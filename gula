@@ -1,5 +1,5 @@
 #!/bin/bash
-source ./private.sh
+# source ./private.sh
 # Variables
 ANDROID_PROJECT_SRC="app/src/main/java"
 OLD_PACKAGE="app.gula.com"
@@ -7,7 +7,7 @@ TEMPORARY_DIR="temp-gula"
 DESTINATION_PROJECT_PATH="/"
 MODULES_DIR="modules"
 MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
-BITBUCKET_REPO_URL="https://x-token-auth:$API_BITBUCKET@bitbucket.org/rudoapps/gula-android.git"
+KEY=""
 
 # Definir colores
 RED='\033[1;31m'
@@ -17,6 +17,7 @@ NC='\033[0m'
 
 clone() {
   # Clonar el repositorio específico desde Bitbucket en un directorio temporal
+  BITBUCKET_REPO_URL="https://x-token-auth:$KEY@bitbucket.org/rudoapps/gula-android.git"
   git clone "$BITBUCKET_REPO_URL" --branch main --single-branch --depth 1 "${TEMPORARY_DIR}"
 }
 
@@ -159,16 +160,42 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-# Ejecutar la opción correspondiente
-case "$1" in
-  install)
-    install_module "$2"
-    ;;
-  list)
-    list_directories
-    ;;
-  *)
-    echo "Comando no reconocido. Uso: $0 {install|list}"
+# Procesar los argumentos
+COMMAND="$1"
+shift
+
+MODULE_NAME=""
+KEY=""
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --key=*)
+      KEY="${1#*=}"
+      ;;
+    install)
+      COMMAND="install"
+      MODULE_NAME="$2"
+      shift
+      ;;
+    list)
+      COMMAND="list"
+      ;;
+    *)
+      MODULE_NAME="$1"
+      ;;
+  esac
+  shift
+done
+
+if [ "$COMMAND" == "install" ]; then
+  if [ -z "$MODULE_NAME" ]; then
+    echo "Uso: $0 install <module_name> [--key=xxxx]"
     exit 1
-    ;;
-esac
+  fi
+  install_module "$MODULE_NAME"
+elif [ "$COMMAND" == "list" ]; then
+  list_directories
+else
+  echo "Comando no reconocido. Uso: $0 {install|list} [--key=xxxx]"
+  exit 1
+fi
