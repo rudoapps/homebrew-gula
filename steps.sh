@@ -28,8 +28,8 @@ detect_package_name() {
 clone() {
   remove_temporary_dir
   # Clonar el repositorio específico desde Bitbucket en un directorio temporal
-  BITBUCKET_REPO_URL="https://x-token-auth:$KEY@bitbucket.org/rudoapps/gula-android.git"
-  git clone "$BITBUCKET_REPO_URL" --branch main --single-branch --depth 1 "${TEMPORARY_DIR}"
+  local repository=$1
+  git clone "$repository" --branch main --single-branch --depth 1 "${TEMPORARY_DIR}"
   if [ $? -eq 0 ]; then
       echo -e "${GREEN}OK.${NC}"
   else
