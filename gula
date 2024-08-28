@@ -6,11 +6,12 @@ GULA_PACKAGE="app.gula.com"
 TEMPORARY_DIR="temp-gula"
 MODULES_DIR="modules"
 MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
+MODULES_PATH_IOS="Gula/${MODULES_DIR}"
 MODULE_NAME=""
 KEY=""
 VERSION="0.0.4"
 
-# Definir colores
+# Definir colores 
 RED='\033[1;31m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
@@ -18,49 +19,40 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 source ./steps.sh
+source ./operations.sh
+source ./platform/android.sh
+source ./platform/ios.sh
 
 install_module() {
-  MODULE_NAME="$1"
+  check_type_of_project
+  type=$?
 
-  check_is_android
-
-  echo -e "${YELLOW}STEP1 - Localizar package name del proyecto.${NC}"
-  detect_package_name
-
-  echo -e "${YELLOW}STEP2 - Clonación temporal del proyecto de GULA.${NC}"
-  clone
-
-  echo -e "${YELLOW}STEP3 - Verificación de la existencia del módulo: ${MODULE_NAME}.${NC}"
-  check_module_in_temporary_dir
-
-  echo -e "${YELLOW}STEP4 - Verificación instalación previa del módulo: ${MODULE_NAME}.${NC}"
-  verify_module
-  
-  echo -e "${YELLOW}STEP5 - Verificación existencia carpeta: ${MODULE_NAME}.${NC}"
-  create_modules_dir
-
-  echo -e "${YELLOW}STEP6 - Copiar ficheros al proyecto.${NC}"
-  copy_files
-
-  echo -e "${YELLOW}STEP7 - Renombrar imports.${NC}"
-  rename_imports
-
-  echo -e "${YELLOW}STEP8 - Eliminación repositorio temporal.${NC}"
-  remove_temporary_dir
-  
-  echo -e "${GREEN}-----------------------------------------------${NC}"
-  echo -e "${GREEN}Proceso finalizado.${NC}"
-  echo -e "${GREEN}-----------------------------------------------${NC}"
+  if [ $type -eq 0 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"
+    install_android_module
+  elif [ $type -eq 1 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
+    install_ios_module
+  else 
+    echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
+    exit 0
+  fi
 }
 
-# Función para listar los directorios
-list_directories() {
-  clone
-  DIRECTORY_PATH="${TEMPORARY_DIR}/${MODULES_PATH}"
-  echo -e "${GREEN}Lista de módulos disponibles:"
-  ls -l "$DIRECTORY_PATH" | grep '^d' | awk '{print $9}'
-  echo -e "${NC}"
-  rm -rf "$TEMPORARY_DIR"
+list_modules() {
+  check_type_of_project
+  type=$?
+
+  if [ $type -eq 0 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"
+    list_android
+  elif [ $type -eq 1 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
+    install_ios_module
+  else 
+    echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
+    exit 0
+  fi
 }
 
 echo -e "${BOLD}-----------------------------------------------"
@@ -105,7 +97,7 @@ if [ "$COMMAND" == "install" ]; then
   fi
   install_module "$MODULE_NAME"
 elif [ "$COMMAND" == "list" ]; then
-  list_directories
+  list_modules
 else
   echo "Comando no reconocido. Uso: $0 {install|list} [--key=xxxx]"
   exit 1
