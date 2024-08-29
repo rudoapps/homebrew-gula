@@ -9,7 +9,7 @@ MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
 MODULES_PATH_IOS="Gula/${MODULES_DIR}"
 MODULE_NAME=""
 KEY=""
-VERSION="0.0.12"
+VERSION="0.0.14"
 
 # Definir colores 
 RED='\033[1;31m'
