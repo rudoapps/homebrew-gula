@@ -13,7 +13,7 @@ class Gula < Formula
     # system "gem", "install", "xcodeproj"
 
     bin.install "gula"
-    pkgshare.install "steps.sh", "operations.sh", "platform/android.sh", "platform/ios.sh"
+    (share/"gula-support").install "scripts"
   end
 
   test do

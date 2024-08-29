@@ -18,16 +18,16 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Obtener el directorio donde se encuentra el script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Incluir los archivos desde el directorio del script
-echo "Directorio $SCRIPT_DIR"
 echo "Cargando imports..."
-source "$SCRIPT_DIR/steps.sh"
-source "$SCRIPT_DIR/operations.sh"
-source "$SCRIPT_DIR/platform/android.sh"
-source "$SCRIPT_DIR/platform/ios.sh"
+source "scripts/steps.sh"
+source "scripts/operations.sh"
+source "scripts/android.sh"
+source "scripts/ios.sh"
+
+source "gula-support/steps.sh"
+source "gula-support/operations.sh"
+source "gula-support/android.sh"
+source "gula-support/ios.sh"
 echo "Cargados"
 
 install_module() {
