@@ -1,8 +1,8 @@
 class Gula < Formula
   desc "Instalador de componentes de gula"
   homepage "https://github.com/rudoapps/gula"
-  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/0.0.11.tar.gz"
-  sha256 "1ae82cceacd9af33ec12646cd311955a2973af3fc5f741777d3189d6e544f7c6"
+  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/0.0.12.tar.gz"
+  sha256 "b2ad8a60beeef33f47542bb07bb63aaed733f52b8205c953dd6a8a93f52333f9"
   license "MIT"
 
   # Dependencias
@@ -13,7 +13,11 @@ class Gula < Formula
     # system "gem", "install", "xcodeproj"
 
     bin.install "gula"
-    (share/"support").install "scripts"
+    (share/"support/scripts").install "scripts"
+  end
+
+  def post_install
+    bin.install_symlink share/"support/scripts" => "gula-scripts"
   end
 
   test do
