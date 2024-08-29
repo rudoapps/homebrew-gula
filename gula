@@ -20,19 +20,14 @@ NC='\033[0m'
 
 echo "Cargando imports..."
 
-scripts_dir="gula-scripts/scripts"
-
-if [ -f "$scripts_dir/android.sh" ]; then
-    bash "$scripts_dir/android.sh"
-else
-    echo "Script android.sh no encontrado en $scripts_dir"
-fi
-
+HOMEBREW_PREFIX=$(brew --prefix)
+scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
+echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
+source "$scripts_dir/android.sh"
 source "$scripts_dir/steps.sh"
 source "$scripts_dir/operations.sh"
-source "$scripts_dir/android.sh"
 source "$scripts_dir/ios.sh"
-echo "Cargados"
+echo -e "${GREEN}OK.${NC}"
 
 install_module() {
   check_type_of_project
