@@ -9,7 +9,7 @@ MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
 MODULES_PATH_IOS="Gula/${MODULES_DIR}"
 MODULE_NAME=""
 KEY=""
-VERSION="0.0.5"
+VERSION="0.0.7"
 
 # Definir colores 
 RED='\033[1;31m'
@@ -22,10 +22,13 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Incluir los archivos desde el directorio del script
+echo "Directorio $SCRIPT_DIR"
+echo "Cargando imports..."
 source "$SCRIPT_DIR/steps.sh"
 source "$SCRIPT_DIR/operations.sh"
 source "$SCRIPT_DIR/platform/android.sh"
 source "$SCRIPT_DIR/platform/ios.sh"
+echo "Cargados"
 
 install_module() {
   check_type_of_project
