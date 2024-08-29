@@ -18,7 +18,7 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-SCRIPT_DIR = "share/support/scripts"
+SCRIPT_DIR="../share/support/scripts"
 echo "Cargando imports..."
 source "scripts/steps.sh"
 source "scripts/operations.sh"
