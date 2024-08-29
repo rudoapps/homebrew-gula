@@ -1,9 +1,11 @@
 #!/bin/bash
 
 # Variables
+ANDROID_PROJECT_RES="app/src/main/res"
 ANDROID_PROJECT_SRC="app/src/main/java"
 GULA_PACKAGE="app.gula.com"
 TEMPORARY_DIR="temp-gula"
+GULA_PROJECT_ROOT="app/src/main/java/app/gula/com/"
 MODULES_DIR="modules"
 MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
 MODULES_PATH_IOS="Gula/${MODULES_DIR}"
@@ -48,7 +50,7 @@ list_modules() {
     list_android
   elif [ $type -eq 1 ]; then
     echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
-    install_ios_module
+    list_ios
   else 
     echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
     exit 0
@@ -66,7 +68,6 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-# Procesar los argumentos
 COMMAND="$1"
 shift
 
@@ -90,13 +91,19 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
+# Verificar y ejecutar el comando correspondiente
 if [ "$COMMAND" == "install" ]; then
   if [ -z "$MODULE_NAME" ]; then
     echo "Uso: $0 install <module_name> [--key=xxxx]"
     exit 1
   fi
-  install_module "$MODULE_NAME"
+  echo "Comando: $COMMAND"
+  echo "Módulo: $MODULE_NAME"
+  echo "Clave: $KEY"
+  install_module
 elif [ "$COMMAND" == "list" ]; then
+  echo "Comando: $COMMAND"
+  echo "Clave: $KEY"
   list_modules
 else
   echo "Comando no reconocido. Uso: $0 {install|list} [--key=xxxx]"
