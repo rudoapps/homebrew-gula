@@ -19,8 +19,8 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 echo "Cargando imports..."
-script_dir="$(dirname "$(realpath "$0")")"
-scripts_dir="$script_dir/../share/support/scripts"
+
+scripts_dir="gula-scripts/scripts"
 
 if [ -f "$scripts_dir/android.sh" ]; then
     bash "$scripts_dir/android.sh"
