@@ -9,7 +9,7 @@ MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
 MODULES_PATH_IOS="Gula/${MODULES_DIR}"
 MODULE_NAME=""
 KEY=""
-VERSION="0.0.10"
+VERSION="0.0.12"
 
 # Definir colores 
 RED='\033[1;31m'
@@ -18,17 +18,20 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-SCRIPT_DIR="../share/support/scripts"
 echo "Cargando imports..."
-source "scripts/steps.sh"
-source "scripts/operations.sh"
-source "scripts/android.sh"
-source "scripts/ios.sh"
+script_dir="$(dirname "$(realpath "$0")")"
+scripts_dir="$script_dir/../share/support/scripts"
 
-source "$SCRIPT_DIR/steps.sh"
-source "$SCRIPT_DIR/operations.sh"
-source "$SCRIPT_DIR/android.sh"
-source "$SCRIPT_DIR/ios.sh"
+if [ -f "$scripts_dir/android.sh" ]; then
+    bash "$scripts_dir/android.sh"
+else
+    echo "Script android.sh no encontrado en $scripts_dir"
+fi
+
+source "$scripts_dir/steps.sh"
+source "$scripts_dir/operations.sh"
+source "$scripts_dir/android.sh"
+source "$scripts_dir/ios.sh"
 echo "Cargados"
 
 install_module() {
