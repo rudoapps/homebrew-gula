@@ -1,7 +1,6 @@
 #!/bin/bash
 
 install_ios_module() {
-  MODULE_NAME="$1"
   echo -e "${RED}Pendiente de terminar.${NC}"
   exit 0  
 }
