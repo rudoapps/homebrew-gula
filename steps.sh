@@ -93,11 +93,12 @@ copy_files() {
 
 rename_imports() {
   # Eliminar el string especificado de la ruta
-  echo -e "${YELLOW}Renombrando imports de $GULA_PACKAGE a $PACKAGE_NAME en los archivos del módulo...${NC}"
   REMOVE_PATH=$ANDROID_PROJECT_SRC
   MODIFIED_PATH=$(echo "$MAIN_DIRECTORY" | sed "s|$REMOVE_PATH||")
   PACKAGE_NAME=$(echo "$MODIFIED_PATH" | sed 's|/|.|g')
   PACKAGE_NAME="${PACKAGE_NAME/.}"
+  echo -e "${YELLOW}Renombrando imports de $GULA_PACKAGE a $PACKAGE_NAME en los archivos del módulo...${NC}"
+
   find "$MAIN_DIRECTORY" -type f \( -name "*.java" -o -name "*.kt" \) -print0 | while IFS= read -r -d '' file; do
     sed -i '' "s#$GULA_PACKAGE#$PACKAGE_NAME#g" "$file"
   done
@@ -116,3 +117,123 @@ remove_temporary_dir() {
   fi
   echo -e "${GREEN}OK.${NC}"
 }
+
+ASSETS="assets"
+COMPONENTS="components"
+STRINGS="strings"
+COLORS="colors"
+DIMENS="dimens"
+
+read_configuration() {
+  # Verificar si el fichero existe
+  FILE="$TEMPORARY_DIR/${MODULES_PATH}${MODULE_NAME}/configuration.gula"
+  echo $FILE
+  if [ ! -f "$FILE" ]; then
+    echo "Error: El fichero $FILE no existe."
+    exit 1
+  fi
+
+  # Leer el fichero línea por línea
+  while IFS= read -r line; do
+    # Extraer el tipo (assets, strings, colors, dimens)
+    type=$(echo "$line" | cut -d'/' -f1)
+    
+    # Extraer la parte de la ruta a transformar
+    path=$(echo "$line" | cut -d'/' -f2-)
+    
+    if [ "$type" == "libraries" ]; then
+      install_library $path
+    elif [[ "$type" == "drawables" || "$type" == "strings" ]]; then
+      extension="${path##*.}"
+      # Eliminar la extensión del archivo para procesar el resto de la ruta
+      path_without_extension="${path%.*}"
+      # Reemplazar los puntos por barras en la parte de la ruta
+      transformed_path=$(echo "$path_without_extension" | sed 's/\./\//g')
+      # Volver a agregar la extensión al final
+      final_path="$transformed_path.$extension"
+      decide_what_to_do_with_file $type $final_path
+    else
+      # Reemplazar los puntos por barras
+      transformed_path=$(echo "$path" | sed 's/\./\//g')
+      # Mostrar el tipo y la ruta transformada
+      decide_what_to_do_with_file $type $transformed_path
+    fi
+    
+  done < "$FILE"
+}
+
+check_path_exists() {
+  local path=$1
+  if [ -e "$path" ]; then
+    return 0  # Éxito
+  else
+    return 1  # Error
+  fi
+}
+
+decide_what_to_do_with_file() {
+	local type=$1
+	local path=$2
+	
+	if [ "$type" == "components" ]; then
+	  component=$(basename "$2")	  
+      copy_file "${TEMPORARY_DIR}/${ANDROID_PROJECT_SRC}/${path}" "${MAIN_DIRECTORY}/shared/components/${component}"
+	elif [[ "$type" == "drawables" || "$type" == "strings" ]]; then	
+      copy_file "${TEMPORARY_DIR}/app/src/main/${path}" "app/src/main/${path}"
+	else
+	  echo "Copying file of ${type}: ${path} to ${ANDROID_PROJECT_RES}/${path}"
+	  echo -e "${YELLOW}Este fichero no se va a copiar debe de revisarse antes${NC}"
+	fi
+}
+
+copy_file() {
+  local origin=$1
+  local destination=$2
+  if check_path_exists "$destination"; then   
+    echo -e "${YELLOW}$destination ya existe en el proyecto destino.${NC}" 
+	read -p "¿Deseas actualizar el módulo existente? (s/n): " CONFIRM < /dev/tty
+
+    if [ "$CONFIRM" == "s" ]; then
+      echo -e "${BOLD}Actualizando.${NC}..."      
+    else
+      echo -e "${BOLD}Cancelado.${NC}"   
+      return
+    fi
+  fi
+  path_without_folder=$(dirname "$destination")
+  echo "Copiando desde ${origin} a ${path_without_folder}"	
+  cp -R "${origin}" "${path_without_folder}"
+  if [ $? -eq 0 ]; then
+    echo -e "${GREEN}OK.${NC}"
+  else
+    echo -e "${RED}Error: No se pudo copiar el fichero.${NC}"
+  fi 
+}	
+
+install_library() {
+  local type=$1
+  echo "Instalando librería: ${path}"
+  echo -e "${YELLOW}Esta librería no se va a instalar todavía.${NC}"
+
+  BUILD_GRADLE_PATH="app/build.gradle.kts"  # Cambia esta ruta según el módulo
+
+  # Verificar si el archivo build.gradle existe
+  if [ ! -f "$BUILD_GRADLE_PATH" ]; then
+    echo "Error: No se encontró el archivo $BUILD_GRADLE_PATH."
+    exit 1
+  fi
+
+  # add_library_if_missing ${path}
+}
+
+add_library_if_missing() {
+  local library=$1
+  if grep -q "$library" "$BUILD_GRADLE_PATH"; then
+    echo "La librería '$library' ya está en $BUILD_GRADLE_PATH."
+  else
+    echo "Añadiendo '$library' a $BUILD_GRADLE_PATH."
+    # Añadir la librería dentro del bloque dependencies {
+    sed -i.bak "/dependencies {/a\    implementation	$library" "$BUILD_GRADLE_PATH"
+  fi
+}
+
