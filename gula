@@ -18,16 +18,17 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+SCRIPT_DIR = "share/support/scripts"
 echo "Cargando imports..."
 source "scripts/steps.sh"
 source "scripts/operations.sh"
 source "scripts/android.sh"
 source "scripts/ios.sh"
 
-source "gula-support/steps.sh"
-source "gula-support/operations.sh"
-source "gula-support/android.sh"
-source "gula-support/ios.sh"
+source "$SCRIPT_DIR/steps.sh"
+source "$SCRIPT_DIR/operations.sh"
+source "$SCRIPT_DIR/android.sh"
+source "$SCRIPT_DIR/ios.sh"
 echo "Cargados"
 
 install_module() {

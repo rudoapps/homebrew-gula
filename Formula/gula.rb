@@ -13,7 +13,7 @@ class Gula < Formula
     # system "gem", "install", "xcodeproj"
 
     bin.install "gula"
-    (share/"gula-support").install "scripts"
+    (share/"support").install "scripts"
   end
 
   test do
