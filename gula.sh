@@ -10,7 +10,7 @@ MODULES_PATH_IOS="Gula/${MODULES_DIR}"
 MODULE_NAME=""
 KEY=""
 ACCESSTOKEN=""
-VERSION="0.0.14"
+VERSION="0.0.15"
 
 # Definir colores 
 RED='\033[1;31m'
@@ -29,7 +29,7 @@ echo -e "${BOLD}Cargando imports...${NC}"
 
 HOMEBREW_PREFIX=$(brew --prefix)
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
-
+scripts_dir="scripts"
 echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
 source "$scripts_dir/android.sh"
 source "$scripts_dir/android_support.sh"

@@ -1,7 +1,9 @@
 #!/bin/bash
 
 list_android() {
-  clone "https://x-token-auth:$KEY@bitbucket.org/rudoapps/gula-android.git"
+  prerequisites
+  clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
+
   DIRECTORY_PATH="${TEMPORARY_DIR}/${MODULES_PATH}"
   echo -e "${GREEN}Lista de módulos disponibles:"
   echo -e "${GREEN}-----------------------------------------------"
