@@ -10,19 +10,33 @@ list_android() {
   remove_temporary_dir
 }
 
-install_android_module() {
-  # STEP1
-  # Verificar si la ruta base existe
+prerequisites() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  echo -e "${BOLD}STEP1 - Localizar package name del proyecto.${NC}"
+  echo -e "${BOLD}Prerequisitos: Validando.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  detect_package_name
+  
+  ACCESSTOKEN=$(get_bitbucket_access_token $KEY android)
+  if [ $? -eq 0 ]; then
+    echo -e "${GREEN}OK.${NC}"
+  else
+    echo -e "${RED}Error: No se ha podido completar la validación KEY incorrecta.${NC}"
+    exit 1
+  fi
+}
 
+install_android_module() {
+  prerequisites
+  echo $ACCESSTOKEN
   # Clonamos el repositorio a una carpeta temporal
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  echo -e "${BOLD}STEP2 - Clonación temporal del proyecto de GULA.${NC}"
+  echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  clone "https://x-token-auth:$KEY@bitbucket.org/rudoapps/gula-android.git"
+  clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP2 - Localizar package name del proyecto.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  android_detect_package_name 
 
   # Verificar que el módulo existe en el repositorio clonado
   echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -34,30 +48,31 @@ install_android_module() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP4 - Verificación instalación previa del módulo: ${MODULE_NAME}.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  verify_module
+  android_verify_module
   
   # Verificar si la carpeta 'modules' existe; si no, crearla
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP5 - Verificación existencia carpeta: ${MODULE_NAME}.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  create_modules_dir
+  android_create_modules_dir
 
   # Copiar el módulo al proyecto destino
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP6 - Copiar ficheros al proyecto.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  copy_files
+  echo -e "${YELLOW}Inicio copiado de del módulo ${MODULE_NAME} en: ${MAIN_DIRECTORY}/modules/${MODULE_NAME}${NC}"
+  copy_files "${TEMPORARY_DIR}/${MODULES_PATH}${MODULE_NAME}" "${MAIN_DIRECTORY}/modules/"
 
    # Renombrar los imports en los archivos .java y .kt del módulo copiado
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP7 - Renombrar imports.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  rename_imports
+  android_rename_imports
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP8 - Copiar/instalar las dependencias.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  read_configuration
+  android_read_configuration
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP9 - Eliminación repositorio temporal.${NC}"
