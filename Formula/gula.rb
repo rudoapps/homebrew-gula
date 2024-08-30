@@ -1,8 +1,8 @@
 class Gula < Formula
   desc "Instalador de componentes de gula"
   homepage "https://github.com/rudoapps/gula"
-  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/0.0.15.tar.gz"
-  sha256 "56086027512565c2df94410da3eb61bdef490286a4235db22aad3927bdadc677"
+  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/0.0.16.tar.gz"
+  sha256 "ef3b98f62bfed5f1b8966c8c5faa2a1d75d871921275f3e747112225ad53c64c"
   license "MIT"
 
   # Dependencias
