@@ -11,6 +11,7 @@ class Gula < Formula
   def install
     # Instalar la gema xcodeproj
     # system "gem", "install", "xcodeproj"
+    depends_on "jq" # Añade jq como una dependencia
 
     bin.install "gula"
     (share/"support/scripts").install "scripts"
