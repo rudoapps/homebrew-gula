@@ -9,6 +9,7 @@ MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
 MODULES_PATH_IOS="Gula/${MODULES_DIR}"
 MODULE_NAME=""
 KEY=""
+ACCESSTOKEN=""
 VERSION="0.0.14"
 
 # Definir colores 
@@ -28,11 +29,15 @@ echo -e "${BOLD}Cargando imports...${NC}"
 
 HOMEBREW_PREFIX=$(brew --prefix)
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
+
 echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
 source "$scripts_dir/android.sh"
-source "$scripts_dir/steps.sh"
-source "$scripts_dir/operations.sh"
+source "$scripts_dir/android_support.sh"
 source "$scripts_dir/ios.sh"
+source "$scripts_dir/ios_support.sh"
+source "$scripts_dir/general_support.sh"
+source "$scripts_dir/git.sh"
+source "$scripts_dir/network.sh"
 echo -e "${GREEN}OK.${NC}"
 
 install_module() {
