@@ -18,7 +18,13 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-echo "Cargando imports..."
+echo -e "${BOLD}-----------------------------------------------"
+echo -e "${BOLD}GULA: Instalador de módulos"
+echo -e "${BOLD}versión: ${VERSION}"
+echo -e "${BOLD}propiedad: Rudo apps"
+echo -e "${BOLD}-----------------------------------------------${NC}"
+echo ""
+echo -e "${BOLD}Cargando imports...${NC}"
 
 HOMEBREW_PREFIX=$(brew --prefix)
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
@@ -61,11 +67,7 @@ list_modules() {
   fi
 }
 
-echo -e "${BOLD}-----------------------------------------------"
-echo -e "${BOLD}GULA: Instalador de módulos"
-echo -e "${BOLD}versión: ${VERSION}"
-echo -e "${BOLD}propiedad: Rudo apps"
-echo -e "${BOLD}-----------------------------------------------${NC}"
+
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
   echo "Uso: $0 {install|list} [nombre-del-modulo]"
