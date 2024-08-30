@@ -29,8 +29,6 @@ echo -e "${BOLD}Cargando imports...${NC}"
 
 HOMEBREW_PREFIX=$(brew --prefix)
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
-scripts_dir="scripts"
-
 
 echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
 source "$scripts_dir/android.sh"
