@@ -40,6 +40,13 @@ source "$scripts_dir/git.sh"
 source "$scripts_dir/network.sh"
 echo -e "${GREEN}OK.${NC}"
 
+function cleanup {
+    remove_temporary_dir
+}
+
+# Asociar la señal SIGINT (Ctrl + C) con la función cleanup
+trap cleanup SIGINT
+
 install_module() {
   check_type_of_project
   type=$?
