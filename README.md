@@ -66,7 +66,7 @@ Listar los módulos disponibles en un proyecto:
 
 ```
 gula list --key=1234abcd
-´´´
+```
 
 # Mantenimiento
 
