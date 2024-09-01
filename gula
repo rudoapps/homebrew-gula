@@ -38,6 +38,7 @@ source "$scripts_dir/ios_support.sh"
 source "$scripts_dir/general_support.sh"
 source "$scripts_dir/git.sh"
 source "$scripts_dir/network.sh"
+source "$scripts_dir/os.sh"
 echo -e "${GREEN}OK.${NC}"
 
 function cleanup {
