@@ -6,12 +6,12 @@ class Gula < Formula
   license "MIT"
 
   # Dependencias
-  # depends_on "ruby" if MacOS.version <= :mojave
+  depends_on "ruby" if MacOS.version <= :mojave
   depends_on "jq" # Añade jq como una dependencia
 
   def install
     # Instalar la gema xcodeproj
-    # system "gem", "install", "xcodeproj"
+    system "gem", "install", "xcodeproj" if MacOS.version <= :mojave
     
     bin.install "gula"
     (share/"support/scripts").install "scripts"
