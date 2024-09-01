@@ -2,6 +2,11 @@
 
 install_ios_module() {
   echo -e "${RED}Pendiente de terminar.${NC}"
+  
+  os_type=$(check_os)
+  if [ ! $os_type -eq "macOS"]; then
+  	echo -e "${RED}Esta funcionalidada solo puede ser ejecutada en macOS.${NC}"
+  	exit 0
   exit 0  
 }
 
