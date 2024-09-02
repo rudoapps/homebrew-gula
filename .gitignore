@@ -22,3 +22,5 @@ gradlew.bat
 settings.gradle.kts
 /.idea
 /android
+/ios
+/.build
