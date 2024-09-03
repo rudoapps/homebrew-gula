@@ -1,12 +1,7 @@
 #!/bin/bash
 
 # Variables
-ANDROID_PROJECT_SRC="app/src/main/java"
-GULA_PACKAGE="app.gula.com"
 TEMPORARY_DIR="temp-gula"
-MODULES_DIR="modules"
-MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
-MODULES_PATH_IOS="Gula/${MODULES_DIR}"
 MODULE_NAME=""
 KEY=""
 ACCESSTOKEN=""
@@ -29,7 +24,7 @@ echo -e "${BOLD}Cargando imports...${NC}"
 
 HOMEBREW_PREFIX=$(brew --prefix)
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
-scripts_dir="scripts"
+scripts_dir="../scripts"
 echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
 source "$scripts_dir/android.sh"
 source "$scripts_dir/android_support.sh"
@@ -39,10 +34,11 @@ source "$scripts_dir/general_support.sh"
 source "$scripts_dir/git.sh"
 source "$scripts_dir/network.sh"
 source "$scripts_dir/os.sh"
-echo -e "${GREEN}OK.${NC}"
+echo -e "✅"
 
 function cleanup {
     remove_temporary_dir
+    echo "clean"
 }
 
 # Asociar la señal SIGINT (Ctrl + C) con la función cleanup
@@ -73,7 +69,7 @@ list_modules() {
     list_android
   elif [ $type -eq 1 ]; then
     echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
-    install_ios_module
+    list_ios
   else 
     echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
     exit 0
@@ -98,7 +94,8 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     install)
       COMMAND="install"
-      MODULE_NAME="$2"
+      MODULE_NAME="$(echo "${str:0:1}" | tr '[:lower:]' '[:upper:]')${str:1}" "$2"
+
       shift
       ;;
     list)
