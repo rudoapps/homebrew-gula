@@ -24,3 +24,8 @@ settings.gradle.kts
 /android
 /ios
 /.build
+testgula.xcodeproj/project.pbxproj
+testgula.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+testgula.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+testgula.xcodeproj/project.xcworkspace/xcuserdata/fer.xcuserdatad/UserInterfaceState.xcuserstate
+testgula.xcodeproj/xcuserdata/fer.xcuserdatad/xcschemes/xcschememanagement.plist
