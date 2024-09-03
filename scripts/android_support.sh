@@ -6,7 +6,7 @@ android_detect_package_name() {
     MAIN_DIRECTORY=$(find "$ANDROID_PROJECT_SRC" -type f \( -name "*.java" -o -name "*.kt" \) -print0 | xargs -0 -n1 dirname | sort -u | head -n 1)
     
     if [ -n "$MAIN_DIRECTORY" ]; then
-      echo -e "${GREEN}OK. Encontrado package: $MAIN_DIRECTORY${NC}"
+      echo -e "${GREEN}✅ Encontrado package: $MAIN_DIRECTORY${NC}"
     else
       echo -e "${RED}No se encontraron archivos .java o .kt en $ANDROID_PROJECT_SRC${NC}"
     fi
@@ -26,9 +26,9 @@ android_verify_module() {
       exit 0
     fi
     rm -rf "$MODULE_PATH"
-    echo -e "${GREEN}OK.${NC}"
+    echo -e "✅"
   else 
-    echo -e "${GREEN}OK.${NC}"
+    echo -e "✅"
   fi
 }
 
@@ -38,7 +38,7 @@ android_create_modules_dir() {
     echo -e "${YELLOW}La carpeta '${MODULE_NAME}' no existe. Creándola...${NC}"
     mkdir -p "$EXISTS_THIS_DIR"
     if [ $? -eq 0 ]; then
-      echo -e "${GREEN}OK.${NC}"
+      echo -e "✅"
     else
       echo -e "${RED}Error: No se pudo crear la carpeta '${MODULE_NAME}'.${NC}"
       exit 1
@@ -58,7 +58,7 @@ android_rename_imports() {
     sed -i '' "s#$GULA_PACKAGE#$PACKAGE_NAME#g" "$file"
   done
   if [ $? -eq 0 ]; then
-    echo -e "${GREEN}OK.${NC}"
+    echo -e "✅"
   else
     echo -e "${RED}Error: No se ha podido renombrar.${NC}"
     remove_temporary_dir
