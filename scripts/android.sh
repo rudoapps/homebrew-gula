@@ -1,5 +1,9 @@
 #!/bin/bash
 
+ANDROID_PROJECT_SRC="app/src/main/java"
+GULA_PACKAGE="app.gula.com"
+MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
+
 list_android() {
   prerequisites
   clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
