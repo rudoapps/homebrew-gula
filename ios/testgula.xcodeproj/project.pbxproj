@@ -42,40 +42,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		01F31B5074065B221BD87817 /* RegisterView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterView.swift; sourceTree = "<group>"; };
-		06AD86C0A5EB39F8454D1375 /* RegisterRemoteDataSourceProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterRemoteDataSourceProtocol.swift; sourceTree = "<group>"; };
-		08F490DC98780792B2313B7F /* AuthSwitcherViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthSwitcherViewModel.swift; sourceTree = "<group>"; };
-		0CFE911F53E10C8A5174BC68 /* AuthRemoteDataSource.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthRemoteDataSource.swift; sourceTree = "<group>"; };
-		0F934C78D31ADF815415AC5A /* configuration.authentication.gula */ = {isa = PBXFileReference; includeInIndex = 1; path = configuration.authentication.gula; sourceTree = "<group>"; };
-		163E88635F322A13C2609492 /* RegisterRemoteDataSource.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterRemoteDataSource.swift; sourceTree = "<group>"; };
-		17E99B560D89394C3032FCAD /* SuccessView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SuccessView.swift; sourceTree = "<group>"; };
-		1C479CAEA5BFB3FEA0B345D6 /* RegisterUseCaseProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterUseCaseProtocol.swift; sourceTree = "<group>"; };
-		1D9B9CE09AD1B3DA99AECF34 /* LoginBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoginBuilder.swift; sourceTree = "<group>"; };
-		2031E9700C68F7AE8913F1DF /* RegisterBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterBuilder.swift; sourceTree = "<group>"; };
-		27C92AC44DA4E5FC0A2949FF /* AuthUseCaseProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthUseCaseProtocol.swift; sourceTree = "<group>"; };
-		2F35AB5711C83641E3CF0EA8 /* RecoverPasswordViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecoverPasswordViewModel.swift; sourceTree = "<group>"; };
-		2F955B851116744DB7780256 /* RecoverPasswordView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecoverPasswordView.swift; sourceTree = "<group>"; };
-		34549BDEFEA99A4E574C84ED /* AuthUseCase.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthUseCase.swift; sourceTree = "<group>"; };
-		3461B6FDBD236FFFBF418F25 /* SuccessBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SuccessBuilder.swift; sourceTree = "<group>"; };
-		35E60F02CED9D18FDB094881 /* RegisterViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterViewModel.swift; sourceTree = "<group>"; };
-		366728DF80FCA02ECFAB9F3E /* RegisterConfirmationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterConfirmationView.swift; sourceTree = "<group>"; };
-		442484F6BCB49FC3D6C21F96 /* RegisterConfirmationBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterConfirmationBuilder.swift; sourceTree = "<group>"; };
-		5F0B53B34DC097A47D28AAC5 /* RegisterConfirmationViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterConfirmationViewModel.swift; sourceTree = "<group>"; };
 		63F5369149014C6FF030AAB0 /* OrderRepositoryFake.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OrderRepositoryFake.swift; path = Gula/Modules/Authentication/GulaTests/Domain/UseCase/Order/OrderRepositoryFake.swift; sourceTree = "<group>"; };
-		686DCC7347F5BFD02430BB88 /* NewPasswordViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewPasswordViewModel.swift; sourceTree = "<group>"; };
-		6FF264940F188D06BC3ECD7F /* LoginViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoginViewModel.swift; sourceTree = "<group>"; };
-		792B98606E1229C5EEE9339C /* RecoverPasswordBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecoverPasswordBuilder.swift; sourceTree = "<group>"; };
-		7B64311F2A1024B1A1B6D62D /* AuthRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthRepository.swift; sourceTree = "<group>"; };
-		8598CA5C288B23009EDFE550 /* NewPasswordView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewPasswordView.swift; sourceTree = "<group>"; };
-		86326B7D0B8087CB315ABB32 /* AuthRepositoryProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthRepositoryProtocol.swift; sourceTree = "<group>"; };
-		878247232DA0CD59304A4DD8 /* RegisterUseCase.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterUseCase.swift; sourceTree = "<group>"; };
-		8F7C7E34544DCE15D6C25A9C /* SuccessViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SuccessViewModel.swift; sourceTree = "<group>"; };
-		8FABB94A078EF1ADCB4C1DA3 /* RegisterRepositoryProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterRepositoryProtocol.swift; sourceTree = "<group>"; };
-		A4CDCDBBAF76163E5433F4B6 /* AuthSwitcherBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthSwitcherBuilder.swift; sourceTree = "<group>"; };
-		A52A8EFBFBA7648A5411123F /* RegisterRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterRepository.swift; sourceTree = "<group>"; };
 		BB883DD5A93FA09CA77D0059 /* configuration.authentication.gula */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = configuration.authentication.gula; path = Gula/Modules/Authentication/configuration.authentication.gula; sourceTree = "<group>"; };
-		BE6C53695A000863FDD25FD9 /* RegisterCompletedViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterCompletedViewModel.swift; sourceTree = "<group>"; };
-		C14DB9F8E4B7812DD5565681 /* RegisterCompletedBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterCompletedBuilder.swift; sourceTree = "<group>"; };
 		C1AAF6DB2C86304B006E563B /* testgula.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = testgula.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1AAF6DE2C86304B006E563B /* testgulaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = testgulaApp.swift; sourceTree = "<group>"; };
 		C1AAF6E02C86304B006E563B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -88,14 +56,9 @@
 		C1AAF6FB2C86304C006E563B /* testgulaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = testgulaUITests.swift; sourceTree = "<group>"; };
 		C1AAF6FD2C86304C006E563B /* testgulaUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = testgulaUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		C7E401A97A7F5EB117C55006 /* Gula.xctestplan */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = Gula.xctestplan; path = Gula/Modules/Authentication/Gula.xctestplan; sourceTree = "<group>"; };
-		CBDDDFD6C3A74AFB382FF30C /* AuthSwitcherView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthSwitcherView.swift; sourceTree = "<group>"; };
 		E4CFA1BE888D358EAADF7FE1 /* README.md */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = Gula/Modules/Authentication/README.md; sourceTree = "<group>"; };
-		E678F76DAD893ED13AC0E559 /* LoginView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
-		EB2AD08F59E32EC51012B3E5 /* RegisterCompletedView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RegisterCompletedView.swift; sourceTree = "<group>"; };
 		EE61E89552E9AD73B9626A9C /* MenuUseCaseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MenuUseCaseTests.swift; path = Gula/Modules/Authentication/GulaTests/Domain/UseCase/Menu/MenuUseCaseTests.swift; sourceTree = "<group>"; };
-		F18B9BCA927DECE426995D8D /* AuthRemoteDataSourceProtocol.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthRemoteDataSourceProtocol.swift; sourceTree = "<group>"; };
 		F5B18BD3DEE328CCBF6F18ED /* OrderUseCaseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OrderUseCaseTests.swift; path = Gula/Modules/Authentication/GulaTests/Domain/UseCase/Order/OrderUseCaseTests.swift; sourceTree = "<group>"; };
-		F934844FA8526B6F3922D126 /* NewPasswordBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewPasswordBuilder.swift; sourceTree = "<group>"; };
 		FBB8C4480C655CA2582B0A2A /* MenuRepositoryFake.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MenuRepositoryFake.swift; path = Gula/Modules/Authentication/GulaTests/Domain/UseCase/Menu/MenuRepositoryFake.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -124,51 +87,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		01094F58E805CB20C97B958B /* Auth */ = {
-			isa = PBXGroup;
-			children = (
-				BDA16BAD98ACB1F249884C86 /* Remote */,
-			);
-			name = Auth;
-			sourceTree = "<group>";
-		};
-		050E987B80CC54E93037DF8E /* NewPassword */ = {
-			isa = PBXGroup;
-			children = (
-				F934844FA8526B6F3922D126 /* NewPasswordBuilder.swift */,
-				686DCC7347F5BFD02430BB88 /* NewPasswordViewModel.swift */,
-				8598CA5C288B23009EDFE550 /* NewPasswordView.swift */,
-			);
-			name = NewPassword;
-			sourceTree = "<group>";
-		};
-		131903CDD1354E44CAFCEF05 /* Data */ = {
-			isa = PBXGroup;
-			children = (
-				6C2482074943327DD1F9BDFB /* Datasource */,
-				15483850F03826185B096DDD /* Repository */,
-			);
-			name = Data;
-			sourceTree = "<group>";
-		};
-		15483850F03826185B096DDD /* Repository */ = {
-			isa = PBXGroup;
-			children = (
-				71E34818CB087F67FBE6263D /* Auth */,
-				A1B7A3127DE726C3E856B3EB /* Register */,
-			);
-			name = Repository;
-			sourceTree = "<group>";
-		};
-		294CC331395942B5EE24B16D /* RepositoryProtocols */ = {
-			isa = PBXGroup;
-			children = (
-				65A8EEBC533CE071F025F939 /* Auth */,
-				7062ABE78ADB548C97E4BE85 /* Register */,
-			);
-			name = RepositoryProtocols;
-			sourceTree = "<group>";
-		};
 		2B403C12C2071D986038E0FF /* Order */ = {
 			isa = PBXGroup;
 			children = (
@@ -178,80 +96,12 @@
 			name = Order;
 			sourceTree = "<group>";
 		};
-		303DFA73A45CAF98AF535223 /* Register */ = {
-			isa = PBXGroup;
-			children = (
-				59A7F986AD622529D661D772 /* RegisterCompleted */,
-				A8F85FFB99E74B89644B49F8 /* ConfirmationScreen */,
-				01F31B5074065B221BD87817 /* RegisterView.swift */,
-				2031E9700C68F7AE8913F1DF /* RegisterBuilder.swift */,
-				35E60F02CED9D18FDB094881 /* RegisterViewModel.swift */,
-			);
-			name = Register;
-			sourceTree = "<group>";
-		};
-		3673D528ED4901A186773417 /* RecoverPasswordSuccess */ = {
-			isa = PBXGroup;
-			children = (
-				3461B6FDBD236FFFBF418F25 /* SuccessBuilder.swift */,
-				8F7C7E34544DCE15D6C25A9C /* SuccessViewModel.swift */,
-				17E99B560D89394C3032FCAD /* SuccessView.swift */,
-			);
-			name = RecoverPasswordSuccess;
-			sourceTree = "<group>";
-		};
-		40056BB9288A57989D403592 /* Remote */ = {
-			isa = PBXGroup;
-			children = (
-				06AD86C0A5EB39F8454D1375 /* RegisterRemoteDataSourceProtocol.swift */,
-				163E88635F322A13C2609492 /* RegisterRemoteDataSource.swift */,
-			);
-			name = Remote;
-			sourceTree = "<group>";
-		};
-		48A0158EE0C66F1454BA423A /* AuthSwitcher */ = {
-			isa = PBXGroup;
-			children = (
-				08F490DC98780792B2313B7F /* AuthSwitcherViewModel.swift */,
-				CBDDDFD6C3A74AFB382FF30C /* AuthSwitcherView.swift */,
-				A4CDCDBBAF76163E5433F4B6 /* AuthSwitcherBuilder.swift */,
-			);
-			name = AuthSwitcher;
-			sourceTree = "<group>";
-		};
 		4EC1FA5EFA5450E7768D5C0A /* Domain */ = {
 			isa = PBXGroup;
 			children = (
 				60F17084CA4AB6C849B9B168 /* UseCase */,
 			);
 			name = Domain;
-			sourceTree = "<group>";
-		};
-		59A7F986AD622529D661D772 /* RegisterCompleted */ = {
-			isa = PBXGroup;
-			children = (
-				BE6C53695A000863FDD25FD9 /* RegisterCompletedViewModel.swift */,
-				EB2AD08F59E32EC51012B3E5 /* RegisterCompletedView.swift */,
-				C14DB9F8E4B7812DD5565681 /* RegisterCompletedBuilder.swift */,
-			);
-			name = RegisterCompleted;
-			sourceTree = "<group>";
-		};
-		5C1A20FEC584AFD71D3C5E8F /* Register */ = {
-			isa = PBXGroup;
-			children = (
-				1C479CAEA5BFB3FEA0B345D6 /* RegisterUseCaseProtocol.swift */,
-				878247232DA0CD59304A4DD8 /* RegisterUseCase.swift */,
-			);
-			name = Register;
-			sourceTree = "<group>";
-		};
-		6033C0FB2630A5B7E1C71F8A /* Presentation */ = {
-			isa = PBXGroup;
-			children = (
-				D509D2F4939F0415342ABA68 /* Screens */,
-			);
-			name = Presentation;
 			sourceTree = "<group>";
 		};
 		60F17084CA4AB6C849B9B168 /* UseCase */ = {
@@ -263,119 +113,12 @@
 			name = UseCase;
 			sourceTree = "<group>";
 		};
-		65A8EEBC533CE071F025F939 /* Auth */ = {
-			isa = PBXGroup;
-			children = (
-				86326B7D0B8087CB315ABB32 /* AuthRepositoryProtocol.swift */,
-			);
-			name = Auth;
-			sourceTree = "<group>";
-		};
-		68D9F2787FE1D2599381F4E7 /* Register */ = {
-			isa = PBXGroup;
-			children = (
-				40056BB9288A57989D403592 /* Remote */,
-			);
-			name = Register;
-			sourceTree = "<group>";
-		};
-		6B4EF2B2400933B104155857 /* Authentication */ = {
-			isa = PBXGroup;
-			children = (
-				0F934C78D31ADF815415AC5A /* configuration.authentication.gula */,
-				131903CDD1354E44CAFCEF05 /* Data */,
-				ED7C6AE5B9745AA6F5B4CD7C /* Domain */,
-				6033C0FB2630A5B7E1C71F8A /* Presentation */,
-			);
-			name = Authentication;
-			sourceTree = "<group>";
-		};
-		6C2482074943327DD1F9BDFB /* Datasource */ = {
-			isa = PBXGroup;
-			children = (
-				01094F58E805CB20C97B958B /* Auth */,
-				68D9F2787FE1D2599381F4E7 /* Register */,
-			);
-			name = Datasource;
-			sourceTree = "<group>";
-		};
-		7062ABE78ADB548C97E4BE85 /* Register */ = {
-			isa = PBXGroup;
-			children = (
-				8FABB94A078EF1ADCB4C1DA3 /* RegisterRepositoryProtocol.swift */,
-			);
-			name = Register;
-			sourceTree = "<group>";
-		};
-		71E34818CB087F67FBE6263D /* Auth */ = {
-			isa = PBXGroup;
-			children = (
-				7B64311F2A1024B1A1B6D62D /* AuthRepository.swift */,
-			);
-			name = Auth;
-			sourceTree = "<group>";
-		};
-		74A3B4043DFEED4AA095663A /* RecoverPassword */ = {
-			isa = PBXGroup;
-			children = (
-				2F35AB5711C83641E3CF0EA8 /* RecoverPasswordViewModel.swift */,
-				3673D528ED4901A186773417 /* RecoverPasswordSuccess */,
-				2F955B851116744DB7780256 /* RecoverPasswordView.swift */,
-				792B98606E1229C5EEE9339C /* RecoverPasswordBuilder.swift */,
-			);
-			name = RecoverPassword;
-			sourceTree = "<group>";
-		};
-		933E14D4926545BA5C69CD93 /* Auth */ = {
-			isa = PBXGroup;
-			children = (
-				34549BDEFEA99A4E574C84ED /* AuthUseCase.swift */,
-				27C92AC44DA4E5FC0A2949FF /* AuthUseCaseProtocol.swift */,
-			);
-			name = Auth;
-			sourceTree = "<group>";
-		};
-		A1B7A3127DE726C3E856B3EB /* Register */ = {
-			isa = PBXGroup;
-			children = (
-				A52A8EFBFBA7648A5411123F /* RegisterRepository.swift */,
-			);
-			name = Register;
-			sourceTree = "<group>";
-		};
-		A8F85FFB99E74B89644B49F8 /* ConfirmationScreen */ = {
-			isa = PBXGroup;
-			children = (
-				442484F6BCB49FC3D6C21F96 /* RegisterConfirmationBuilder.swift */,
-				5F0B53B34DC097A47D28AAC5 /* RegisterConfirmationViewModel.swift */,
-				366728DF80FCA02ECFAB9F3E /* RegisterConfirmationView.swift */,
-			);
-			name = ConfirmationScreen;
-			sourceTree = "<group>";
-		};
 		A9884EC0716027BEB19F35E2 /* GulaTests */ = {
 			isa = PBXGroup;
 			children = (
 				4EC1FA5EFA5450E7768D5C0A /* Domain */,
 			);
 			name = GulaTests;
-			sourceTree = "<group>";
-		};
-		AD9FD36EFE17EE5E345C9516 /* Modules */ = {
-			isa = PBXGroup;
-			children = (
-				6B4EF2B2400933B104155857 /* Authentication */,
-			);
-			name = Modules;
-			sourceTree = "<group>";
-		};
-		BDA16BAD98ACB1F249884C86 /* Remote */ = {
-			isa = PBXGroup;
-			children = (
-				F18B9BCA927DECE426995D8D /* AuthRemoteDataSourceProtocol.swift */,
-				0CFE911F53E10C8A5174BC68 /* AuthRemoteDataSource.swift */,
-			);
-			name = Remote;
 			sourceTree = "<group>";
 		};
 		C1AAF6D22C86304B006E563B = {
@@ -410,7 +153,6 @@
 				C1AAF6E22C86304B006E563B /* Item.swift */,
 				C1AAF6E42C86304C006E563B /* Assets.xcassets */,
 				C1AAF6E62C86304C006E563B /* Preview Content */,
-				AD9FD36EFE17EE5E345C9516 /* Modules */,
 			);
 			path = testgula;
 			sourceTree = "<group>";
@@ -440,36 +182,6 @@
 			path = testgulaUITests;
 			sourceTree = "<group>";
 		};
-		D509D2F4939F0415342ABA68 /* Screens */ = {
-			isa = PBXGroup;
-			children = (
-				050E987B80CC54E93037DF8E /* NewPassword */,
-				303DFA73A45CAF98AF535223 /* Register */,
-				48A0158EE0C66F1454BA423A /* AuthSwitcher */,
-				FD28C16AF039883CC4E87F7D /* Login */,
-				74A3B4043DFEED4AA095663A /* RecoverPassword */,
-			);
-			name = Screens;
-			sourceTree = "<group>";
-		};
-		E4A27A58F01521BB9B5BF8F7 /* UseCase */ = {
-			isa = PBXGroup;
-			children = (
-				933E14D4926545BA5C69CD93 /* Auth */,
-				5C1A20FEC584AFD71D3C5E8F /* Register */,
-			);
-			name = UseCase;
-			sourceTree = "<group>";
-		};
-		ED7C6AE5B9745AA6F5B4CD7C /* Domain */ = {
-			isa = PBXGroup;
-			children = (
-				294CC331395942B5EE24B16D /* RepositoryProtocols */,
-				E4A27A58F01521BB9B5BF8F7 /* UseCase */,
-			);
-			name = Domain;
-			sourceTree = "<group>";
-		};
 		FABC9873F8683B23B1F8BF48 /* Menu */ = {
 			isa = PBXGroup;
 			children = (
@@ -477,16 +189,6 @@
 				FBB8C4480C655CA2582B0A2A /* MenuRepositoryFake.swift */,
 			);
 			name = Menu;
-			sourceTree = "<group>";
-		};
-		FD28C16AF039883CC4E87F7D /* Login */ = {
-			isa = PBXGroup;
-			children = (
-				6FF264940F188D06BC3ECD7F /* LoginViewModel.swift */,
-				E678F76DAD893ED13AC0E559 /* LoginView.swift */,
-				1D9B9CE09AD1B3DA99AECF34 /* LoginBuilder.swift */,
-			);
-			name = Login;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
