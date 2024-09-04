@@ -35,13 +35,13 @@ end
 
 def create_groups(xcodeproj_path, app_name, destination, destination_relative_path)
   project = Xcodeproj::Project.open(xcodeproj_path)
-  root_group = project.main_group.find_subpath(app_name, true) || project.main_group.new_group(app_name)
+  root_group = project.main_group.find_subpath(app_name, false) || project.main_group.new_group(app_name, app_name)
   groups = destination_relative_path.split('/')
   current_group = root_group
 
   groups.each do |group_name|
     puts group_name
-    current_group = current_group.find_subpath(group_name, true) || current_group.new_group(group_name)
+    current_group = current_group.find_subpath(group_name, false) || current_group.new_group(group_name, group_name)
   end
 
   Dir.glob("#{destination}/**/*").each do |item|
@@ -53,7 +53,7 @@ def create_groups(xcodeproj_path, app_name, destination, destination_relative_pa
 
     path_components.each do |component|
       if File.extname(component).empty?
-        group = group.find_subpath(component, true) || group.new_group(component)
+        group = group.find_subpath(component, false) || group.new_group(component, component)
       end
     end
     
@@ -61,11 +61,13 @@ def create_groups(xcodeproj_path, app_name, destination, destination_relative_pa
     file_name = File.basename(item)
     
     #if !File.directory?(item)
-      existing_ref = group.files.find { |f| f.path == item.sub("#{app_name}/", "") }
+    puts item
+      existing_ref = group.files.find { |f| f.path == file_name }
       if existing_ref
         puts "❕ El archivo ya forma parte del xcodeproj, omitiendo: #{file_name}"
       else
-        file_ref = group.new_reference(item.sub("#{app_name}/", ""))
+        file_ref = group.new_reference(file_name)
+        project.targets.first.add_file_references([file_ref])
         puts "✅ Archivo añadido: #{file_name} en el grupo: #{group.name}"
       end
     #end
