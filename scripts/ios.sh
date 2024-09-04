@@ -47,6 +47,7 @@ install_ios_module() {
 	echo -e "${GREEN}-----------------------------------------------${NC}"
   	echo -e "${GREEN}Proceso finalizado.${NC}"
   	echo -e "${GREEN}-----------------------------------------------${NC}"
+  	remove_temporary_dir
 }
 
 list_ios() {
@@ -61,4 +62,5 @@ list_ios() {
 	echo -e "${GREEN}-----------------------------------------------"
 	ls -l "$DIRECTORY_PATH" | grep '^d' | awk '{print $9}'  
 	echo -e "${GREEN}-----------------------------------------------${NC}"
+	remove_temporary_dir
 }
