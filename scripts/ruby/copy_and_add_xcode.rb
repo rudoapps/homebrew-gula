@@ -24,7 +24,7 @@ def copy_all_files(origin, destination)
       FileUtils.mkdir_p(destination_path)
     else
       if File.exist?(destination_path)
-        puts "⚠️ El archivo ya existe, omitiendo: #{destination_path}"
+        puts "❕ El archivo ya existe, omitiendo: #{destination_path}"
       else
         FileUtils.mkdir_p(File.dirname(destination_path))
         FileUtils.cp(item, destination_path)
@@ -63,7 +63,7 @@ def create_groups(xcodeproj_path, app_name, destination, destination_relative_pa
     #if !File.directory?(item)
       existing_ref = group.files.find { |f| f.path == item.sub("#{app_name}/", "") }
       if existing_ref
-        puts "⚠️ El archivo ya forma parte del xcodeproj, omitiendo: #{file_name}"
+        puts "❕ El archivo ya forma parte del xcodeproj, omitiendo: #{file_name}"
       else
         file_ref = group.new_reference(item.sub("#{app_name}/", ""))
         puts "✅ Archivo añadido: #{file_name} en el grupo: #{group.name}"
