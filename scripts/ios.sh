@@ -36,7 +36,7 @@ install_ios_module() {
     MODULE_NAME="$(echo "${MODULE_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${MODULE_NAME:1}"
 	DIRECTORY_PATH="${MODULES_PATH_IOS}/${MODULE_NAME}"
 	# ruby "${scripts_dir}/ruby/copy_folder.rb" ${TEMPORARY_DIR} ${DIRECTORY_PATH}
-	ruby "${scripts_dir}/ruby/copy_and_add_xcode.rb" "${TEMPORARY_DIR}/${DIRECTORY_PATH}" "Modules/${MODULE_NAME}"
+	ruby "${scripts_dir}/ruby/copy_and_add_xcode.rb" "${TEMPORARY_DIR}/${DIRECTORY_PATH}" "Modules/${MODULE_NAME}" "${TEMPORARY_DIR}"
 	if [ $? -eq 0 ]; then
 		echo -e "✅"
 	else
