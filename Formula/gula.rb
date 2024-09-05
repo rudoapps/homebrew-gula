@@ -18,11 +18,8 @@ class Gula < Formula
   def install
     ENV["GEM_HOME"] = libexec
     
-    # Instala la gema xcodeproj sin Bundler, directamente con gem install
-    resource("xcodeproj").stage do
-      system "gem", "install", "xcodeproj-1.25.0.gem"
-    end
-
+    system "gem", "install", "xcodeproj-1.25.0.gem"
+    
     bin.install "gula"
     (share/"support/scripts").install "scripts"
   end
