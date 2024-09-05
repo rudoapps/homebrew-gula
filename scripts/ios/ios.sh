@@ -36,6 +36,14 @@ install_ios_module() {
     MODULE_NAME="$(echo "${MODULE_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${MODULE_NAME:1}"
 	DIRECTORY_PATH="${MODULES_PATH_IOS}/${MODULE_NAME}"
 	# ruby "${scripts_dir}/ruby/copy_folder.rb" ${TEMPORARY_DIR} ${DIRECTORY_PATH}
+
+	if ! gem list -i xcodeproj > /dev/null 2>&1; then
+	  echo "La gema 'xcodeproj' no está instalada. Procediendo con la instalación..."
+	  sudo gem install xcodeproj
+	else
+	  echo "La gema 'xcodeproj' ya está instalada."
+	fi
+
 	ruby "${scripts_dir}/ios/ruby/copy_and_add_xcode.rb" "${TEMPORARY_DIR}/${DIRECTORY_PATH}" "Modules/${MODULE_NAME}" "${TEMPORARY_DIR}"
 	if [ $? -eq 0 ]; then
 		echo -e "✅"
