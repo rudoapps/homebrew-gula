@@ -10,9 +10,6 @@ class Gula < Formula
   depends_on "jq" # Añade jq como una dependencia
 
   def install
-    
-    system "sudo", "gem", "install", "xcodeproj"
-
     bin.install "gula"
     (share/"support/scripts").install "scripts"
   end
