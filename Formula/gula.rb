@@ -18,19 +18,17 @@ class Gula < Formula
   def install
     # Configura el entorno para usar la versión de Ruby de Homebrew
     ENV["GEM_HOME"] = libexec
-    ENV["GEM_PATH"] = "#{libexec}:/usr/local/lib/ruby/gems/#{Formula["ruby"].version}"  # Cambia esta ruta a la versión correcta de Ruby
+    ENV["GEM_PATH"] = "#{libexec}:/usr/local/lib/ruby/gems/#{Formula["ruby"].version}"
     ENV["PATH"] = "#{Formula["ruby"].opt_bin}:#{libexec}/bin:#{ENV["PATH"]}"
 
-    # Instala la versión de Bundler compatible con Ruby 2.6.10 (si es necesario)
-    system "gem", "install", "bundler", "-v", "2.4.22"
-
-    # Instala la gema xcodeproj sin Bundler, directamente con gem install
+    # Instala la gema xcodeproj directamente en libexec
     resource("xcodeproj").stage do
-      system "gem", "install", "xcodeproj-1.25.0.gem"
+      system "gem", "install", "xcodeproj", "--install-dir", libexec
     end
 
-    bin.install "gula"
+    # Asegúrate de que el script se ejecute con el entorno Ruby correcto
     (share/"support/scripts").install "scripts"
+    (bin/"gula").write_env_script(share/"support/scripts/gula", GEM_HOME: libexec, GEM_PATH: libexec, PATH: "#{Formula["ruby"].opt_bin}:#{libexec}/bin:#{ENV["PATH"]}")
   end
 
   def post_install
