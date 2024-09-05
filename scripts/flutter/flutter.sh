@@ -2,7 +2,7 @@
 
 MODULES_PATH_FLUTTER="lib/modules"
 
-prerequisites() {
+flutter_prerequisites() {
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}Prerequisitos: Validando.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -17,7 +17,7 @@ prerequisites() {
 }
 
 list_flutter() {
-	prerequisites
+	flutter_prerequisites
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -33,7 +33,7 @@ list_flutter() {
 
 
 install_flutter_module() {	
-	prerequisites
+	flutter_prerequisites
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"

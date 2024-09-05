@@ -2,11 +2,10 @@
 
 MODULES_PATH_IOS="Gula/Modules"
 
-prerequisites() {
+ios_prerequisites() {
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}Prerequisitos: Validando.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
-	  
 	ACCESSTOKEN=$(get_bitbucket_access_token $KEY ios)
 	if [ $? -eq 0 ]; then
 		echo -e "✅"
@@ -22,7 +21,8 @@ install_ios_module() {
     	echo -e "${RED}Esta funcionalidad solo puede ser ejecutada en macOS.${NC}"
 		exit 0
 	fi
-	prerequisites
+	ios_prerequisites
+	
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -51,7 +51,8 @@ install_ios_module() {
 }
 
 list_ios() {
-	prerequisites
+	ios_prerequisites
+	
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"

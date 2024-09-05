@@ -28,11 +28,9 @@ copy_files() {
   local origin=$1
   local destination=$2
   
-  echo "Copiand de ${1} a ${2}"
   cp -R $1 $2
-  # Validar si el comando se ejecutó correctamente
   if [ $? -eq 0 ]; then
-    echo -e "✅"
+    echo -e "✅ Ficheros copiados en: $2"
   else
     echo -e "${RED}Error: No se ha podido copiar.${NC}"
     remove_temporary_dir
@@ -44,7 +42,7 @@ remove_temporary_dir() {
   if [ -d "$TEMPORARY_DIR" ]; then
     rm -rf "$TEMPORARY_DIR"
   fi
-  echo -e "✅"
+  echo -e "✅ Directorio temporal eliminado"
 }
 
 check_path_exists() {

@@ -5,7 +5,7 @@ GULA_PACKAGE="app.gula.com"
 MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
 
 list_android() {
-  prerequisites
+  android_prerequisites
   clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
 
   DIRECTORY_PATH="${TEMPORARY_DIR}/${MODULES_PATH}"
@@ -16,7 +16,7 @@ list_android() {
   remove_temporary_dir
 }
 
-prerequisites() {
+android_prerequisites() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}Prerequisitos: Validando.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -31,7 +31,7 @@ prerequisites() {
 }
 
 install_android_module() {
-  prerequisites
+  android_prerequisites
   echo $ACCESSTOKEN
   # Clonamos el repositorio a una carpeta temporal
   echo -e "${BOLD}-----------------------------------------------${NC}"
