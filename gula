@@ -26,18 +26,21 @@ HOMEBREW_PREFIX=$(brew --prefix)
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
 
 echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
-source "$scripts_dir/android.sh"
-source "$scripts_dir/android_support.sh"
-source "$scripts_dir/ios.sh"
-source "$scripts_dir/ios_support.sh"
-source "$scripts_dir/general_support.sh"
-source "$scripts_dir/git.sh"
-source "$scripts_dir/network.sh"
-source "$scripts_dir/os.sh"
+source "$scripts_dir/android/android.sh"
+source "$scripts_dir/android/android_support.sh"
+source "$scripts_dir/ios/ios.sh"
+source "$scripts_dir/ios/ios_support.sh"
+source "$scripts_dir/flutter/flutter.sh"
+source "$scripts_dir/flutter/flutter_support.sh"
+source "$scripts_dir/support/general_support.sh"
+source "$scripts_dir/support/git.sh"
+source "$scripts_dir/support/network.sh"
+source "$scripts_dir/support/os.sh"
 echo -e "✅"
 
 function cleanup {
-  remove_temporary_dir
+    remove_temporary_dir
+    echo "clean"
 }
 
 # Asociar la señal SIGINT (Ctrl + C) con la función cleanup
@@ -53,6 +56,9 @@ install_module() {
   elif [ $type -eq 1 ]; then
     echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
     install_ios_module
+  elif [ $type -eq 2 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
+    install_flutter_module
   else 
     echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
     exit 0
@@ -69,6 +75,9 @@ list_modules() {
   elif [ $type -eq 1 ]; then
     echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
     list_ios
+  elif [ $type -eq 2 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
+    list_flutter
   else 
     echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
     exit 0
