@@ -5,7 +5,6 @@ class Gula < Formula
   sha256 "81a06cab7b6df7af45a6554313552b26231487387b6a8a7b0a9b8a984494f7be"
   license "MIT"
 
-  # Dependencias
   depends_on "ruby" if MacOS.version <= :mojave
   depends_on "jq"
 
@@ -21,7 +20,11 @@ class Gula < Formula
     ENV["GEM_PATH"] = "#{libexec}:/usr/local/lib/ruby/gems/#{Formula["ruby"].version}"
     ENV["PATH"] = "#{Formula["ruby"].opt_bin}:#{libexec}/bin:#{ENV["PATH"]}"
 
-    # Instala la gema xcodeproj directamente en libexec
+    # Configura las cabeceras de Ruby para compilación
+    ENV["CFLAGS"] = "-I#{Formula["ruby"].opt_include}/ruby-#{Formula["ruby"].version.major_minor}"
+    ENV["LDFLAGS"] = "-L#{Formula["ruby"].opt_lib}"
+
+    # Instala la gema xcodeproj en libexec
     resource("xcodeproj").stage do
       system "gem", "install", "xcodeproj", "--install-dir", libexec
     end
