@@ -5,7 +5,7 @@ TEMPORARY_DIR="temp-gula"
 MODULE_NAME=""
 KEY=""
 ACCESSTOKEN=""
-VERSION="0.0.20"
+VERSION="0.0.21"
 
 # Definir colores 
 RED='\033[1;31m'
