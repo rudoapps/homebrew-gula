@@ -15,18 +15,9 @@ class Gula < Formula
   end
 
   def install
-    # Configura el entorno para usar la versión de Ruby de Homebrew
-    ENV["GEM_HOME"] = libexec
-    ENV["GEM_PATH"] = "#{libexec}:/usr/local/lib/ruby/gems/#{Formula["ruby"].version}"
-    ENV["PATH"] = "#{Formula["ruby"].opt_bin}:#{libexec}/bin:#{ENV["PATH"]}"
-
-    # Configura las cabeceras de Ruby para compilación
-    ENV["CFLAGS"] = "-I#{Formula["ruby"].opt_include}/ruby-#{Formula["ruby"].version.major_minor}"
-    ENV["LDFLAGS"] = "-L#{Formula["ruby"].opt_lib}"
-
     # Instala la gema xcodeproj en libexec
     resource("xcodeproj").stage do
-      system "gem", "install", "xcodeproj", "--install-dir", libexec
+      system "gem", "install", "xcodeproj"
     end
 
     # Asegúrate de que el script se ejecute con el entorno Ruby correcto
