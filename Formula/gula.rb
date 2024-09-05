@@ -18,8 +18,10 @@ class Gula < Formula
   def install
     ENV["GEM_HOME"] = libexec
     
-    system "gem", "install", "xcodeproj-1.25.0.gem"
-    
+    resource("xcodeproj").stage do
+      system "gem", "install", "xcodeproj-1.25.0.gem"
+    end
+
     bin.install "gula"
     (share/"support/scripts").install "scripts"
   end
