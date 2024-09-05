@@ -16,10 +16,13 @@ class Gula < Formula
   end
 
   def install
-    # Instala Bundler y las gemas en un entorno gestionado
     ENV["GEM_HOME"] = libexec
-    system "gem", "install", "bundler"
-    system "bundler", "install"
+    # Instala Bundler y las gemas en un entorno gestionado
+    system "gem", "install", "bundler", "-v", "2.4.22"
+
+    # Usar Bundler para instalar las dependencias
+    system "bundle", "config", "set", "path", "vendor/bundle"
+    system "bundle", "install"
 
     bin.install "gula"
     (share/"support/scripts").install "scripts"
