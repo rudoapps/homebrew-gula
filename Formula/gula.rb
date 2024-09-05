@@ -7,8 +7,8 @@ class Gula < Formula
 
   # Dependencias
   depends_on "ruby" if MacOS.version <= :mojave
-  depends_on "jq" # Añade jq como una dependencia
-  
+  depends_on "jq"
+
   # Recurso para xcodeproj
   resource "xcodeproj" do
     url "https://rubygems.org/gems/xcodeproj-1.25.0.gem"
@@ -16,8 +16,15 @@ class Gula < Formula
   end
 
   def install
+    # Configura el entorno para usar la versión de Ruby de Homebrew
     ENV["GEM_HOME"] = libexec
-    
+    ENV["GEM_PATH"] = "#{libexec}:/usr/local/lib/ruby/gems/#{Formula["ruby"].version}"  # Cambia esta ruta a la versión correcta de Ruby
+    ENV["PATH"] = "#{Formula["ruby"].opt_bin}:#{libexec}/bin:#{ENV["PATH"]}"
+
+    # Instala la versión de Bundler compatible con Ruby 2.6.10 (si es necesario)
+    system "gem", "install", "bundler", "-v", "2.4.22"
+
+    # Instala la gema xcodeproj sin Bundler, directamente con gem install
     resource("xcodeproj").stage do
       system "gem", "install", "xcodeproj-1.25.0.gem"
     end
