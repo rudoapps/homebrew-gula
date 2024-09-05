@@ -8,11 +8,19 @@ class Gula < Formula
   # Dependencias
   depends_on "ruby" if MacOS.version <= :mojave
   depends_on "jq" # Añade jq como una dependencia
+# Usa Bundler para gestionar las dependencias Ruby
+  
+  resource "xcodeproj" do
+    url "https://rubygems.org/gems/xcodeproj-1.25.0.gem"
+    sha256 "aa0bc57eb3bd616357088a9b41794ef79bdcf7ba969000642aec1e768e7b06ce"
+  end
 
   def install
-    # Instalar la gema xcodeproj
-    system "gem", "install", "xcodeproj" if MacOS.version <= :mojave
-    
+    # Instala Bundler y las gemas en un entorno gestionado
+    ENV["GEM_HOME"] = libexec
+    system "gem", "install", "bundler"
+    system "bundler", "install"
+
     bin.install "gula"
     (share/"support/scripts").install "scripts"
   end
