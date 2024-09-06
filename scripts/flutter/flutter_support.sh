@@ -16,18 +16,23 @@ flutter_create_modules_dir() {
 
 
 flutter_rename_imports() {
-  # Eliminar el string especificado de la ruta
-  REMOVE_PATH=$ANDROID_PROJECT_SRC
-  MODIFIED_PATH=$(echo "$MAIN_DIRECTORY" | sed "s|$REMOVE_PATH||")
-  PACKAGE_NAME=$(echo "$MODIFIED_PATH" | sed 's|/|.|g')
-  PACKAGE_NAME="${PACKAGE_NAME/.}"
-  echo -e "${YELLOW}Renombrando imports de $GULA_PACKAGE a $PACKAGE_NAME en los archivos del módulo...${NC}"
+  NEW_PACKAGE=$(grep '^name:' pubspec.yaml | awk '{print $2}')
 
-  find "$MAIN_DIRECTORY" -type f \( -name "*.java" -o -name "*.kt" \) -print0 | while IFS= read -r -d '' file; do
-    sed -i '' "s#$GULA_PACKAGE#$PACKAGE_NAME#g" "$file"
-  done
+  # Verifica si se pudo extraer el nombre
+  if [ -z "$NEW_PACKAGE" ]; then
+    echo -e "${RED}No se pudo encontrar el nombre del paquete en pubspec.yaml.${NC}"
+    exit 1
+  fi
+
+  # Define el nombre del paquete antiguo (reemplaza 'antiguo_paquete' por el nombre correcto)
+  OLD_PACKAGE="gula"
+  echo -e "${YELLOW}Renombrando imports de $OLD_PACKAGE a $NEW_PACKAGE en los archivos del módulo...${NC}"
+
+  # Realiza el reemplazo en todos los archivos .dart dentro del proyecto
+  find . -type f -name "*.dart" -exec sed -i "" "s/package:$OLD_PACKAGE\//package:$NEW_PACKAGE\//g" {} +
+  
   if [ $? -eq 0 ]; then
-    echo -e "✅"
+    echo -e "✅ Reemplazo completado: $OLD_PACKAGE -> $NEW_PACKAGE"
   else
     echo -e "${RED}Error: No se ha podido renombrar.${NC}"
     remove_temporary_dir
@@ -39,12 +44,13 @@ flutter_rename_imports() {
 flutter_read_configuration() {
   # Verificar si el fichero existe
   FILE="${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}/configuration.gula"
-  echo $FILE
+  
   if [ ! -f "$FILE" ]; then
-    echo "Error: El fichero $FILE no existe."
+    echo -e "${RED}Error: El fichero $FILE no existe.${NC}"
     exit 1
   fi
 
+  echo "Lectura correcta de fichero de configuración"
   # Leer el fichero línea por línea
   while IFS= read -r line; do
     # Extraer el tipo (assets, strings, colors, dimens)
