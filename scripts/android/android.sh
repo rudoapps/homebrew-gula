@@ -5,43 +5,45 @@ GULA_PACKAGE="app.gula.com"
 MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
 
 list_android() {
-  android_prerequisites
-  clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
-
-  DIRECTORY_PATH="${TEMPORARY_DIR}/${MODULES_PATH}"
-  echo -e "${GREEN}Lista de módulos disponibles:"
-  echo -e "${GREEN}-----------------------------------------------"
-  ls -l "$DIRECTORY_PATH" | grep '^d' | awk '{print $9}'  
-  echo -e "${GREEN}-----------------------------------------------${NC}"
-  remove_temporary_dir
-}
-
-android_prerequisites() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}Prerequisitos: Validando.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  
-  ACCESSTOKEN=$(get_bitbucket_access_token $KEY android)
-  if [ $? -eq 0 ]; then
-    echo -e "${GREEN}OK.${NC}"
-  else
-    echo -e "${RED}Error: No se ha podido completar la validación KEY incorrecta.${NC}"
-    exit 1
-  fi
-}
 
-install_android_module() {
-  android_prerequisites
-  echo $ACCESSTOKEN
-  # Clonamos el repositorio a una carpeta temporal
+  get_access_token $KEY "android"
+  
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
+
+  echo -e "${GREEN}Lista de módulos disponibles:"
+  echo -e "${GREEN}-----------------------------------------------"
+  echo ""
+  ls -l "${TEMPORARY_DIR}/${MODULES_PATH}" | grep '^d' | awk '{print $9}' 
+  echo ""
+  echo -e "${GREEN}-----------------------------------------------${NC}"
+  
+  remove_temporary_dir
+}
+
+install_android_module() {
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}Prerequisitos: Validando.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  get_access_token $KEY "android"
+  
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  
   clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP2 - Localizar package name del proyecto.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
+  
   android_detect_package_name 
 
   # Verificar que el módulo existe en el repositorio clonado
