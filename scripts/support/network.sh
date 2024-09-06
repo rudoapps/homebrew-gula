@@ -22,3 +22,15 @@ get_bitbucket_access_token() {
     exit 1
   fi
 }
+
+get_access_token() {
+  local apikey=$1
+  local platform=$2
+  ACCESSTOKEN=$(get_bitbucket_access_token $apikey $platform)
+  if [ $? -eq 0 ]; then
+    echo -e "✅ Obtención del código de acceso"
+  else
+    echo -e "${RED}Error: No se ha podido completar la validación KEY incorrecta.${NC}"
+    exit 1
+  fi
+}
