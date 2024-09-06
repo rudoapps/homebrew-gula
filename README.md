@@ -1,7 +1,8 @@
 
-# Gula Installer
+# Gula
 
-# Descripción
+## Descripción
+
 El Gula Module Installer es un script bash diseñado para facilitar la instalación y gestión de módulos en proyectos Android e iOS. Este script permite identificar el tipo de proyecto (Android o iOS) y ejecutar los comandos correspondientes para instalar o listar módulos en dichos proyectos.
 
 ## Requisitos
