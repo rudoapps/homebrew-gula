@@ -21,7 +21,7 @@ check_module_in_temporary_dir() {
     rm -rf "$TEMPORARY_DIR"
     exit 1
   fi
-  echo -e "✅"
+  echo -e "✅ Módulo existe correctamente"
 }
 
 copy_files() {
@@ -72,7 +72,7 @@ copy_file() {
   echo "Copiando desde ${origin} a ${path_without_folder}"	
   cp -R "${origin}" "${path_without_folder}"
   if [ $? -eq 0 ]; then
-    echo -e "✅"
+    echo -e "✅ Copiado desde ${origin} a ${path_without_folder} correctamente"
   else
     echo -e "${RED}Error: No se pudo copiar el fichero.${NC}"
   fi 
