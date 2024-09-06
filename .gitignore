@@ -28,3 +28,5 @@ settings.gradle.kts
 /ios
 /testgula.xcodeproj
 /flutter
+/python
+gula.sh
