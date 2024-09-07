@@ -4,26 +4,17 @@ MAIN_DIRECTORY=""
 
 check_type_of_project() {
   if [ -d "$ANDROID_PROJECT_SRC" ]; then
-      return 0
-    elif find . -maxdepth 1 -name "*.xcodeproj" | grep -q .; then
-      return 1 
-    elif [ -f "pubspec.yaml" ]; then
-      return 2 
-    else
-      return -1
-    fi
-}
-
-check_module_in_temporary_dir() {
-  if [ ! -d "$TEMPORARY_DIR/${MODULES_PATH}${MODULE_NAME}" ]; then
-    echo -e "${RED}Error: El módulo $MODULE_NAME no existe en el repositorio.${NC}"
-    echo -e "${RED}No encontrado en: $MODULES_PATH"
-    rm -rf "$TEMPORARY_DIR"
-    exit 1
+      return 0  # Proyecto Android
+  elif find . -maxdepth 1 -name "*.xcodeproj" | grep -q .; then
+      return 1  # Proyecto iOS (Xcode)
+  elif [ -f "pubspec.yaml" ]; then
+      return 2  # Proyecto Flutter (Dart)
+  elif [ -f "requirements.txt" ] || [ -f "setup.py" ] || [ -f "pyproject.toml" ]; then
+      return 3  # Proyecto Python
+  else
+      return -1  # Tipo de proyecto desconocido
   fi
-  echo -e "✅ Módulo existe correctamente"
 }
-
 copy_files() {
   local origin=$1
   local destination=$2
@@ -54,20 +45,26 @@ check_path_exists() {
   fi
 }
 
+check_directory_exists() {
+  local destination=$1
+  if check_path_exists "$destination"; then   
+    echo -e "${YELLOW}$destination ya existe en el proyecto destino.${NC}" 
+    read -p "¿Deseas actualizar el fichero existente? (s/n): " CONFIRM < /dev/tty
+
+    if [ "$CONFIRM" == "s" ]; then
+      echo -e "${BOLD}Actualizando.${NC}..."
+      return 0     
+    else
+      echo -e "${BOLD}Cancelado.${NC}"   
+      return 1
+    fi
+  fi
+}
+
 copy_file() {
   local origin=$1
   local destination=$2
-  if check_path_exists "$destination"; then   
-    echo -e "${YELLOW}$destination ya existe en el proyecto destino.${NC}" 
-	  read -p "¿Deseas actualizar el fichero existente? (s/n): " CONFIRM < /dev/tty
 
-    if [ "$CONFIRM" == "s" ]; then
-      echo -e "${BOLD}Actualizando.${NC}..."      
-    else
-      echo -e "${BOLD}Cancelado.${NC}"   
-      return
-    fi
-  fi
   path_without_folder=$(dirname "$destination")
   echo "Copiando desde ${origin} a ${path_without_folder}"	
   cp -R "${origin}" "${path_without_folder}"
