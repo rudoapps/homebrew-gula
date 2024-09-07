@@ -2,7 +2,6 @@
 
 ANDROID_PROJECT_SRC="app/src/main/java"
 GULA_PACKAGE="app.gula.com"
-MODULES_PATH="app/src/main/java/app/gula/com/${MODULES_DIR}/"
 
 list_android() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -20,10 +19,10 @@ list_android() {
   echo -e "${GREEN}Lista de módulos disponibles:"
   echo -e "${GREEN}-----------------------------------------------"
   echo ""
-  ls -l "${TEMPORARY_DIR}/${MODULES_PATH}" | grep '^d' | awk '{print $9}' 
+  android_list_modules "${TEMPORARY_DIR}/${MODULES_PATH}"
   echo ""
   echo -e "${GREEN}-----------------------------------------------${NC}"
-  
+
   remove_temporary_dir
 }
 
@@ -50,13 +49,13 @@ install_android_module() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP3 - Verificación de la existencia del módulo: ${MODULE_NAME}.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  check_module_in_temporary_dir
+  android_check_module_in_temporary_dir $MODULE_NAME
 
   # Verificar si el módulo ya está instalado en el proyecto destino
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP4 - Verificación instalación previa del módulo: ${MODULE_NAME}.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  android_verify_module
+  android_verify_module $MODULE_NAME
   
   # Verificar si la carpeta 'modules' existe; si no, crearla
   echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -68,8 +67,8 @@ install_android_module() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP6 - Copiar ficheros al proyecto.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  echo -e "${YELLOW}Inicio copiado de del módulo ${MODULE_NAME} en: ${MAIN_DIRECTORY}/modules/${MODULE_NAME}${NC}"
-  copy_files "${TEMPORARY_DIR}/${MODULES_PATH}${MODULE_NAME}" "${MAIN_DIRECTORY}/modules/"
+  echo -e "${YELLOW}Inicio copiado de del módulo ${TEMPORARY_DIR}/${MODULE_NAME} en: ${MODULE_NAME}${NC}"
+  copy_files "${TEMPORARY_DIR}/${MODULE_NAME}" "."
 
    # Renombrar los imports en los archivos .java y .kt del módulo copiado
   echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -80,7 +79,7 @@ install_android_module() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP8 - Copiar/instalar las dependencias.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  android_read_configuration
+  android_read_configuration_temporal
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP9 - Eliminación repositorio temporal.${NC}"
