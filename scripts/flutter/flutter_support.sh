@@ -47,30 +47,29 @@ flutter_read_configuration() {
   
   if [ ! -f "$FILE" ]; then
     echo -e "${RED}Error: El fichero $FILE no existe.${NC}"
-    exit 1
+  else 
+    echo "Lectura correcta de fichero de configuración"
+    # Leer el fichero línea por línea
+    while IFS= read -r line; do
+      # Extraer el tipo (assets, strings, colors, dimens)
+      type=$(echo "$line" | cut -d'/' -f1)
+      
+      # Extraer la parte de la ruta a transformar
+      # path=$(echo "$line" | cut -d'/' -f2-)
+      path=$(dirname "$line")
+      EXISTS_THIS_DIR=lib/${path}
+      if [ ! -d "$EXISTS_THIS_DIR" ]; then
+        echo -e "${YELLOW}La carpeta '${path}' no existe. Creándola...${NC}"
+        mkdir -p "$EXISTS_THIS_DIR"
+        if [ $? -eq 0 ]; then
+          echo -e "✅ Creada correctamente"
+        else
+          echo -e "${RED}Error: No se pudo crear la carpeta '${MODULE_NAME}'.${NC}"
+          exit 1
+        fi 
+      fi
+      copy_files "${TEMPORARY_DIR}/lib/${line}" "lib/${line}"
+      
+    done < "$FILE"
   fi
-
-  echo "Lectura correcta de fichero de configuración"
-  # Leer el fichero línea por línea
-  while IFS= read -r line; do
-    # Extraer el tipo (assets, strings, colors, dimens)
-    type=$(echo "$line" | cut -d'/' -f1)
-    
-    # Extraer la parte de la ruta a transformar
-    # path=$(echo "$line" | cut -d'/' -f2-)
-    path=$(dirname "$line")
-    EXISTS_THIS_DIR=lib/${path}
-    if [ ! -d "$EXISTS_THIS_DIR" ]; then
-      echo -e "${YELLOW}La carpeta '${path}' no existe. Creándola...${NC}"
-      mkdir -p "$EXISTS_THIS_DIR"
-      if [ $? -eq 0 ]; then
-        echo -e "✅"
-      else
-        echo -e "${RED}Error: No se pudo crear la carpeta '${MODULE_NAME}'.${NC}"
-        exit 1
-      fi 
-    fi
-    copy_files "${TEMPORARY_DIR}/lib/${line}" "lib/${line}"
-    
-  done < "$FILE"
 }
