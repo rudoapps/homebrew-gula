@@ -15,25 +15,18 @@ def find_xcode_project_and_app_name
   return xcode_project_path, app_name
 end
 
-def copy_file(origin, destination)
-  FileUtils.mkdir_p(destination)
-  Dir.glob("#{origin}/**/*").each do |item|
-    relative_path = item.sub("#{origin}/", "")
-    destination_path = File.join(destination, relative_path)
-    if File.directory?(item)
-      FileUtils.mkdir_p(destination_path)
+def copy_all_files(origin, destination)
+  if Dir.exist?(destination)
+    puts"-----------------------------------------------"
+    puts "Directorio '#{destination}' ya existe. ¿Deseas reemplazarlo? (s/n)"
+    puts"-----------------------------------------------"
+    response = STDIN.gets.chomp.downcase
+    if response == 's'
+      puts "Actualizando código..."
     else
-      if File.exist?(destination_path)
-        puts "❕ El archivo ya existe, omitiendo: #{destination_path}"
-      else
-        FileUtils.mkdir_p(File.dirname(destination_path))
-        FileUtils.cp(item, destination_path)
-      end
+      return
     end
   end
-end
-
-def copy_all_files(origin, destination)
   FileUtils.mkdir_p(destination)
   Dir.glob("#{origin}/**/*").each do |item|
     relative_path = item.sub("#{origin}/", "")
@@ -41,12 +34,9 @@ def copy_all_files(origin, destination)
     if File.directory?(item)
       FileUtils.mkdir_p(destination_path)
     else
-      if File.exist?(destination_path)
-        puts "❕ El archivo ya existe, omitiendo: #{destination_path}"
-      else
-        FileUtils.mkdir_p(File.dirname(destination_path))
-        FileUtils.cp(item, destination_path)
-      end
+      FileUtils.mkdir_p(File.dirname(destination_path))
+      FileUtils.cp(item, destination_path)
+      puts "✅ Código añadido en: #{destination_path}"
     end
   end
 end
@@ -79,48 +69,14 @@ def create_groups(xcodeproj_path, app_name, destination, destination_relative_pa
     
     #if !File.directory?(item)
       existing_ref = group.files.find { |f| f.path == file_name }
-      if existing_ref
-        puts "❕ El archivo ya forma parte del xcodeproj, omitiendo: #{file_name}"
-      else
+      if !existing_ref        
         file_ref = group.new_reference(file_name)
         project.targets.first.add_file_references([file_ref])
-        puts "✅ Archivo añadido: #{file_name} en el grupo: #{group.name}"
+        puts "✅ Referencia añadida: #{file_name} en el grupo: #{group.name}"
       end
     #end
   end
   project.save
-end
-
-def copy_and_add_shared(xcodeproj_path, app_name, origin, temporary_dir)
-  items_to_copy = read_gula_file(origin, "Gula")
-  if items_to_copy.size > 0
-    puts "----------------------------------------------------"
-    puts "🏗️ Elementos a copiar en Shared"
-    items_to_copy.each do |item|
-      puts "📦 #{item}"  
-    end
-    puts "----------------------------------------------------"
-    for item in items_to_copy do
-      puts "Copiar #{item} a #{item.sub("Gula", app_name)}"
-      copy_file("#{temporary_dir}/#{item}", item.sub("Gula", app_name))
-    end
-    create_groups(xcodeproj_path, app_name, "#{app_name}/Shared", "Shared")
-  end
-end
-
-def notify_libraries(origin)
-  items_to_copy = read_gula_file(origin, "Library")
-  if items_to_copy.size > 0
-    puts "----------------------------------------------------"
-    puts ""
-    puts "❗❗❗ Tendrás que instalar manualmente estos package ❗❗❗"
-    puts ""
-    items_to_copy.each do |item|
-      puts "📦 #{item.gsub('Library/', '')}"  
-    end
-    puts ""
-    puts "----------------------------------------------------"
-  end
 end
 
 def main 
@@ -140,7 +96,6 @@ def main
   
   puts "✅ Archivos integrados exitosamente en el proyecto Xcode dentro de #{destination_relative_path}"
 
-  copy_and_add_shared(xcodeproj_path, app_name, origin, temporary_dir)
-  notify_libraries(origin)
+  read_gula_file_and_install_dependencies(xcodeproj_path, app_name, origin, temporary_dir)
 end
 main
