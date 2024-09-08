@@ -79,7 +79,8 @@ install_android_module() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP8 - Copiar/instalar las dependencias.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  android_read_configuration_temporal
+  android_install_libraries_dependencies
+  android_install_gradle_dependencies
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP9 - Eliminación repositorio temporal.${NC}"
