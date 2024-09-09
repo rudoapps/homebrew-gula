@@ -74,7 +74,7 @@ install_android_module() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP7 - Renombrar imports.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  android_rename_imports
+  # android_rename_imports
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP8 - Copiar/instalar las dependencias.${NC}"
