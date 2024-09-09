@@ -6,7 +6,7 @@ class Gula < Formula
   license "MIT"
 
   # Dependencias
-  depends_on "ruby" if MacOS.version <= :mojave
+  depends_on "ruby"
   depends_on "jq" # Añade jq como una dependencia
 
   def install
