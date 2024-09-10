@@ -87,7 +87,7 @@ copy_file_or_create_folder() {
     mkdir -p "$destination"
   fi
 
-  cp -R "${origin}" "${destination}"
+  cp -R "${origin}/." "${destination}"
   if [ $? -eq 0 ]; then
     echo -e "✅ Copiado desde ${origin} a ${destination} correctamente"
   else
@@ -230,7 +230,7 @@ android_install_modules_dependencies() {
 
   # Iterar sobre el array 'modules'
   for module in $(echo "$modules" | jq -r '.[]'); do
-    copy_file_or_create_folder "${TEMPORARY_DIR}/${module}/" "./${module}"
+    copy_file_or_create_folder "${TEMPORARY_DIR}/${module}" "./${module}"
   done
 }
 
