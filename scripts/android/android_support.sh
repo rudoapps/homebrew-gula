@@ -81,7 +81,9 @@ copy_file_or_create_folder() {
   local origin=$1
   local destination=$2
 
+  echo $destination
   if !(check_path_exists "$destination"); then  
+    echo "No existe CREAMOS DIRECTORIO"
     mkdir -p "$destination"
   fi
 
@@ -228,7 +230,7 @@ android_install_modules_dependencies() {
 
   # Iterar sobre el array 'modules'
   for module in $(echo "$modules" | jq -r '.[]'); do
-    copy_file_or_create_folder "${TEMPORARY_DIR}/${module}" "./${module}"
+    copy_file_or_create_folder "${TEMPORARY_DIR}/${module}/" "./${module}"
   done
 }
 
@@ -249,16 +251,13 @@ android_read_versions_and_install_toml() {
   echo "Configuración: ${json_file}"
   echo "Toml: ${toml_file}"
   echo "-----------------------------------------------"
-  # Recorrer las versiones en el bloque 'toml' del JSON
   while read -r entry; do
-    # Extraer las propiedades name, version, group y module
     name=$(echo "$entry" | jq -r '.name')
     version=$(echo "$entry" | jq -r '.version')
     group=$(echo "$entry" | jq -r '.group // empty')
     module=$(echo "$entry" | jq -r '.module // empty')
 
-    # Comprobar si la versión ya existe en el bloque [versions]
-    if grep -q "^$name" "$toml_file"; then
+    if grep -q "${name} = \"" "$toml_file"; then
       echo "✅ $name ya está en la versión $version en el TOML"
     else
       echo "➕ $name no está en el TOML. Añadiendo a la lista para [versions]..."
@@ -442,7 +441,7 @@ android_install_gradle_dependencies() {
       echo "✅ $include ya está en el archivo"
     else
       echo "➕ $include no está en el archivo. Instalando..."
-      includes_to_add+="\ninclude(\"$include\")"
+      includes_to_add+="\ninclude(${include})"
     fi
   done
 
