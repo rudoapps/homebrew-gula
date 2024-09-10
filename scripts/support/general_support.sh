@@ -67,7 +67,7 @@ copy_file() {
 
   path_without_folder=$(dirname "$destination")
   echo "Copiando desde ${origin} a ${path_without_folder}"	
-  cp -R "${origin}" "${path_without_folder}"
+  cp -R "${origin}" "${destination}"
   if [ $? -eq 0 ]; then
     echo -e "✅ Copiado desde ${origin} a ${path_without_folder} correctamente"
   else
