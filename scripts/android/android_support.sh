@@ -165,7 +165,6 @@ android_read_configuration() {
   fi
 }
 
-
 android_decide_what_to_do_with_file() {
   local type=$1
   local path=$2
@@ -318,7 +317,7 @@ android_read_libraries_and_install_toml() {
     fi
 
     if grep -q "= \"$group\"" "$toml_file"; then
-      echo "✔ $name ya está en [libraries] del TOML"
+      echo "✅ $name ya está en [libraries] del TOML"
     elif grep -q "= \"$module\"" "$toml_file"; then      
       echo "✅ $name ya está en [libraries] del TOML"
     else

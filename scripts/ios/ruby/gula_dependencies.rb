@@ -69,16 +69,14 @@ def install_packages(xcodeproj_path, name, url, version)
         "kind" => "upToNextMajorVersion",
         "minimumVersion" => version
       }
-
-      swift_package_product = project.new Xcodeproj::Project::Object::XCSwiftPackageProductDependency
+      swift_package_product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
       swift_package_product.package = swift_package
       swift_package_product.product_name = name
-      puts swift_package_product
-      swift_package_build_file = project.new Xcodeproj::Project::Object::PBXBuildFile
-      swift_package_build_file.product_ref = swift_package_product
-      swift_package_build_file.referrers << project['Frameworks']
-      puts swift_package_build_file
+
+      target.package_product_dependencies << swift_package_product
+
       project.root_object.package_references << swift_package
+
       project.save
       puts "✅ Librería: #{name}, URL: #{url}, Versión: #{version}"
     end
