@@ -436,11 +436,11 @@ android_install_gradle_dependencies() {
   echo "[1/2] Leyendo includes..."
 
   for include in $includes; do
-    if grep -q "include(\"$include\")" "$gradle_file"; then
+    if grep -q "include($include)" "$gradle_file"; then
       echo "✅ $include ya está en el archivo"
     else
       echo "➕ $include no está en el archivo. Instalando..."
-      includes_to_add+="\ninclude(${include})"
+      includes_to_add+="include(${include})"
     fi
   done
 
@@ -466,29 +466,62 @@ android_install_gradle_dependencies() {
     name=$(echo "$dep" | jq -r '.name')
     url=$(echo "$dep" | jq -r '.url')
 
-    if grep -q "maven(\"$url\")" "$gradle_file"; then
+    if grep -q "$name(\"$url\")" "$gradle_file"; then
       echo "✅ $url ya está en el archivo"
     else
-      echo "➕ $url no está en el archivo. Instalando..."
-      repositories_to_add+="maven(\"$url\")\n"
+      echo "➕ $url no está en el archivo. Añadiendo..."
+      repositories_to_add+="\t\t${name}(\"$url\")"
     fi
   done
 
   if [[ -n "$repositories_to_add" ]]; then
     echo "Añadiendo nuevos repositorios al archivo..."
-    repositories_to_add=$(printf "%b" "$repositories_to_add")
 
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      # macOS
-      printf '%s\n' "$repositories_to_add" | sed -i '' "/repositories {/r /dev/stdin" "$gradle_file"
-    else
-      printf '%s\n' "$repositories_to_add" | sed -i "/repositories {/r /dev/stdin" "$gradle_file"
-    fi
-    echo "✅ Instalados repositorios en gradle"
+    # Usamos awk para insertar los nuevos repositorios después de 'repositories {' dentro de 'dependencyResolutionManagement'
+    awk -v repos="$repositories_to_add" '
+      /dependencyResolutionManagement/ {in_dependency_block=1}
+      in_dependency_block && /repositories {/ {print; print repos; in_dependency_block=0; next}
+      {print}
+    ' "$gradle_file" > tmp && mv tmp "$gradle_file"
+
+    echo "✅ Repositorios añadidos en build.gradle.kts"
   else
     echo "No hay nuevos repositorios que añadir."
   fi
 
   echo "✅ Modificaciones completadas."
   echo ""
+}
+
+android_install_main_dependencies() {
+  json_file="${TEMPORARY_DIR}/configuration.gula"
+  gradle_file="build.gradle.kts"
+
+  plugins_to_add=""
+  while read -r plugin; do
+    alias=$(echo "$plugin" | jq -r '.alias')
+    apply=$(echo "$plugin" | jq -r '.apply')
+
+    if grep -q "alias($alias)" "$gradle_file"; then
+      echo "✅ $alias ya está en el archivo"
+    else
+      echo "➕ $alias no está en el archivo. Añadiendo..."
+      plugins_to_add+="\talias($alias) apply $apply\n"
+    fi
+  done < <(jq -c '.plugins[]' "$json_file")
+
+  if [[ -n "$plugins_to_add" ]]; then
+    echo "Añadiendo nuevos plugins al archivo..."
+    plugins_to_add=$(printf "%b" "$plugins_to_add")
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      # macOS
+      printf '%s\n' "$plugins_to_add" | sed -i '' "/plugins {/r /dev/stdin" "$gradle_file"
+    else
+      printf '%s\n' "$plugins_to_add" | sed -i "/plugins {/r /dev/stdin" "$gradle_file"
+    fi
+    echo "✅ Plugins añadidos en build.gradle.kts"
+  else
+    echo "No hay nuevos plugins que añadir."
+  fi
 }

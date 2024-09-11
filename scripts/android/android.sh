@@ -77,14 +77,19 @@ install_android_module() {
   # android_rename_imports
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  echo -e "${BOLD}STEP8 - Copiar/instalar las dependencias.${NC}"
+  echo -e "${BOLD}STEP8 - Instalar dependencias principales.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  android_install_main_dependencies
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP9 - Copiar/instalar las dependencias.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
   android_install_libraries_dependencies "$TEMPORARY_DIR/${MODULE_NAME}/configuration.gula"
   android_install_gradle_dependencies "$TEMPORARY_DIR/${MODULE_NAME}/configuration.gula"
   android_install_modules_dependencies
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  echo -e "${BOLD}STEP9 - Eliminación repositorio temporal.${NC}"
+  echo -e "${BOLD}STEP10 - Eliminación repositorio temporal.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
   remove_temporary_dir
   
