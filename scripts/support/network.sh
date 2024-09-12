@@ -32,6 +32,7 @@ get_access_token() {
 
 check_version() {
   latest_tag=$(curl -s https://api.github.com/repos/rudoapps/homebrew-gula/releases/latest | jq -r '.tag_name')
+  echo ""
   if [ "$latest_tag" == "$VERSION" ]; then
     echo -e "✅ Tienes la versión más actual"
   else
@@ -41,7 +42,7 @@ check_version() {
     echo ""
     echo -e "✅ Script actualizado. Lanza el script de nuevo"
     echo -e "${BOLD}-----------------------------------------------${NC}"
-    echo ""
     exit 1
   fi
+  echo ""
 }

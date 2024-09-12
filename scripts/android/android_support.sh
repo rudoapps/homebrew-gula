@@ -53,7 +53,7 @@ android_verify_module() {
     echo -e "${YELLOW}El módulo $module ya existe en el proyecto destino.${NC}"
     read -p "¿Deseas actualizar el módulo existente? (s/n): " CONFIRM
     if [ "$CONFIRM" != "s" ]; then
-      echo "  Instalación del módulo cancelada."
+      echo -e "${RED}Instalación del módulo cancelada.${NC}"
       exit 0
     fi
     rm -rf "$MODULE_PATH"
