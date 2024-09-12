@@ -6,16 +6,11 @@ get_bitbucket_access_token() {
   local response
   local token
 
-  # Ejecuta curl para obtener la respuesta
   response=$(curl --location --silent --show-error --write-out "HTTPSTATUS:%{http_code}" "https://dashboard.rudo.es/bitbucket_access/token/?platform=${tech}" --header "API-KEY: $API_KEY")
 
-  # Separa el cuerpo de la respuesta del código de estado
   local body=$(echo $response | sed -e 's/HTTPSTATUS\:.*//g')
   local http_status=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-
-  # Verifica si el código de estado es 200 (OK)
   if [ "$http_status" -eq 200 ]; then
-    # Extrae el token del cuerpo de la respuesta
     token=$(echo $body | jq -r '.token')    
     echo "$token"
   else
@@ -32,5 +27,22 @@ get_access_token() {
   else
     echo -e "${RED}Error: No se ha podido completar la validación KEY incorrecta.${NC}"
     exit 1
+  fi
+}
+
+check_version() {
+  latest_tag=$(curl -s https://api.github.com/repos/rudoapps/homebrew-gula/releases/latest | jq -r '.tag_name')
+  
+  if [ "$latest_tag" = "$VERSION" ]; then
+    echo -e "Es necesario actualizar el script tu versión: $VERSION es antigua"
+    brew update
+    brew upgrade gula
+    echo ""
+    echo -e "✅ Script actualizado. Lanza el script de nuevo"
+    echo -e "${BOLD}-----------------------------------------------${NC}"
+    
+    exec bash "$0" "$@"
+  else
+    echo -e "✅ Tienes la versión más actual"
   fi
 }
