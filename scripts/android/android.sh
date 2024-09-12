@@ -15,13 +15,14 @@ list_android() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
 
   clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
-
-  echo -e "${GREEN}Lista de módulos disponibles:"
-  echo -e "${GREEN}-----------------------------------------------"
+  echo ""
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}Lista de módulos disponibles:"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
   echo ""
   android_list_modules "${TEMPORARY_DIR}/${MODULES_PATH}"
   echo ""
-  echo -e "${GREEN}-----------------------------------------------${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
 
   remove_temporary_dir
 }

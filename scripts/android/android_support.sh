@@ -2,7 +2,7 @@
 
 android_list_modules() {  
   EXCLUDE_DIRS=("app" "gradle" "shared")
-  for dir in "$TARGET_DIR"/*/; do
+  for dir in "$TEMPORARY_DIR"/*/; do
     dir_name=$(basename "$dir")
 
     exclude=0
@@ -15,7 +15,7 @@ android_list_modules() {
     done
 
     if [[ $exclude -eq 0 ]]; then
-      echo "$dir_name"
+      echo -e "${GREEN}📦 $dir_name${NC}"
     fi
   done
 }

@@ -29,7 +29,7 @@ source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
 echo ""
-echo -e "✅ imports cargados correctamente"
+echo -e "✅ Imports cargados correctamente"
 
 echo ""
 echo -e "${BOLD}Comprobando versión más actual [$VERSION].${NC}"
