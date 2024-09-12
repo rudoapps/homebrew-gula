@@ -2,11 +2,6 @@
 
 # Variables
 HOMEBREW_PREFIX=$(brew --prefix)
-if [ -z "$brew_prefix" ]; then
-    echo "No se encontró el prefijo de Homebrew. Verifica si brew está instalado correctamente."
-else
-    echo "El prefijo de Homebrew es: $brew_prefix"
-fi
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
 
 source "$scripts_dir/global_vars.sh"
@@ -20,8 +15,13 @@ echo ""
 echo -e "${BOLD}-----------------------------------------------${NC}"
 echo -e "${BOLD}Prerequisitos: Cargando dependencias.${NC}"
 echo -e "${BOLD}-----------------------------------------------${NC}"
-
-
+echo ""
+if [ -z "$HOMEBREW_PREFIX" ]; then
+    echo "No se encontró el prefijo de Homebrew. Verifica si brew está instalado correctamente."
+else
+    echo "✅ El prefijo de Homebrew es: $HOMEBREW_PREFIX"
+fi
+echo ""
 echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
 source "$scripts_dir/android/android.sh"
 source "$scripts_dir/android/android_support.sh"
