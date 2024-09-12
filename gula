@@ -2,7 +2,7 @@
 
 # Variables
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
-scripts_dir="../scripts"
+
 source "$scripts_dir/global_vars.sh"
 
 echo -e "${BOLD}-----------------------------------------------"
@@ -32,7 +32,8 @@ echo ""
 echo -e "✅ Imports cargados correctamente"
 
 echo ""
-echo -e "${BOLD}Comprobando versión más actual [$VERSION].${NC}"
+echo -e "${BOLD}Comprobando versión más reciente...${NC}"
+echo -e "${BOLD}Versión actual: [$VERSION].${NC}"
 
 check_version
 
