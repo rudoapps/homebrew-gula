@@ -2,6 +2,7 @@
 
 # Variables
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
+scripts_dir="../scripts"
 source "$scripts_dir/global_vars.sh"
 
 echo -e "${BOLD}-----------------------------------------------"
@@ -27,7 +28,13 @@ source "$scripts_dir/support/general_support.sh"
 source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
+echo ""
 echo -e "✅ imports cargados correctamente"
+
+echo ""
+echo -e "${BOLD}Comprobando versión más actual [$VERSION].${NC}"
+
+check_version
 
 function cleanup {
     remove_temporary_dir
@@ -35,8 +42,6 @@ function cleanup {
 
 # Asociar la señal SIGINT (Ctrl + C) con la función cleanup
 trap cleanup SIGINT
-
-# !!!! TODO: Add force update !!!! 
 
 install_module() {
   check_type_of_project
