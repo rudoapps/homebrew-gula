@@ -15,6 +15,7 @@ check_type_of_project() {
       return -1  # Tipo de proyecto desconocido
   fi
 }
+
 copy_files() {
   local origin=$1
   local destination=$2
@@ -61,13 +62,14 @@ check_directory_exists() {
   fi
 }
 
+
 copy_file() {
   local origin=$1
   local destination=$2
 
   path_without_folder=$(dirname "$destination")
   echo "Copiando desde ${origin} a ${path_without_folder}"	
-  cp -R "${origin}" "${destination}"
+  cp -R "${origin}" "${path_without_folder}"
   if [ $? -eq 0 ]; then
     echo -e "✅ Copiado desde ${origin} a ${path_without_folder} correctamente"
   else
