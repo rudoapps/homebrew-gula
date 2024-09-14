@@ -38,11 +38,17 @@ install_flutter_module() {
 	clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git"
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}STEP2 - Instalar dependencias generales.${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	flutter_read_versions_and_install_pubspec ""
+
+	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP2 - Copiar ficheros al proyecto.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	flutter_create_modules_dir
-    copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/"
+	#flutter_create_modules_dir
+    
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP3 - Cargando dependencias.${NC}"
