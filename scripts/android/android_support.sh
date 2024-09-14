@@ -276,8 +276,6 @@ android_read_versions_and_install_toml() {
     else
       printf '%s\n' "$libraries_to_add" | sed -i "/^\[versions\]/r /dev/stdin" "$toml_file"
     fi
-    echo $libraries_to_add
-    echo $added_libraries
     echo "✅ Versiones instaladas."
   else
     echo "No se han añadido elementos a [versions]."
