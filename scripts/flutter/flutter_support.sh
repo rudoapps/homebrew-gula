@@ -136,9 +136,11 @@ flutter_read_versions_and_install_pubspec() {
     fi
     echo "   |"
     echo "   | ✅ Dependencias añadidas correctamente."
+    echo "   └──────────────────────────────────────────"
   else
     echo "   |"
     echo "   | ❌ No se han añadido nuevas dependencias."
+    echo "   └──────────────────────────────────────────"
   fi
 }
 
