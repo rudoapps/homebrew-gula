@@ -41,31 +41,38 @@ install_flutter_module() {
 	echo -e "${BOLD}STEP2 - Instalar dependencias generales.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	flutter_read_versions_and_install_pubspec ""
+	flutter_read_versions_and_install_pubspec "lib/"
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
-	echo -e "${BOLD}STEP2 - Copiar ficheros al proyecto.${NC}"
+	echo -e "${BOLD}STEP3 - Copiar ficheros al proyecto.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	#flutter_create_modules_dir
+	flutter_create_modules_dir
+	copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
     
-
 	echo -e "${BOLD}-----------------------------------------------${NC}"
-	echo -e "${BOLD}STEP3 - Cargando dependencias.${NC}"
+	echo -e "${BOLD}STEP4 - Cargando dependencias.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
 	flutter_read_configuration
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
-	echo -e "${BOLD}STEP4 - Renombrar imports.${NC}"
+	echo -e "${BOLD}STEP5 - Renombrar imports.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	
 	flutter_rename_imports
 
-	echo -e "${GREEN}-----------------------------------------------${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+  	echo -e "${BOLD}STEP6 - Actualización de dependencias.${NC}"
+  	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  	echo ""
+  	flutter pub get
+  	echo ""
+
+  	echo -e "${GREEN}-----------------------------------------------${NC}"
   	echo -e "${GREEN}Proceso finalizado.${NC}"
   	echo -e "${GREEN}-----------------------------------------------${NC}"
-
   	remove_temporary_dir
 }
 
