@@ -49,6 +49,7 @@ install_flutter_module() {
 
 	flutter_create_modules_dir
 	copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
+	flutter_read_configuration "modules/${MODULE_NAME}/"
     
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP4 - Cargando dependencias.${NC}"
