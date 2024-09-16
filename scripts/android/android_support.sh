@@ -81,7 +81,6 @@ copy_file_or_create_folder() {
   local origin=$1
   local destination=$2
 
-  echo $destination
   if !(check_path_exists "$destination"); then  
     echo "No existe CREAMOS DIRECTORIO"
     mkdir -p "$destination"
@@ -89,9 +88,16 @@ copy_file_or_create_folder() {
 
   cp -R "${origin}/." "${destination}"
   if [ $? -eq 0 ]; then
-    echo -e "✅ Copiado desde ${origin} a ${destination} correctamente"
+    echo "┌──────────────────────────────────────────────"
+    echo "│"
+    echo "│ Instalando $(basename "$destination ")  "
+    echo "│ ✅ Copiado a ${destination} correctamente"
+    echo "│"
+    echo "└──────────────────────────────────────────────"
+    
   else
     echo -e "${RED}Error: No se pudo copiar el fichero.${NC}"
+    return
   fi
   android_install_libraries_dependencies "${origin}/configuration.gula"
   android_install_gradle_dependencies "${origin}/configuration.gula"
@@ -245,11 +251,11 @@ android_read_versions_and_install_toml() {
     return
   fi
 
-  echo "-----------------------------------------------"
-  echo "[VERSIONS] Buscando dependencias"
-  echo "Configuración: ${json_file}"
-  echo "Toml: ${toml_file}"
-  echo "-----------------------------------------------"
+  echo "   ┌──────────────────────────────────────────"
+  echo "   │ [VERSIONS] Buscando dependencias"
+  echo "   │ Configuración: ${json_file}"
+  echo "   │ Toml: ${toml_file}"
+  echo "   │"
   while read -r entry; do
     name=$(echo "$entry" | jq -r '.name')
     version=$(echo "$entry" | jq -r '.version')
@@ -257,16 +263,16 @@ android_read_versions_and_install_toml() {
     module=$(echo "$entry" | jq -r '.module // empty')
 
     if grep -q "${name} = \"" "$toml_file"; then
-      echo "✅ $name ya está en la versión $version en el TOML"
+      echo "   │ ✅ $name ya está en la versión $version en el TOML"
     else
-      echo "➕ $name no está en el TOML. Añadiendo a la lista para [versions]..."
+      echo "   │ ➕ $name no está en el TOML. Añadiendo a la lista para [versions]..."
       libraries_to_add+="$name = \"$version\"\n"
       added_libraries+=("$name")  # Añadir al array de añadidos
     fi
   done < <(jq -c '.toml[]' "$json_file")
 
   if [[ ${#added_libraries[@]} -gt 0 ]]; then
-    echo "Librerías añadidas al archivo TOML en la sección [versions]:"
+    echo "   │ Librerías añadidas al archivo TOML en la sección [versions]:"
 
     libraries_to_add=$(printf "%b" "$libraries_to_add")
 
@@ -276,10 +282,11 @@ android_read_versions_and_install_toml() {
     else
       printf '%s\n' "$libraries_to_add" | sed -i "/^\[versions\]/r /dev/stdin" "$toml_file"
     fi
-    echo "✅ Versiones instaladas."
+    echo "   │ ✅ Versiones instaladas."
   else
-    echo "No se han añadido elementos a [versions]."
+    echo "   │ ❌No se han añadido elementos a [versions]."
   fi
+  echo "   └──────────────────────────────────────────"
   echo ""
 }
 
@@ -295,11 +302,11 @@ android_read_libraries_and_install_toml() {
     return
   fi
 
-  echo "-----------------------------------------------"
-  echo "[LIBRARIES] Buscando dependencias"
-  echo "Configuración: ${json_file}"
-  echo "Toml: ${toml_file}"
-  echo "-----------------------------------------------"
+  echo "   ┌──────────────────────────────────────────"
+  echo "   │ [LIBRARIES] Buscando dependencias"
+  echo "   │ Configuración: ${json_file}"
+  echo "   │ Toml: ${toml_file}"
+  echo "   │"
   while read -r entry; do
     name=$(echo "$entry" | jq -r '.name')
     group=$(echo "$entry" | jq -r '.group // empty')
@@ -315,11 +322,11 @@ android_read_libraries_and_install_toml() {
     fi
 
     if grep -q "= \"$group\"" "$toml_file"; then
-      echo "✅ $name ya está en [libraries] del TOML"
+      echo "   │ ✅ $name ya está en [libraries] del TOML"
     elif grep -q "= \"$module\"" "$toml_file"; then      
-      echo "✅ $name ya está en [libraries] del TOML"
+      echo "   │ ✅ $name ya está en [libraries] del TOML"
     else
-      echo "➕ $name no está en [libraries]. Añadiendo a la lista para [libraries]..."
+      echo "   │ ➕ $name no está en [libraries]. Añadiendo a la lista para [libraries]..."
       libraries_to_add+="$new_library\n"
     fi
 
@@ -334,10 +341,11 @@ android_read_libraries_and_install_toml() {
     else
       printf '%s\n' "$libraries_to_add" | sed -i "/^\[libraries\]/r /dev/stdin" "$toml_file"
     fi
-    echo "✅ Librerias instaladas."
+    echo "   │ ✅ Librerias instaladas."
   else
-    echo "No se han añadido elementos a [libraries]."
+    echo "   │ ❌ No se han añadido elementos a [libraries]."
   fi
+  echo "   └──────────────────────────────────────────"
   echo ""
 }
 
@@ -353,11 +361,11 @@ android_read_plugins_and_install_toml() {
     return
   fi
 
-  echo "-----------------------------------------------"
-  echo "[PLUGINS] Buscando dependencias"
-  echo "Configuración: ${json_file}"
-  echo "Toml: ${toml_file}"
-  echo "-----------------------------------------------"
+  echo "   ┌──────────────────────────────────────────"
+  echo "   │ [PLUGINS] Buscando dependencias"
+  echo "   │ Configuración: ${json_file}"
+  echo "   │ Toml: ${toml_file}"
+  echo "   │"
   while read -r entry; do
     name=$(echo "$entry" | jq -r '.name')
     plugin=$(echo "$entry" | jq -r '.plugin // empty')
@@ -370,7 +378,7 @@ android_read_plugins_and_install_toml() {
     fi
 
     if grep -q "= \"$plugin\"" "$toml_file"; then
-      echo "✅ $id ya está en [plugins] del TOML"
+      echo "   │ ✅ $id ya está en [plugins] del TOML"
     else
       plugins_to_add+="$new_plugin\n"
     fi
@@ -384,10 +392,11 @@ android_read_plugins_and_install_toml() {
     else
       printf '%s\n' "$plugins_to_add" | sed -i "/^\[plugins\]/r /dev/stdin" "$toml_file"
     fi
-    echo "✅ Plugins instalados."
+    echo "   │ ✅ Plugins instalados."
   else
-    echo "No se han añadido elementos a [plugins]."
+    echo "   │ ❌ No se han añadido elementos a [plugins]."
   fi
+  echo "   └──────────────────────────────────────────"
   echo ""
 }
 
@@ -411,10 +420,10 @@ android_install_libraries_dependencies() {
 android_install_gradle_dependencies() {
   local json_file="$1"
   gradle_file="settings.gradle.kts"
-  echo "-----------------------------------------------"
-  echo "[GRADLE] Buscando dependencias para "
-  echo "configuration: ${json_file}"
-  echo "-----------------------------------------------"
+  echo "   ┌──────────────────────────────────────────"
+  echo "   │ [GRADLE] Buscando dependencias para "
+  echo "   │ Configuración: ${json_file}"
+  echo "   │"
 
   if [[ ! -f "$json_file" ]]; then
     echo "El archivo JSON no existe: $json_file"
@@ -431,13 +440,13 @@ android_install_gradle_dependencies() {
 
   includes_to_add=""
 
-  echo "[1/2] Leyendo includes..."
+  echo "   │ [1/2] Leyendo includes..."
 
   for include in $includes; do
     if grep -q "include($include)" "$gradle_file"; then
-      echo "✅ $include ya está en el archivo"
+      echo "   │ ✅ $include ya está en el archivo"
     else
-      echo "➕ $include no está en el archivo. Instalando..."
+      echo "   │ ➕ $include no está en el archivo. Instalando..."
       includes_to_add+="include(${include})"
     fi
   done
@@ -450,30 +459,30 @@ android_install_gradle_dependencies() {
     else
       printf '%s\n' "$includes_to_add" | sed -i "/^include(\"/r /dev/stdin" "$gradle_file"
     fi
-    echo "✅ Instalados includes en gradle"
+    echo "   │ ✅ Instalados includes en gradle"
   else
-    echo "No hay información nueva que añadir."
+    echo "   │ ❌ No hay información nueva que añadir."
   fi
-  echo ""
+  echo "   │ "
 
   repositories_to_add=""
 
-  echo "[2/2] Leyendo dependencias..."
+  echo "   │ [2/2] Leyendo dependencias..."
 
   for dep in $dependencies; do
     name=$(echo "$dep" | jq -r '.name')
     url=$(echo "$dep" | jq -r '.url')
 
     if grep -q "$name(\"$url\")" "$gradle_file"; then
-      echo "✅ $url ya está en el archivo"
+      echo "   │ ✅ $url ya está en el archivo"
     else
-      echo "➕ $url no está en el archivo. Añadiendo..."
+      echo "   │ ➕ $url no está en el archivo. Añadiendo..."
       repositories_to_add+="\t\t${name}(\"$url\")"
     fi
   done
 
   if [[ -n "$repositories_to_add" ]]; then
-    echo "Añadiendo nuevos repositorios al archivo..."
+    echo "   │ Añadiendo nuevos repositorios al archivo..."
 
     # Usamos awk para insertar los nuevos repositorios después de 'repositories {' dentro de 'dependencyResolutionManagement'
     awk -v repos="$repositories_to_add" '
@@ -482,12 +491,13 @@ android_install_gradle_dependencies() {
       {print}
     ' "$gradle_file" > tmp && mv tmp "$gradle_file"
 
-    echo "✅ Repositorios añadidos en build.gradle.kts"
+    echo "   │ ✅ Repositorios añadidos en build.gradle.kts"
   else
-    echo "No hay nuevos repositorios que añadir."
+    echo "   │ ❌ No hay nuevos repositorios que añadir."
   fi
 
-  echo "✅ Modificaciones completadas."
+  echo "   │ ✅ Modificaciones completadas."
+  echo "   └──────────────────────────────────────────"
   echo ""
 }
 
@@ -496,20 +506,22 @@ android_install_main_dependencies() {
   gradle_file="build.gradle.kts"
 
   plugins_to_add=""
+  echo "   ┌──────────────────────────────────────────"
+  echo "   │ [TOML] Instalando dependencias generales"
   while read -r plugin; do
     alias=$(echo "$plugin" | jq -r '.alias')
     apply=$(echo "$plugin" | jq -r '.apply')
 
     if grep -q "alias($alias)" "$gradle_file"; then
-      echo "✅ $alias ya está en el archivo"
+      echo "   │ ✅ $alias ya está en el archivo"
     else
-      echo "➕ $alias no está en el archivo. Añadiendo..."
+      echo "   │ ➕ $alias no está en el archivo. Añadiendo..."
       plugins_to_add+="\talias($alias) apply $apply\n"
     fi
   done < <(jq -c '.plugins[]' "$json_file")
 
   if [[ -n "$plugins_to_add" ]]; then
-    echo "Añadiendo nuevos plugins al archivo..."
+    echo "   │ Añadiendo nuevos plugins al archivo..."
     plugins_to_add=$(printf "%b" "$plugins_to_add")
 
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -518,8 +530,9 @@ android_install_main_dependencies() {
     else
       printf '%s\n' "$plugins_to_add" | sed -i "/plugins {/r /dev/stdin" "$gradle_file"
     fi
-    echo "✅ Plugins añadidos en build.gradle.kts"
+    echo "   │ ✅ Plugins añadidos en build.gradle.kts"
   else
-    echo "No hay nuevos plugins que añadir."
+    echo "   │ ❌ No hay nuevos plugins que añadir."
   fi
+  echo "   └──────────────────────────────────────────"
 }
