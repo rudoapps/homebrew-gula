@@ -50,7 +50,7 @@ flutter_copy_file_or_create_folder() {
 
   cp -R "${origin}/." "${destination}"
   if [ $? -eq 0 ]; then
-    echo -e "✅ Copiado desde ${origin} a ${destination} correctamente"
+    echo -e "✅ Copiado a ${destination} correctamente"
   else
     echo -e "${RED}Error: No se pudo copiar el fichero.${NC}"
   fi
@@ -61,11 +61,12 @@ flutter_copy_file_or_create_folder() {
 
 flutter_read_configuration() {
   local path="$1"
-  FILE="${TEMPORARY_DIR}/lib/${path}configuration.gula"
+  configuration="${TEMPORARY_DIR}/lib/${path}configuration.gula"
 
   echo "Verificando y copiando archivos compartidos..."
   echo ""
-  jq -r '.shared[]' "$FILE" | while read -r file; do
+  flutter_read_versions_and_install_pubspec "/lib/${path}"
+  jq -r '.shared[]' "$configuration" | while read -r file; do
       origin=${TEMPORARY_DIR}/lib/${file}
       destination="lib/${file}"
       flutter_copy_file_or_create_folder $origin $destination
