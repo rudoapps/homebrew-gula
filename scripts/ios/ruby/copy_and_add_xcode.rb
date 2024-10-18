@@ -4,6 +4,33 @@ require 'xcodeproj'
 require 'fileutils'
 require_relative 'gula_dependencies.rb'
 
+def xcode_version
+  version_output = `xcodebuild -version`
+  version = version_output.lines.first.strip.split(' ').last
+  version
+  puts "ℹ️  Xcode Version: #{version}"
+end
+
+def check_object_version(xcodeproj_path)
+  pbxproj_path = "#{xcodeproj_path}/project.pbxproj"
+  object_version_line = File.readlines(pbxproj_path).grep(/objectVersion/).first
+
+  if object_version_line
+    object_version = object_version_line.scan(/\d+/).first.to_i
+    puts "ℹ️  Object Version: #{object_version}"
+
+    if object_version > 76
+      puts "❌ La versión del proyecto es mayor a 76. Por lo que se ha creado con Xcode 16 y aun no tenemos soporte."
+      exit 1
+    else
+      puts "✅ La versión del proyecto es válida."
+    end
+  else
+    puts "❌ No se encontró 'objectVersion' en el archivo."
+    exit 1
+  end
+end
+
 def find_xcode_project_and_app_name
   xcode_project_path = Dir.glob("*.xcodeproj").first
   if xcode_project_path.nil?
@@ -80,8 +107,10 @@ def create_groups(xcodeproj_path, app_name, destination, destination_relative_pa
 end
 
 def main 
+  xcode_version
+  
   xcodeproj_path, app_name = find_xcode_project_and_app_name
-
+  check_object_version(xcodeproj_path)
   origin = ARGV[0]
   destination_relative_path = ARGV[1]
   temporary_dir = ARGV[2]
