@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 require 'json'
 
-def read_gula_file_and_install_dependencies(xcodeproj_path, app_name, folder_path, temporary_dir)
+def read_gula_file_and_install_dependencies(xcodeproj_path, app_name, folder_path, temporary_dir, xcode_version)
   gula_file = Dir.glob("#{folder_path}/*.gula").first
   
   if gula_file.nil?
@@ -30,7 +30,9 @@ def read_gula_file_and_install_dependencies(xcodeproj_path, app_name, folder_pat
       for item in items_to_copy do
         copy_all_files("#{temporary_dir}/#{item}", item.sub("Gula", app_name))
       end
-      create_groups(xcodeproj_path, app_name, "#{app_name}/Shared", "Shared")
+      if xcode_version == 15
+        create_groups(xcodeproj_path, app_name, "#{app_name}/Shared", "Shared")
+      end
     end 
 
     puts"-----------------------------------------------"

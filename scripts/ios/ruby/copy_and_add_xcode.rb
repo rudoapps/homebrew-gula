@@ -18,13 +18,15 @@ def check_object_version(xcodeproj_path)
   if object_version_line
     object_version = object_version_line.scan(/\d+/).first.to_i
     puts "ℹ️  Object Version: #{object_version}"
-
+    
     if object_version > 76
-      puts "❌ La versión del proyecto es mayor a 76. Por lo que se ha creado con Xcode 16 y aun no tenemos soporte."
-      exit 1
+      puts "✅ Proyecto creado con xcode 16+"
+      return 16
     else
-      puts "✅ La versión del proyecto es válida."
+      puts "✅ Proyecto creado con xcode 15 o inferior."
+      return 15
     end
+    puts ""
   else
     puts "❌ No se encontró 'objectVersion' en el archivo."
     exit 1
@@ -110,7 +112,7 @@ def main
   xcode_version
   
   xcodeproj_path, app_name = find_xcode_project_and_app_name
-  check_object_version(xcodeproj_path)
+  project_created_with_xcode = check_object_version(xcodeproj_path)
   origin = ARGV[0]
   destination_relative_path = ARGV[1]
   temporary_dir = ARGV[2]
@@ -121,10 +123,12 @@ def main
   puts "✅ Archivos copiados exitosamente de #{origin} a #{destination}"
 
   puts "✅ Integrando en el proyecto Xcode: #{xcodeproj_path}"
-  create_groups(xcodeproj_path, app_name, destination, destination_relative_path)
+  if project_created_with_xcode == 15
+    create_groups(xcodeproj_path, app_name, destination, destination_relative_path)
+  end
   
   puts "✅ Archivos integrados exitosamente en el proyecto Xcode dentro de #{destination_relative_path}"
 
-  read_gula_file_and_install_dependencies(xcodeproj_path, app_name, origin, temporary_dir)
+  read_gula_file_and_install_dependencies(xcodeproj_path, app_name, origin, temporary_dir, project_created_with_xcode)
 end
 main
