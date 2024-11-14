@@ -34,7 +34,8 @@ install_python_module() {
   echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-python.git"
+	deep_clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-python.git"
+	install_python_dependencies
   create_gula_packages_dir
 	build_packages
 
