@@ -15,10 +15,11 @@ build_packages() {
 }
 
 copy_packages() {
-  REQUESTED_MODULES=$1
+  REQUESTED_MODULES=("$@")
   for MODULE_NAME in "${REQUESTED_MODULES[@]}"; do
-    if ls ./dist/*"$MODULE_NAME"*.tar.gz 1> /dev/null 2>&1; then
-      mv ./dist/*"$MODULE_NAME"*.tar.gz ./../$GULA_PACKAGES_DIR
+    matches=$(find ./"$TEMPORARY_DIR"/dist -type f -name "*.tar.gz" | grep "$MODULE_NAME")
+    if [ -n "$matches" ]; then
+      mv "$matches" ./../$GULA_PACKAGES_DIR
       echo "Archivo para el paquete $MODULE_NAME copiado correctamente en $GULA_PACKAGES_DIR"
     else
       echo "Archivo no encontrado para el paquete: $MODULE_NAME"
@@ -29,4 +30,8 @@ copy_packages() {
 
 install_packages() {
   poetry add ./$GULA_PACKAGES_DIR/*
+}
+
+install_python_dependencies() {
+  poetry add build wheel setuptools
 }
