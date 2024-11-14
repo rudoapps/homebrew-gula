@@ -17,6 +17,7 @@ build_packages() {
 copy_packages() {
   REQUESTED_MODULES=("$@")
   for MODULE_NAME in "${REQUESTED_MODULES[@]}"; do
+    echo $(pwd)
     matches=$(find ./"$TEMPORARY_DIR"/dist -type f -name "*.tar.gz" | grep "$MODULE_NAME")
     if [ -n "$matches" ]; then
       mv "$matches" ./../$GULA_PACKAGES_DIR
