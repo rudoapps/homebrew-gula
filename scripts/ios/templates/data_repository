@@ -1,0 +1,13 @@
+class {{TEMPLATE_NAME}}Repository: {{TEMPLATE_NAME}}RepositoryProtocol {
+    // MARK: - Properties
+    var remote: {{TEMPLATE_NAME}}RemoteDataSourceProtocol
+
+    // MARK: - Init
+    init(remote:  {{TEMPLATE_NAME}}RemoteDataSourceProtocol) {
+        self.remote = remote
+    }
+
+    func get{{TEMPLATE_NAME}}s() async throws -> [{{TEMPLATE_NAME}}] {
+        return try await remote.get{{TEMPLATE_NAME}}s()
+    }
+}
