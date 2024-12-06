@@ -1,0 +1,14 @@
+import SwiftUI
+
+struct {{TEMPLATE_NAME}}View: View {
+    @StateObject var viewModel: {{TEMPLATE_NAME}}ViewModel
+
+
+    var body: some View {
+        Text("change me")
+    }
+}
+
+#Preview {
+    {{TEMPLATE_NAME}}ViewBuilder().build()
+}
