@@ -68,3 +68,18 @@ list_ios() {
 
 	remove_temporary_dir
 }
+
+install_templates_ios() {
+  
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}Iniciando instalación.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  ios_install_all_templates "$MODULE_NAME"
+
+  if [ $? -eq 0 ]; then
+  	echo -e "✅ El módulo '$MODULE_NAME' fue generado correctamente."
+  else
+    echo -e "${RED}Error: Algo salió mal al ejecutar ${NC}"
+    exit 1
+  fi
+}
