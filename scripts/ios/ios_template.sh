@@ -50,7 +50,7 @@ ios_install_all_templates() {
 
 
     SCRIPT_DIR=$(dirname "$(realpath "$0")")
-    TEMPLATES_DIR="$SCRIPT_DIR/scripts/ios/templates"
+    TEMPLATES_DIR="$SCRIPT_DIR/scripts/support/ios/templates"
 
     if [ ! -d "$TEMPLATES_DIR" ]; then
       echo "Error: No se encontró el directorio de plantillas en $TEMPLATES_DIR"
