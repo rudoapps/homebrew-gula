@@ -27,10 +27,10 @@ source "$scripts_dir/android/android.sh"
 source "$scripts_dir/android/android_support.sh"
 source "$scripts_dir/ios/ios.sh"
 source "$scripts_dir/ios/ios_support.sh"
+source "$scripts_dir/ios/ios_template.sh"
 source "$scripts_dir/flutter/flutter.sh"
 source "$scripts_dir/flutter/flutter_support.sh"
 source "$scripts_dir/python/python.sh"
-source "$scripts_dir/python/python_support.sh"
 source "$scripts_dir/support/general_support.sh"
 source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
@@ -95,6 +95,19 @@ list_modules() {
   fi
 }
 
+install_template() {
+  check_type_of_project
+  type=$?
+
+  if [ $type -eq 1 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
+    install_templates_ios
+  else 
+    echo -e "${RED}Error: Opción solo disponible para IOS.${NC}"
+    exit 0
+  fi
+}
+
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
@@ -114,11 +127,15 @@ while [[ "$#" -gt 0 ]]; do
     install)
       COMMAND="install"
       MODULE_NAME="$(echo "${str:0:1}" | tr '[:lower:]' '[:upper:]')${str:1}" "$2"
-
       shift
       ;;
     list)
       COMMAND="list"
+      ;;
+    template)
+      COMMAND="create"
+      MODULE_NAME="$2"
+      shift
       ;;
     *)
       MODULE_NAME="$1"
@@ -135,7 +152,13 @@ if [ "$COMMAND" == "install" ]; then
   install_module "$MODULE_NAME"
 elif [ "$COMMAND" == "list" ]; then
   list_modules
+elif [ "$COMMAND" == "create" ]; then
+  if [ -z "$MODULE_NAME" ]; then
+    echo "Uso: $0 create <module_name>"
+    exit 1
+  fi
+  install_template "$MODULE_NAME"
 else
-  echo "Comando no reconocido. Uso: $0 {install|list} [--key=xxxx]"
+  echo "Comando no reconocido. Uso: $0 {install|list|create} [--key=xxxx]"
   exit 1
 fi
