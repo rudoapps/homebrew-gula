@@ -95,6 +95,46 @@ list_modules() {
   fi
 }
 
+help_modules() {
+  check_type_of_project
+  type=$?
+
+  echo ""
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD} AYUDA${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo " Este script tiene como principal objetivo proporcionar herramientas"
+  echo " que aumenten el rendimiento del desarrollador. Dependiendo del tipo"
+  echo " de proyecto se ofrecen distintas funcionalidades."
+  echo ""
+  echo -e "${BOLD} COMANDOS:${NC}"
+  echo ""
+  echo " gula list --key=XXXX"
+  echo " Proporciona el listado de módulos disponibles para instalar."
+  echo ""
+  echo " gula install {module_name} --key=XXXX"
+  echo " Instala el módulo indicado. Debe de estar disponible en el listado anterior"
+  echo ""
+  if [ $type -eq 0 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"    
+  elif [ $type -eq 1 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
+    echo " gula create {dominio}"
+    echo " Crea todo el flujo de CLEAN ARCHITECTURE tanto ficheros como"
+    echo " carpetas para el dominio dado"
+    echo ""
+  elif [ $type -eq 2 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
+    list_flutter
+  elif [ $type -eq 3 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Python${NC}"
+    list_python
+  else 
+    echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
+    exit 0
+  fi
+}
+
 install_template() {
   check_type_of_project
   type=$?
@@ -132,6 +172,9 @@ while [[ "$#" -gt 0 ]]; do
     list)
       COMMAND="list"
       ;;
+    help)
+      COMMAND="help"
+      ;;
     template)
       COMMAND="create"
       MODULE_NAME="$2"
@@ -152,6 +195,8 @@ if [ "$COMMAND" == "install" ]; then
   install_module "$MODULE_NAME"
 elif [ "$COMMAND" == "list" ]; then
   list_modules
+elif [ "$COMMAND" == "help" ]; then
+  help_modules
 elif [ "$COMMAND" == "create" ]; then
   if [ -z "$MODULE_NAME" ]; then
     echo "Uso: $0 create <module_name>"
@@ -159,6 +204,6 @@ elif [ "$COMMAND" == "create" ]; then
   fi
   install_template "$MODULE_NAME"
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|create} [--key=xxxx]"
+  echo "Comando no reconocido. Uso: $0 {install|list|create|help} [--key=xxxx]"
   exit 1
 fi
