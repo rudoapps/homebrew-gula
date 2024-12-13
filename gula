@@ -109,19 +109,21 @@ help_modules() {
   echo ""
   echo -e "${BOLD} COMANDOS:${NC}"
   echo ""
-  echo " gula list --key=XXXX"
-  echo " Proporciona el listado de módulos disponibles para instalar."
+  echo -e "${BOLD} gula list --key=XXXX${NC}"
   echo ""
-  echo " gula install {module_name} --key=XXXX"
-  echo " Instala el módulo indicado. Debe de estar disponible en el listado anterior"
+  echo " └─ Proporciona el listado de módulos disponibles para instalar."
+  echo ""
+  echo -e "${BOLD} gula install {module_name} --key=XXXX${NC}"
+  echo ""
+  echo " └─ Instala el módulo indicado. Debe de estar disponible en el listado anterior"
   echo ""
   if [ $type -eq 0 ]; then
     echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"    
   elif [ $type -eq 1 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
-    echo " gula create {dominio}"
-    echo " Crea todo el flujo de CLEAN ARCHITECTURE tanto ficheros como"
-    echo " carpetas para el dominio dado"
+    echo -e "${BOLD} gula create {dominio}${NC}"
+    echo ""
+    echo " └─ Crea todo el flujo de CLEAN ARCHITECTURE tanto ficheros como"
+    echo "    carpetas para el dominio dado"
     echo ""
   elif [ $type -eq 2 ]; then
     echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
@@ -133,6 +135,7 @@ help_modules() {
     echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
     exit 0
   fi
+  echo -e "${BOLD}-----------------------------------------------${NC}"
 }
 
 install_template() {
