@@ -10,15 +10,8 @@ execPath=$PWD
 
 # Función de ayuda
 helpFun(){
-    echo -e "\n\033[1;1m[Uso]\n$0 -d <ruta_destino_proyecto> -g <repo_git> -b <id_bundle> -v <version_arquetipo> -u <nombre_usuario> -e <email_usuario>\033[0m"
-    echo -e "\n\033[1;1m[Parámetros]\033[0m"
-    echo -e "\033[1;1m\t-d\tRuta de destino para el nuevo proyecto. El arquetipo se clonará en esta ruta. Ejemplo: '../NuevaApp'\033[0m"
-    echo -e "\033[1;1m\t-g\tLa URL del repositorio GIT para esta nueva aplicación.\033[0m"
-    echo -e "\033[1;1m\t-n\tNombre de la nueva aplicación (opcional). Ejemplo: 'NuevaApp'\033[0m"
-    echo -e "\033[1;1m\t-b\tEl identificador base del bundle. Ejemplo: 'com.mercadona.archetype'\033[0m"
-    echo -e "\033[1;1m\t-v\tLa versión base del arquetipo (opcional). Ejemplo: '1.0.0'\n\033[0m"
-    echo -e "\033[1;1m\t-u\tEl nombre del autor para el repositorio git. Ejemplo: 'Nombre Ejemplo'\n\033[0m"
-    echo -e "\033[1;1m\t-e\tEl email del autor para el repositorio git. Ejemplo: 'ejemplo@mercadona.com'\n\033[0m"
+    echo -e "\n\033[1;1m[Uso]\n$0\033[0m"
+    echo -e "\n\033[1;1mEste script configurará un nuevo proyecto iOS basado en el arquetipo.\033[0m"
     exit 1
 }
 
@@ -45,51 +38,31 @@ pause(){
 }
 
 ios_create_project() {
-    # Leer parámetros
-    while getopts "d:g:n:b:v:u:e:" opt
-    do
-    case "$opt" in
-    d     ) projectPath="$OPTARG" ;;
-    g     ) gitRepo="$OPTARG" ;;
-    n    ) appName="$OPTARG" ;;
-    b     ) appId="$OPTARG" ;;
-    v    ) archVersion="$OPTARG" ;;
-    u    ) userName="$OPTARG" ;;
-    e    ) userEmail="$OPTARG" ;;
-    ?     ) helpFun ;;
-    esac
-    done
+    # Pedir parámetros al usuario
+    read -p "Introduce la ruta de destino para el nuevo proyecto (por ejemplo, ../NuevaApp): " projectPath
+    read -p "Introduce el nombre de la nueva aplicación (opcional, se usará el nombre del repo si se deja vacío): " appName
+    read -p "Introduce el identificador base del bundle (por ejemplo, com.mercadona.archetype): " appId
+    read -p "Introduce el nombre del autor para el repositorio git: " userName
+    read -p "Introduce el email del autor para el repositorio git: " userEmail
 
-    # Mostrar ayuda si falta algún parámetro
+    # Validar parámetros
     if [ -z "$projectPath" ] || [ -z "$appId" ]
     then
     echo -e "\n\033[1;31m[✘] Faltan parámetros obligatorios \033[0m\n";
     helpFun
     fi
+
     echo -e "\n\033[1;34mIniciando configuración... \033[0m"
 
     # Obtener el nombre de la aplicación
     echo -e "\033[1;34m==> Obteniendo el nombre de la nueva aplicación...\033[0m\n"
-    if [ -z "$appName" ]; then
-    if [[ $gitRepo =~ ^.*\/(.*)\.git$ ]]; then
-    appName=${BASH_REMATCH[1]}
-    else
-    echo -e "\n\033[1;31m[✘] Nombre de aplicación no válido \033[0m\n"
-    echo -e "\n033[1;31m[✘] Paso FALLÓ \033[0m\n"
-
-    exit 1
-    fi
-    fi
     echo -e "\033[1;32m✅ Nombre de la aplicación encontrado: $appName\n\033[0m"
 
     # Clonar arquetipo
-    echo -e "\033[1;34m==> Clonando repositorio de arquetipo iOS: '$ARCH_REPO' $archVersion...\033[0m"
-    if [ -z "$archVersion" ]
-    then
+    echo -e "\033[1;34m==> Clonando repositorio de arquetipo iOS: '$ARCH_REPO'...\033[0m"
+ 
     git clone $ARCH_REPO --branch master --depth 1 $projectPath
-    else
-    git clone $ARCH_REPO --branch $archVersion --depth 1 $projectPath
-    fi
+    
     checkResult "Clonando repositorio de arquetipo"
     echo -e "\033[1;32m✅ Clonado exitosamente\n\033[0m"
 
