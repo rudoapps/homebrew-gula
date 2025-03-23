@@ -31,6 +31,7 @@ source "$scripts_dir/ios/ios_template.sh"
 source "$scripts_dir/flutter/flutter.sh"
 source "$scripts_dir/flutter/flutter_support.sh"
 source "$scripts_dir/python/python.sh"
+source "$scripts_dir/python/python_create_project.sh"
 source "$scripts_dir/support/general_support.sh"
 source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
@@ -73,28 +74,6 @@ install_module() {
   fi
 }
 
-list_modules() {
-  check_type_of_project
-  type=$?
-
-  if [ $type -eq 0 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"
-    list_android
-  elif [ $type -eq 1 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
-    list_ios
-  elif [ $type -eq 2 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
-    list_flutter
-  elif [ $type -eq 3 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Python${NC}"
-    list_python
-  else 
-    echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
-    exit 0
-  fi
-}
-
 help_modules() {
   check_type_of_project
   type=$?
@@ -120,10 +99,14 @@ help_modules() {
   if [ $type -eq 0 ]; then
     echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"    
   elif [ $type -eq 1 ]; then
-    echo -e "${BOLD} gula create {dominio}${NC}"
+    echo -e "${BOLD} gula template {dominio}${NC}"
     echo ""
     echo " └─ Crea todo el flujo de CLEAN ARCHITECTURE tanto ficheros como"
     echo "    carpetas para el dominio dado"
+    echo ""
+    echo -e "${BOLD} gula create ${NC}"
+    echo ""
+    echo " └─ Crea un proyecto con CLEAN ARCHITECTURE"
     echo ""
   elif [ $type -eq 2 ]; then
     echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
@@ -136,6 +119,28 @@ help_modules() {
     exit 0
   fi
   echo -e "${BOLD}-----------------------------------------------${NC}"
+}
+
+list_modules() {
+  check_type_of_project
+  type=$?
+
+  if [ $type -eq 0 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"
+    list_android
+  elif [ $type -eq 1 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
+    list_ios
+  elif [ $type -eq 2 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
+    list_flutter
+  elif [ $type -eq 3 ]; then
+    echo -e "${GREEN}Te encuentras en un proyecto Python${NC}"
+    list_python
+  else 
+    echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
+    exit 0
+  fi
 }
 
 install_template() {
@@ -151,10 +156,23 @@ install_template() {
   fi
 }
 
+create_project() {
+  echo $MODULE_NAME
+  if [[ "$MODULE_NAME" == "ios" ]]; then
+    echo -e "${GREEN}Empezando la instalación del arquetipo para ios${NC}"
+    ios_create_project
+  elif [[ "$MODULE_NAME" == "python" ]]; then
+    echo -e "${GREEN}Empezando la instalación del arquetipo para Python${NC}"
+    python_create_project
+  else 
+    echo -e "${RED}Error: solo esta permitido como opción: ios, android, python o flutter.${NC}"
+    exit 0
+  fi
+}
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
-  echo "Uso: $0 {install|list} [nombre-del-modulo]"
+  echo "Uso: $0 {install|list|template|create}"
   exit 1
 fi
 
@@ -178,8 +196,13 @@ while [[ "$#" -gt 0 ]]; do
     help)
       COMMAND="help"
       ;;
-    template)
+    create)
       COMMAND="create"
+      MODULE_NAME="$(echo "${str:0:1}" | tr '[:lower:]' '[:upper:]')${str:1}" "$2"
+      shift
+      ;;
+    template)
+      COMMAND="template"
       MODULE_NAME="$2"
       shift
       ;;
@@ -188,7 +211,7 @@ while [[ "$#" -gt 0 ]]; do
       ;;
   esac
   shift
-done
+done  
 
 if [ "$COMMAND" == "install" ]; then
   if [ -z "$MODULE_NAME" ]; then
@@ -200,13 +223,19 @@ elif [ "$COMMAND" == "list" ]; then
   list_modules
 elif [ "$COMMAND" == "help" ]; then
   help_modules
-elif [ "$COMMAND" == "create" ]; then
+elif [ "$COMMAND" == "template" ]; then
   if [ -z "$MODULE_NAME" ]; then
-    echo "Uso: $0 create <module_name>"
+    echo "Uso: $0 template <module_name>"
     exit 1
   fi
   install_template "$MODULE_NAME"
+elif [ "$COMMAND" == "create" ]; then
+  if [ -z "$MODULE_NAME" ]; then
+    echo "Uso: $0 create <platform {ios}>"
+    exit 1
+  fi
+  create_project "$MODULE_NAME"
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|create|help} [--key=xxxx]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create} [--key=xxxx]"
   exit 1
 fi
