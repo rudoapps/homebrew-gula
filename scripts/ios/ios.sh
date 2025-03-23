@@ -25,7 +25,7 @@ install_ios_module() {
 	echo -e "${BOLD}STEP2 - Copiar ficheros al proyecto.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-    MODULE_NAME="$(echo "${MODULE_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${MODULE_NAME:1}"
+  MODULE_NAME="$(echo "${MODULE_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${MODULE_NAME:1}"
 	DIRECTORY_PATH="${MODULES_PATH_IOS}/${MODULE_NAME}"
 	# ruby "${scripts_dir}/ruby/copy_folder.rb" ${TEMPORARY_DIR} ${DIRECTORY_PATH}
 
@@ -68,6 +68,7 @@ list_ios() {
 
 	remove_temporary_dir
 }
+
 
 install_templates_ios() {
   
