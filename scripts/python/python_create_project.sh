@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Constantes
-ARCH_REPO="bitbucket.org:rudoapps/python-archetype.git"
+ARCH_REPO="bitbucket.org:rudoapps/architecture-python.git"
 execPath=$PWD
 
 
