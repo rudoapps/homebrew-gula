@@ -104,14 +104,14 @@ ios_create_project() {
     checkResult "Clonando archetype repository"
     echo "┌──────────────────────────────────────────────"
     echo "│"
-    echo "│ ✅ Clonado completado\n"
+    echo "│ ✅ Clonado completado"
     echo "│"
     # Moving to new app directory
     echo "│ Moviendo a la carpeta: '$execPath/$projectPath'..."
     cd $execPath/$projectPath
     checkResult "Moviendo a la carpeta"
     echo "│"
-    echo "│ ✅ Movimiento completado\n"
+    echo "│ ✅ Movimiento completado"
     echo "│"
 
     # Rename Main target directory
