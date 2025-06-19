@@ -97,7 +97,7 @@ python_create_project() {
     echo "│"
     echo "└──────────────────────────────────────────────"
 
-    git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/python-archetype.git" "$TEMP_CLONE_DIR"
+    git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-python.git" "$TEMP_CLONE_DIR"
     checkResult "Clonando repositorio arquetipo"
 
     echo "┌──────────────────────────────────────────────"
