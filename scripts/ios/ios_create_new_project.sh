@@ -1,252 +1,95 @@
 #!/usr/bin/env bash
 
-# Constants
-ARCH_REPO="git@bitbucket.org:rudoapps/architecture-ios"
-ARCH_ASP_NAME="Template"
-ARCH_APP_ID="com.template"
+# Constantes
+ARCH_REPO="https://github.com/rudoapps/ios-archetype"
+ARCH_ASP_NAME="rudo_archetype"
+ARCH_APP_ID="es.rudo.archetype.swiftui"
 
-# Storing execution path
+# Guardar la ruta de ejecución
 execPath=$PWD
 
-# Help function
+# Función de ayuda
 helpFun(){
-    echo -e "\n\033[1;1m[Usage]\n$0 -d <project_destination_path> -g <git_repo> -b <bundle_id> -v <archetype_version> -u <user_name> -e <user_email>"
-    echo -e "\n\033[1;1m[Parameters]"
-    echo -e "\033[1;1m\t-d\tDestination path for the new project. The archetype will be cloned into this path. E.g. '../NewApp'"
-    echo -e "\033[1;1m\t-g\tThe url of the GIT repository for this new app."
-    echo -e "\033[1;1m\t-n\tName of the new app (Optional) E.g. 'NewApp'"
-    echo -e "\033[1;1m\t-b\tThe base bundle identifier. E.g. 'com.rudo.archetype'"
+    echo -e "\n\033[1;1m[Uso]\n$0 <projectPath> <appName> <appId>\033[0m"
+    echo -e "\n\033[1;1mEste script configurará un nuevo proyecto iOS basado en el arquetipo.\033[0m"
     exit 1
 }
 
-get_token_for_ios() {
-    echo "┌──────────────────────────────────────────────"
-    echo "│"
-    echo "│ Validando key"
-    echo "│ "
-    echo "└──────────────────────────────────────────────"   
-    get_access_token $KEY "ios"
-}
-
-
-
-
-# Check the step execution result
+# Comprobar el resultado de la ejecución de un paso
 checkResult(){
     if [ $? != 0 ]
     then
-        echo "│"
-        echo "│ ❌ '$1' paso FALLIDO.\n"
-        echo "│"
-        echo "└──────────────────────────────────────────────" 
+    echo -e "\n\033[1;31mError:  Paso '$1' FALLÓ \033[0m\n"
     exit 1
     fi
 }
 
-# Check the step execution result - Environment
-optionalCheckResult(){
-    if [ $? != 0 ]
-    then
-    echo -e "\n❌ '$1' paso FALLIDO.\n"
-    echo -e "\nContinuando...\n"
-    fi
-}
-
-pause(){
-    read -p "Presiona [Enter] para continuar..."
-}
-
 ios_create_project() {
-    # Reading parameters
-    # Preguntar parámetros al usuario
-    echo ""
-    echo "──────────────────────────────────────────────"
-    echo -e "\nIntroduce la ruta de destino para el nuevo proyecto (por ejemplo, ../NuevaApp)"
-    read -r projectPath
+    local projectPath="$1"
+    local appName="$2"
+    local appId="$3"
 
-    echo -e "\nIntroduce el nombre de la nueva app (o dejalo en blanco para dejar el del arquetipo):"
-    read -r appName
-
-    echo -e "\nIntroduce el nombre del bundle (e.g. com.rudo.archetype):"
-    read -r appId
-    echo "──────────────────────────────────────────────"
-
-    # Validación básica
+    # Validar parámetros
     if [ -z "$projectPath" ] || [ -z "$appId" ]; then
-        echo -e "\n❌ Faltan campos requeridos (ruta del proyecto y bundle ID).\n"
-        return 1
+        echo -e "\n\033[1;31mError: Faltan parámetros obligatorios (ruta y bundle ID)\033[0m\n"
+        helpFun
     fi
 
-    echo -e "Iniciando configuración"
-
-    # Getting app name
-    echo -e "Obteniendo nombre de la nueva app ...\n"
     if [ -z "$appName" ]; then
-        if [[ $gitRepo =~ ^.*\/(.*)\.git$ ]]; then
-            appName=${BASH_REMATCH[1]}
-        else
-            echo -e "\n❌ El nombre de la app no es válido.\n"
-
-            exit 1
-        fi
+        appName="$ARCH_ASP_NAME"
     fi
-    echo -e "✅ Nombre de la app encontrado: $appName\n"
 
-    # Cloning archetype
-    echo -e "Clonando el repositorio del arquetipo de rudo: '$ARCH_REPO' $archVersion..."
-    if [ -z "$archVersion" ]
-    then
-    get_token_for_ios
-    git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"    
-    #git clone $ARCH_REPO --branch master-arch --depth 1 $projectPath
-    #git clone $ARCH_REPO --branch $archVersion --depth 1 $projectPath
-    fi
-    checkResult "Clonando archetype repository"
+    echo "Iniciando configuración..."
+
     echo "┌──────────────────────────────────────────────"
     echo "│"
-    echo "│ ✅ Clonado completado"
+    echo "│ Obteniendo el nombre de la nueva aplicación...\n"
+    echo "│ ✅ Nombre de la aplicación encontrado: $appName\n"
     echo "│"
-    # Moving to new app directory
-    echo "│ Moviendo a la carpeta: '$execPath/$projectPath'..."
-    cd $execPath/$projectPath
-    checkResult "Moviendo a la carpeta"
-    echo "│"
-    echo "│ ✅ Movimiento completado"
-    echo "│"
+    echo "└──────────────────────────────────────────────"
+    echo 
 
-    # Rename Main target directory
-    echo "│ Renombrando la carpeta ${ARCH_ASP_NAME} a ${appName} ... "
-    mv ${ARCH_ASP_NAME} ${appName}
-    checkResult "Renombrando carpeta ${ARCH_ASP_NAME}"
+    # Clonar arquetipo
+    echo "┌──────────────────────────────────────────────"
     echo "│"
-    echo "│ ✅ Renombrado completado"
+    echo "│ Clonando repositorio de arquetipo iOS: '$ARCH_REPO'..."
     echo "│"
-    
+    echo "└──────────────────────────────────────────────"
+    git clone $ARCH_REPO --branch main --depth 1 "$projectPath"
+    checkResult "Clonando repositorio de arquetipo"
 
-    # Rename Tests target directory∫
-    echo "│ Renombrando la carpeta ${ARCH_ASP_NAME}Tests a ${appName}Tests ..."
-    mv ${ARCH_ASP_NAME}Tests ${appName}Tests
-    checkResult "Renombrando carpeta ${ARCH_ASP_NAME}Tests"
+    echo "┌──────────────────────────────────────────────"
     echo "│"
-    echo "│ ✅ Renombrado completado"
+    echo "│ ✅ Clonado exitosamente"
     echo "│"
-
-    # Rename .xcodeproj bundle
-    echo "│ Renombrando ${ARCH_ASP_NAME}.xcodeproj a ${appName}.xcodeproj ..."
-    mv ${ARCH_ASP_NAME}.xcodeproj ${appName}.xcodeproj
-    checkResult "Renaming ${ARCH_ASP_NAME}.xcodeproj"
-    echo "│"
-    echo "│ ✅ Renombrado completado"
-    echo "│"
-
-    # Rename paths
-    echo "│ Renombrado el fichero de pbxproj ..."
-    sed -i'' -e 's/${ARCH_ASP_NAME}/${appName}/g' ${appName}.xcodeproj/project.pbxproj
-    checkResult "Renombrando pbxproj"
-    echo "│"
-    echo "│ ✅ Renombrado completado"
-    echo "│"
-
-    # Update references in project.pbxproj
-    echo "│ Actualizando referencias ${ARCH_ASP_NAME} a ${appName} en project.pbxproj ..."
-    cmd="s/${ARCH_ASP_NAME}/${appName}/g"
-    sed $cmd "${appName}.xcodeproj/project.pbxproj" > tmp; mv tmp "${appName}.xcodeproj/project.pbxproj"
-    checkResult "Cambiando viejas referencias"
-    echo "│"
-    echo "│ ✅ Cambio completado"
-    echo "│"
-
-    # Update SwiftApp files
-    echo "│ Actualizando ficheros SwiftApp ..."
-    mv "${appName}/Presentation/App/${ARCH_ASP_NAME}App.swift" "${appName}/Presentation/App/${appName}App.swift"
-    sed -i '' "/${ARCH_ASP_NAME}App/ s/${ARCH_ASP_NAME}App/${appName}App/" ${appName}/Presentation/App/${appName}App.swift 
-    echo "│"
-    echo "│ ✅ Actualización completa"
-    echo "│"
-
-    # Update TestPlan files
-    echo "│ Actualizando ficheros TestPlan ..."
-    mv "${ARCH_ASP_NAME}.xctestplan" "${appName}.xctestplan"
-    echo "│"
-    echo "│ ✅ Actualización completa"
-    echo "│"
-
-    # Updating Software license in source files"
-    echo "│ Actualización Software license  ..."
-    newAuthor="RUDO"
-    newOwnerCopyright="RUDO"
-    date=`date +%d\\\\/%m\\\\/%Y`
-    year=`date +%Y`
-    filepaths=$(find ./${appName}* -type f -name "*.swift")
-    filepathsSplitted=$(echo ${filepaths} | sed -E 's/( \.)/;./g')
-    OIFS=$IFS
-    IFS=';'
-    for i in $filepathsSplitted; do
-    sed "s/\/\/  ${ARCH_ASP_NAME}/\/\/  $appName/g" $i > tmp; mv tmp $i;
-    sed -E "s/Created by (.*) on [0-9]{2}\/[0-9]{2}\/[0-9]{4}/Created by ${newAuthor} on ${date}/g" $i > tmp; mv tmp $i
-    sed -E "s/Copyright © [0-9]{4} ([^\.]*)\./Copyright © ${year} $newOwnerCopyright./g" $i > tmp; mv tmp $i
-    done
-    IFS=$OIFS
-    echo "│"
-    echo "│ ✅ Actualización completa"
-    echo "│"
-
-    # Updating Tests imports in source files"
-    echo "│ Actualizando Test imports  ..."
-    archNameFormatted=${ARCH_ASP_NAME//"-"/"_"}
-    appNameFormatted=${appName//"-"/"_"}
-    filepaths=$(find ./${appName}Tests* -type f -name "*.swift")
-    filepathsSplitted=$(echo ${filepaths} | sed -E 's/( \.)/;./g')
-    OIFS=$IFS
-    IFS=';'
-    for i in $filepathsSplitted; do
-    sed "s/import ${archNameFormatted}/import ${appNameFormatted}/g" $i > tmp; mv tmp $i;
-    sed "s/@testable import ${archNameFormatted}/@testable import ${appNameFormatted}/g" $i > tmp; mv tmp $i;
-    done
-    IFS=$OIFS
-    echo "│"
-    echo "│ ✅ Actualización completa"
-    echo "│"
-
-    # Update Bundle ID
-    echo "│ Actualizando Bundle ID ..."
-    cmd="s/${ARCH_APP_ID}/${appId}/g"
-    sed $cmd ${appName}.xcodeproj/project.pbxproj > tmp; mv tmp ${appName}.xcodeproj/project.pbxproj
-    checkResult "Actualizando Bundle Id"
-    echo "│"
-    echo "│ ✅ Actualización completa"
-    echo "│"
-
-    # Empty CHANGELOG.md
-    echo "│ Vaciando CHANGELOG.md  ..."
-    cat /dev/null > CHANGELOG.md
-    checkResult "Vaciando CHANGELOG.md"
-    echo "│"
-    echo "│ ✅ CHANGELOG.md cambiado"
-    echo "│"
-
-    # Delete old README
-    echo "│ Eliminando README.md  ..."
-    rm README.md;
-    checkResult "Eliminando README.md"
-    echo "│"
-    echo "│ ✅ CREADME.md eliminado"
-    echo "│"
-
-    # Removing .git directory
-    echo "│ Eliminando .git directory"
-    rm -rf .git
-    checkResult "Eliminando .git directory"
-    echo "│"
-    echo "│ ✅ Eliminado"
-    echo "│"
-
-    # Success
-
-    echo "│"
-    echo "│ 👍 Configuración completada"
-    echo "│ Proyecto creado en $projectPath"
-    echo "│"
-    echo "└──────────────────────────────────────────────" 
+    echo "└──────────────────────────────────────────────"
     echo ""
+
+    echo "┌──────────────────────────────────────────────"
+    echo "│"
+    echo "│ Moviéndose a la ruta: '$execPath/$projectPath'..."
+    cd "$execPath/$projectPath"
+    checkResult "Moviéndose a la carpeta de la aplicación"
+    echo "│ ✅ Movimiento exitoso"
+    echo "│"
+    echo "└──────────────────────────────────────────────"
+    echo ""
+
+    echo "┌──────────────────────────────────────────────"
+    echo "│"
+    echo "│ Renombrando el directorio ${ARCH_ASP_NAME} a ${appName}..."
+    if [ -d "${ARCH_ASP_NAME}" ]; then
+        mv "${ARCH_ASP_NAME}" "${appName}"
+        checkResult "Renombrando el directorio ${ARCH_ASP_NAME}"
+        echo -e "│ \033[1;32m✅ Renombrado exitoso\033[0m"
+    else
+        echo -e "│ \033[1;33m[!] El directorio ${ARCH_ASP_NAME} no existe. Creando uno nuevo...\033[0m"
+        mkdir "${appName}"
+        checkResult "Creando el directorio ${appName}"
+        echo -e "│ \033[1;32m✅ Directorio creado exitosamente\033[0m"
+    fi
+    echo "│ ✅ Renombrado exitoso"
+    echo "│"
+    echo "└──────────────────────────────────────────────"
 }
+

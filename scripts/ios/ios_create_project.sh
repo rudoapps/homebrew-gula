@@ -10,7 +10,7 @@ execPath=$PWD
 
 # Función de ayuda
 helpFun(){
-    echo -e "\n\033[1;1m[Uso]\n$0\033[0m"
+    echo -e "\n\033[1;1m[Uso]\n$0 <projectPath> <appName> <appId>\033[0m"
     echo -e "\n\033[1;1mEste script configurará un nuevo proyecto iOS basado en el arquetipo.\033[0m"
     exit 1
 }
@@ -24,18 +24,19 @@ checkResult(){
     fi
 }
 
-
 ios_create_project() {
-    # Pedir parámetros al usuario
-    read -p "Introduce la ruta de destino para el nuevo proyecto (por ejemplo, ../NuevaApp): " projectPath
-    read -p "Introduce el nombre de la nueva aplicación (opcional, se usará el nombre del repo si se deja vacío): " appName
-    read -p "Introduce el identificador base del bundle (por ejemplo, com.mercadona.archetype): " appId
+    local projectPath="$1"
+    local appName="$2"
+    local appId="$3"
 
     # Validar parámetros
-    if [ -z "$projectPath" ] || [ -z "$appId" ]
-    then
-    echo -e "\n\033[1;31mError: Faltan parámetros obligatorios \033[0m\n";
-    helpFun
+    if [ -z "$projectPath" ] || [ -z "$appId" ]; then
+        echo -e "\n\033[1;31mError: Faltan parámetros obligatorios (ruta y bundle ID)\033[0m\n"
+        helpFun
+    fi
+
+    if [ -z "$appName" ]; then
+        appName="$ARCH_ASP_NAME"
     fi
 
     echo "Iniciando configuración..."
@@ -47,46 +48,48 @@ ios_create_project() {
     echo "│"
     echo "└──────────────────────────────────────────────"
     echo 
+
     # Clonar arquetipo
     echo "┌──────────────────────────────────────────────"
     echo "│"
     echo "│ Clonando repositorio de arquetipo iOS: '$ARCH_REPO'..."
     echo "│"
     echo "└──────────────────────────────────────────────"
-    git clone $ARCH_REPO --branch main --depth 1 $projectPath
-    
+    git clone $ARCH_REPO --branch main --depth 1 "$projectPath"
+    checkResult "Clonando repositorio de arquetipo"
+
     echo "┌──────────────────────────────────────────────"
-    echo "│"
-    echo "│ " checkResult "Clonando repositorio de arquetipo"
     echo "│"
     echo "│ ✅ Clonado exitosamente"
     echo "│"
     echo "└──────────────────────────────────────────────"
     echo ""
+
     echo "┌──────────────────────────────────────────────"
     echo "│"
     echo "│ Moviéndose a la ruta: '$execPath/$projectPath'..."
-    cd $execPath/$projectPath
-    checkResult "│ Moviéndose a la carpeta de la aplicación"
+    cd "$execPath/$projectPath"
+    checkResult "Moviéndose a la carpeta de la aplicación"
     echo "│ ✅ Movimiento exitoso"
     echo "│"
     echo "└──────────────────────────────────────────────"
     echo ""
+
     echo "┌──────────────────────────────────────────────"
     echo "│"
     echo "│ Renombrando el directorio ${ARCH_ASP_NAME} a ${appName}..."
     if [ -d "${ARCH_ASP_NAME}" ]; then
-        mv ${ARCH_ASP_NAME} ${appName}
+        mv "${ARCH_ASP_NAME}" "${appName}"
         checkResult "Renombrando el directorio ${ARCH_ASP_NAME}"
         echo -e "│ \033[1;32m✅ Renombrado exitoso\033[0m"
     else
-        echo -e "│ \033[1;33m[!] El directorio ${appName} no existe. Creando uno nuevo...\033[0m"
-        mkdir ${appName}
-        checkResult "│ Creando el directorio ${appName}"
+        echo -e "│ \033[1;33m[!] El directorio ${ARCH_ASP_NAME} no existe. Creando uno nuevo...\033[0m"
+        mkdir "${appName}"
+        checkResult "Creando el directorio ${appName}"
         echo -e "│ \033[1;32m✅ Directorio creado exitosamente\033[0m"
     fi
-    checkResult "Renombrando el directorio ${ARCH_ASP_NAME}"
     echo "│ ✅ Renombrado exitoso"
     echo "│"
     echo "└──────────────────────────────────────────────"
 }
+

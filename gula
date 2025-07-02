@@ -2,7 +2,9 @@
 
 # Variables
 HOMEBREW_PREFIX=$(brew --prefix)
-scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
+# scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
+scripts_dir="scripts"
+source "$scripts_dir/global_vars.sh"
 
 source "$scripts_dir/global_vars.sh"
 
@@ -161,7 +163,7 @@ create_project() {
   echo $MODULE_NAME
   if [[ "$MODULE_NAME" == "ios" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para ios${NC}"
-    ios_create_project
+    ios_create_project "$PROJECT_NAME" "$APP_NAME" "$BUNDLE_ID"
   elif [[ "$MODULE_NAME" == "python" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para Python${NC}"
     python_create_project
@@ -186,9 +188,18 @@ while [[ "$#" -gt 0 ]]; do
     --key=*)
       KEY="${1#*=}"
       ;;
+    --project-name=*)
+      PROJECT_NAME="${1#*=}"
+      ;;
+    --app-name=*)
+      APP_NAME="${1#*=}"
+      ;;
+    --bundle-id=*)
+      BUNDLE_ID="${1#*=}"
+      ;;
     install)
       COMMAND="install"
-      MODULE_NAME="$(echo "${str:0:1}" | tr '[:lower:]' '[:upper:]')${str:1}" "$2"
+      MODULE_NAME="$2"
       shift
       ;;
     list)
@@ -199,7 +210,7 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     create)
       COMMAND="create"
-      MODULE_NAME="$(echo "${str:0:1}" | tr '[:lower:]' '[:upper:]')${str:1}" "$2"
+      MODULE_NAME="$2"
       shift
       ;;
     template)
@@ -212,8 +223,7 @@ while [[ "$#" -gt 0 ]]; do
       ;;
   esac
   shift
-done  
-
+done
 if [ "$COMMAND" == "install" ]; then
   if [ -z "$MODULE_NAME" ]; then
     echo "Uso: $0 install <module_name> [--key=xxxx]"
