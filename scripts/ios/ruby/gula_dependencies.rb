@@ -17,7 +17,7 @@ def read_gula_file_and_install_dependencies(xcodeproj_path, app_name, folder_pat
     end
 
     if items_to_copy.empty?
-      puts "⚠️ No se encontraron elementos que comiencen con '#{prefix}' en #{gula_file}."
+      puts "⚠️ No se encontraron elementos"
     end
 
     if items_to_copy.size > 0
