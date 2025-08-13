@@ -25,6 +25,7 @@ echo ""
 echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
 source "$scripts_dir/android/android.sh"
 source "$scripts_dir/android/android_support.sh"
+source "$scripts_dir/android/android_create_new_project.sh"
 source "$scripts_dir/ios/ios.sh"
 source "$scripts_dir/ios/ios_support.sh"
 source "$scripts_dir/ios/ios_template.sh"
@@ -162,6 +163,9 @@ create_project() {
   if [[ "$MODULE_NAME" == "ios" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para ios${NC}"
     ios_create_project
+  elif [[ "$MODULE_NAME" == "android" ]]; then
+    echo -e "${GREEN}Empezando la instalación del arquetipo para android${NC}"
+    android_create_project
   elif [[ "$MODULE_NAME" == "python" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para Python${NC}"
     python_create_project
