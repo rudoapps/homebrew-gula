@@ -7,23 +7,22 @@ scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
 source "$scripts_dir/global_vars.sh"
 source "$scripts_dir/support/logo.sh"
 
-echo -e "${BOLD}-----------------------------------------------"
-echo -e "${BOLD}GULA: Instalador de módulos"
-echo -e "${BOLD}versión: ${VERSION}"
-echo -e "${BOLD}propiedad: Rudo apps"
-echo -e "${BOLD}-----------------------------------------------${NC}"
+
 echo ""
-echo -e "${BOLD}-----------------------------------------------${NC}"
-echo -e "${BOLD}Prerequisitos: Cargando dependencias.${NC}"
-echo -e "${BOLD}-----------------------------------------------${NC}"
+echo -e "${BOLD}versión: ${VERSION}"
+echo -e "${BOLD}propiedad: Rudo apps${NC}"
+
+echo ""
+echo -e "${BOLD}──────────────────────────────────────────────${NC}"
+echo -e "${BOLD}Cargando prerequisitos:${NC}"
 echo ""
 if [ -z "$HOMEBREW_PREFIX" ]; then
     echo "No se encontró el prefijo de Homebrew. Verifica si brew está instalado correctamente."
 else
     echo "✅ El prefijo de Homebrew es: $HOMEBREW_PREFIX"
 fi
-echo ""
-echo -e "${BOLD}Ruta de homebrew: $scripts_dir.${NC}"
+
+echo -e "✅ Ruta de homebrew: $scripts_dir"
 source "$scripts_dir/android/android.sh"
 source "$scripts_dir/android/android_support.sh"
 source "$scripts_dir/android/android_create_new_project.sh"
@@ -39,14 +38,12 @@ source "$scripts_dir/support/general_support.sh"
 source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
-echo ""
+
 echo -e "✅ Imports cargados correctamente"
 
-echo ""
-echo -e "${BOLD}Comprobando versión más reciente...${NC}"
-echo -e "${BOLD}Versión actual: [$VERSION].${NC}"
-
 check_version
+
+echo "──────────────────────────────────────────────"
 
 function cleanup {
     remove_temporary_dir
@@ -160,20 +157,26 @@ install_template() {
 }
 
 create_project() {
+  echo ""
   if [[ "$MODULE_NAME" == "ios" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para ios${NC}"
+    echo ""
     ios_create_project
   elif [[ "$MODULE_NAME" == "android" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para android${NC}"
+    echo ""
     android_create_project
   elif [[ "$MODULE_NAME" == "python" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para Python${NC}"
+    echo ""
     python_create_project
   else 
     echo -e "${RED}Error: solo esta permitido como opción: ios, android, python o flutter.${NC}"
+    echo ""
     exit 0
-  fi
+  fi  
 }
+
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
