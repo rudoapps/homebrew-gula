@@ -58,9 +58,7 @@ pause(){
 
 ios_create_project() {
     # Reading parameters
-    # Preguntar parámetros al usuario
-    echo ""
-    echo "──────────────────────────────────────────────"
+    # Preguntar parámetros al usuario  
     echo -e "\nIntroduce la ruta de destino para el nuevo proyecto (por ejemplo, ../NuevaApp)"
     read -r projectPath
 
@@ -93,14 +91,15 @@ ios_create_project() {
     echo -e "✅ Nombre de la app encontrado: $appName\n"
 
     # Cloning archetype
-    echo -e "Clonando el repositorio del arquetipo de rudo: '$ARCH_REPO' $archVersion..."
-    if [ -z "$archVersion" ]
-    then
+    echo -e "Clonando el repositorio del arquetipo de rudo..."
     get_token_for_ios
+    #if [ -z "$archVersion" ]
+    #then
+    #
     git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"    
     #git clone $ARCH_REPO --branch master-arch --depth 1 $projectPath
     #git clone $ARCH_REPO --branch $archVersion --depth 1 $projectPath
-    fi
+    #fi
     checkResult "Clonando archetype repository"
     echo "┌──────────────────────────────────────────────"
     echo "│"
@@ -130,6 +129,18 @@ ios_create_project() {
     echo "│"
     echo "│ ✅ Renombrado completado"
     echo "│"
+
+    # Rename main test file if it exists
+    if [ -f "${appName}Tests/${ARCH_ASP_NAME}Tests.swift" ]; then
+        echo "│ Renombrando ${ARCH_ASP_NAME}Tests.swift a ${appName}Tests.swift ..."
+        mv "${appName}Tests/${ARCH_ASP_NAME}Tests.swift" "${appName}Tests/${appName}Tests.swift"
+        checkResult "Renombrando archivo de test principal"
+        echo "│"
+        echo "│ ✅ Renombrado completado"
+        echo "│"
+    else
+        echo "│ No se encontró ${ARCH_ASP_NAME}Tests.swift, saltando este paso."
+    fi
 
     # Rename .xcodeproj bundle
     echo "│ Renombrando ${ARCH_ASP_NAME}.xcodeproj a ${appName}.xcodeproj ..."
@@ -165,11 +176,11 @@ ios_create_project() {
     echo "│"
 
     # Update TestPlan files
-    echo "│ Actualizando ficheros TestPlan ..."
-    mv "${ARCH_ASP_NAME}.xctestplan" "${appName}.xctestplan"
-    echo "│"
-    echo "│ ✅ Actualización completa"
-    echo "│"
+    #echo "│ Actualizando ficheros TestPlan ..."
+    #mv "${ARCH_ASP_NAME}.xctestplan" "${appName}.xctestplan"
+    #echo "│"
+    #echo "│ ✅ Actualización completa"
+    #echo "│"
 
     # Updating Software license in source files"
     echo "│ Actualización Software license  ..."
@@ -231,6 +242,14 @@ ios_create_project() {
     checkResult "Eliminando README.md"
     echo "│"
     echo "│ ✅ CREADME.md eliminado"
+    echo "│"
+
+    # Remove .gitkeep placeholders
+    echo "│ Eliminando ficheros .gitkeep ..."
+    find . -type f -name ".gitkeep" -delete
+    checkResult "Eliminando .gitkeep"
+    echo "│"
+    echo "│ ✅ Ficheros .gitkeep eliminados"
     echo "│"
 
     # Removing .git directory
