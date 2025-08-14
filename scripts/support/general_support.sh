@@ -34,7 +34,12 @@ remove_temporary_dir() {
   if [ -d "$TEMPORARY_DIR" ]; then
     rm -rf "$TEMPORARY_DIR"
   fi
+  echo ""
   echo -e "✅ Directorio temporal eliminado"
+  echo ""
+  echo -e "Fin de la ejecución"
+  echo ""
+  exit 1
 }
 
 check_path_exists() {
