@@ -59,8 +59,6 @@ android_create_project() {
     # =========================
     # Input interactivo
     # =========================
-    echo ""
-    echo "──────────────────────────────────────────────"
     read -r -p "Ruta de destino del nuevo proyecto (ej: ../NuevaApp): " PROJECT_PATH
     read -r -p "Nombre de la app (rootProject.name) [opcional, Enter para mantener]: " APP_NAME
     read -r -p "Nuevo namespace (ej: com.yourcompany.yourapp): " NEW_NAMESPACE
@@ -274,10 +272,10 @@ android_create_project() {
       ok "README.md eliminado."
     fi
 
-    echo ""
     echo "│ 👍 Proyecto Android preparado en: $(pwd)"
     [ -n "${APP_NAME:-}" ] && echo "│ • rootProject.name = ${APP_NAME}"
     echo "│ • namespace = ${NEW_NAMESPACE}"
+    echo "│ "
     echo "└──────────────────────────────────────────────"
     echo ""
 }
