@@ -16,9 +16,21 @@ APP_MODULE_DIR="app" # si el módulo no es "app", cambia aquí
 # =========================
 # Utilidades
 # =========================
-err() { echo "❌ $*" >&2; exit 1; }
-info() { echo "▶ $*"; }
-ok() { echo "✅ $*"; }
+err() {
+    echo "│"
+    echo "│ ❌ $*"
+    echo "│">&2; exit 1;  
+}
+info() {
+    echo "│"
+    echo "│ $*"
+    echo "│"
+}
+ok() { 
+    echo "│"
+    echo "│ ✅ $*"
+    echo "│"
+}
 
 # sed compatible macOS/Linux
 sed_inplace() {
@@ -37,11 +49,9 @@ ns_to_path() {
 }
 
 get_token_for_android() {
-    echo "┌──────────────────────────────────────────────"
     echo "│"
     echo "│ Validando key"
-    echo "│ "
-    echo "└──────────────────────────────────────────────"   
+    echo "│ " 
     get_access_token $KEY "android"
 }
 
@@ -65,6 +75,8 @@ android_create_project() {
     # =========================
     # Clonado
     # =========================
+    echo "┌──────────────────────────────────────────────"    
+    # Moving to new app directory
     info "Clonando arquetipo…"
     get_token_for_android
     git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-android.git" "$PROJECT_PATH"    
@@ -227,6 +239,20 @@ android_create_project() {
     ok "Reemplazo global completado."
 
     # =========================
+    # Actualización nombre en strings.xml
+    # =========================
+    info "Actualizando app_name en recursos..."
+
+    # Busca todos los strings.xml que contengan app_name
+    find . -type f -path "*/res/values/strings.xml" -print0 | while IFS= read -r -d '' file; do
+        if grep -q '<string name="app_name">' "$file"; then
+            # Reemplaza el valor entre etiquetas app_name
+            sed_inplace "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">${APP_NAME}</string>|" "$file"
+            ok "app_name actualizado en $file"
+        fi
+    done
+
+    # =========================
     # Limpiezas varias
     # =========================
     # Quitar el repo git original
@@ -249,7 +275,6 @@ android_create_project() {
     fi
 
     echo ""
-    echo "┌──────────────────────────────────────────────"
     echo "│ 👍 Proyecto Android preparado en: $(pwd)"
     [ -n "${APP_NAME:-}" ] && echo "│ • rootProject.name = ${APP_NAME}"
     echo "│ • namespace = ${NEW_NAMESPACE}"
