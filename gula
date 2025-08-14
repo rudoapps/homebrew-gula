@@ -5,6 +5,7 @@ HOMEBREW_PREFIX=$(brew --prefix)
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
 
 source "$scripts_dir/global_vars.sh"
+source "$scripts_dir/support/logo.sh"
 
 echo -e "${BOLD}-----------------------------------------------"
 echo -e "${BOLD}GULA: Instalador de módulos"
@@ -159,7 +160,6 @@ install_template() {
 }
 
 create_project() {
-  echo $MODULE_NAME
   if [[ "$MODULE_NAME" == "ios" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para ios${NC}"
     ios_create_project
