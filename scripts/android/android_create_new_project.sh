@@ -260,6 +260,11 @@ android_create_project() {
       ok ".git eliminado."
     fi
 
+    # Remove .gitkeep placeholders
+    info "Eliminando ficheros .gitkeep ..."
+    find . -type f -name ".gitkeep" -delete
+    ok "Ficheros .gitkeep eliminados"
+
     # Vaciar CHANGELOG si existe
     if [ -f "CHANGELOG.md" ]; then
       : > CHANGELOG.md
