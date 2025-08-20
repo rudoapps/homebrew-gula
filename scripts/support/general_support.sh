@@ -12,7 +12,7 @@ check_type_of_project() {
   elif [ -f "requirements.txt" ] || [ -f "setup.py" ] || [ -f "pyproject.toml" ]; then
       return 3  # Proyecto Python
   else
-      return -1  # Tipo de proyecto desconocido
+      return 4  # Tipo de proyecto desconocido
   fi
 }
 
