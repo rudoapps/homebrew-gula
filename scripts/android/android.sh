@@ -14,7 +14,7 @@ list_android() {
   echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
 
-  clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
+  git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "temp-gula"
   echo ""
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}Lista de módulos disponibles:"
@@ -38,7 +38,7 @@ install_android_module() {
   echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
   
-  clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
+  git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "temp-gula"
 
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP2 - Localizar package name del proyecto.${NC}"
