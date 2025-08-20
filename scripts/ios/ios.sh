@@ -19,7 +19,7 @@ install_ios_module() {
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "temp-gula"
+	git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "$TEMPORARY_DIR"
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP2 - Copiar ficheros al proyecto.${NC}"
@@ -59,7 +59,7 @@ list_ios() {
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
- 	git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "temp-gula"
+ 	git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "$TEMPORARY_DIR"
 	
 	echo -e "${GREEN}Lista de módulos disponibles:"
 	echo -e "${GREEN}-----------------------------------------------"
