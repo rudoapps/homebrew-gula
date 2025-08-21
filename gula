@@ -53,25 +53,19 @@ function cleanup {
 trap cleanup SIGINT
 
 install_module() {
-  check_type_of_project
-  type=$?
-
-  if [ $type -eq 0 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"
-    install_android_module
-  elif [ $type -eq 1 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
-    install_ios_module
-  elif [ $type -eq 2 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
-    install_flutter_module
-  elif [ $type -eq 3 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Python${NC}"
-    install_python_module
-  else 
-    echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
-    exit 0
+  if check_type_of_project; then
+    type=0
+  else
+    type=$?
   fi
+
+  case "$type" in
+    0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; install_android_module ;;
+    1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     install_ios_module ;;
+    2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  install_flutter_module ;;
+    3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   install_python_module ;;
+    *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
+  esac
 }
 
 help_modules() {
