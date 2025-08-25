@@ -48,7 +48,13 @@ flutter_copy_file_or_create_folder() {
     mkdir -p "$destination"
   fi
 
-  cp -R "${origin}/." "${destination}"
+  if [ -d "${origin}" ]; then
+    cp -R "${origin}/." "${destination}"
+  elif [ -f "${origin}" ]; then
+    cp "${origin}" "${destination}"
+  else
+    echo "❌ Error: ${origin} no existe"
+  fi
   if [ $? -eq 0 ]; then
     echo -e "✅ Copiado a ${destination} correctamente"
   else
@@ -66,10 +72,10 @@ flutter_read_configuration() {
   echo "Verificando y copiando archivos compartidos..."
   echo ""
   flutter_read_versions_and_install_pubspec "/lib/${path}"
-  jq -r '.shared[]' "$configuration" | while read -r file; do
-      origin=${TEMPORARY_DIR}/lib/${file}
-      destination="lib/${file}"
-      flutter_copy_file_or_create_folder $origin $destination
+  jq -r '.shared? // [] | .[]' "$configuration" | while read -r file; do
+    origin=${TEMPORARY_DIR}/lib/${file}
+    destination="lib/${file}"
+    flutter_copy_file_or_create_folder "$origin" "$destination"
   done
 }
 
@@ -97,12 +103,12 @@ flutter_read_versions_and_install_pubspec() {
   echo "   |"
   echo "   | Instalando dependencias [ ${json_file} ]"
   echo "   | "
-
+  
   while read -r entry; do
     name=$(echo "$entry" | jq -r '.name')
     version=$(echo "$entry" | jq -r '.version // empty')  # Version puede ser opcional
     git_url=$(echo "$entry" | jq -r '.git.url // empty')  # Propiedad opcional de git
-    git_version=$(echo "$entry" | jq -r '.git.version // empty')  # Propiedad opcional de git
+    git_version=$(echo "$entry" | jq -r '.git.version // empty')  # Propiedad opcional de git  
 
     if grep -q "$name:" "$pubspec"; then
       echo "   | ✅ $name ya está en el pubspec.yaml"

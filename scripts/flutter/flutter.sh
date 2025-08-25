@@ -51,20 +51,20 @@ install_flutter_module() {
 	copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
 	flutter_read_configuration "modules/${MODULE_NAME}/"
     
-	echo -e "${BOLD}-----------------------------------------------${NC}"
-	echo -e "${BOLD}STEP4 - Cargando dependencias.${NC}"
-	echo -e "${BOLD}-----------------------------------------------${NC}"
+	#echo -e "${BOLD}-----------------------------------------------${NC}"
+	#echo -e "${BOLD}STEP4 - Cargando dependencias.${NC}"
+	#echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	flutter_read_configuration
+	#flutter_read_configuration
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
-	echo -e "${BOLD}STEP5 - Renombrar imports.${NC}"
+	echo -e "${BOLD}STEP4 - Renombrar imports.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	
 	flutter_rename_imports
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
-  	echo -e "${BOLD}STEP6 - Actualización de dependencias.${NC}"
+  	echo -e "${BOLD}STEP5 - Actualización de dependencias.${NC}"
   	echo -e "${BOLD}-----------------------------------------------${NC}"
 
   	echo ""
