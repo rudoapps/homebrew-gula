@@ -34,7 +34,10 @@ install_flutter_module() {
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
-
+	if [ -d "$TEMPORARY_DIR" ]; then
+	  echo "🗑️ Borrando directorio existente: $TEMPORARY_DIR"
+	  rm -rf "$TEMPORARY_DIR"
+	fi
 	git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -69,6 +72,14 @@ install_flutter_module() {
 
   	echo ""
   	flutter pub get
+  	echo ""
+
+  	echo -e "${BOLD}-----------------------------------------------${NC}"
+  	echo -e "${BOLD}STEP6 - Generarando archivo de configuración de DI.${NC}"
+  	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  	echo ""
+  	flutter pub run build_runner build --delete-conflicting-outputs
   	echo ""
 
   	echo -e "${GREEN}-----------------------------------------------${NC}"

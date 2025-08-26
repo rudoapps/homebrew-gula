@@ -48,22 +48,28 @@ flutter_copy_file_or_create_folder() {
     mkdir -p "$destination"
   fi
 
-  if [ -d "${origin}" ]; then
-    cp -R "${origin}/." "${destination}"
-  elif [ -f "${origin}" ]; then
-    cp "${origin}" "${destination}"
+  if [ -d "$origin" ]; then
+    echo "📁 Copiando directorio $origin → $destination"
+    cp -R "${origin}/." "$destination"
+  elif [ -f "$origin" ]; then
+    echo "📄 Copiando archivo $origin → $destination"
+    cp "$origin" "$destination"
   else
-    echo "❌ Error: ${origin} no existe"
+    echo "❌ Error: $origin no existe"
+    return 1
   fi
+
   if [ $? -eq 0 ]; then
     echo -e "✅ Copiado a ${destination} correctamente"
   else
     echo -e "${RED}Error: No se pudo copiar el fichero.${NC}"
+    return 1
   fi
+
   delete_this="/lib"
   destination_without_lib="${destination/$delete_this/}"
   flutter_read_versions_and_install_pubspec "${destination_without_lib}/"
-} 
+}
 
 flutter_read_configuration() {
   local path="$1"
@@ -85,69 +91,122 @@ flutter_read_versions_and_install_pubspec() {
   pubspec="pubspec.yaml"
 
   added_libraries=()
+  added_dev_libraries=()
   libraries_to_add=""
-  start_versions_line=$(grep -n '^dependencies:$' "$pubspec" | cut -d: -f1)
+  dev_libraries_to_add=""
 
-  if !(check_path_exists "$json_file"); then  
-    echo -e "${YELLOW}🟡 No existe configuración para este módulo.${NC}"
-    echo ""
+  # Líneas de anclaje
+  start_dependencies_line=$(grep -n '^dependencies:$' "$pubspec" | cut -d: -f1)
+  start_dev_dependencies_line=$(grep -n '^dev_dependencies:$' "$pubspec" | cut -d: -f1)
+
+  if !(check_path_exists "$json_file"); then
+    echo -e "${YELLOW}🟡 No existe configuración para este módulo.${NC}\n"
     return
   fi
 
-  if [[ -z "$start_versions_line" ]]; then
+  if [[ -z "$start_dependencies_line" ]]; then
     echo "No se encontró la sección [dependencies] en el archivo pubspec"
     return
   fi
 
+  # Si no existe la sección dev_dependencies, la creamos al final (vacía)
+  if [[ -z "$start_dev_dependencies_line" ]]; then
+    echo "dev_dependencies:" >> "$pubspec"
+    start_dev_dependencies_line=$(grep -n '^dev_dependencies:$' "$pubspec" | cut -d: -f1)
+  fi
+
   echo -e "${GREEN}✅ Configuración encontrada.${NC}"
+  echo "   | Instalando dependencias desde [ ${json_file} ]"
   echo "   |"
-  echo "   | Instalando dependencias [ ${json_file} ]"
-  echo "   | "
-  
+
+  # ---- DEPENDENCIES ----
   while read -r entry; do
     name=$(echo "$entry" | jq -r '.name')
-    version=$(echo "$entry" | jq -r '.version // empty')  # Version puede ser opcional
-    git_url=$(echo "$entry" | jq -r '.git.url // empty')  # Propiedad opcional de git
-    git_version=$(echo "$entry" | jq -r '.git.version // empty')  # Propiedad opcional de git  
+    version=$(echo "$entry" | jq -r '.version // empty')
+    git_url=$(echo "$entry" | jq -r '.git.url // empty')
+    # compat: usa .git.ref si existe; si no, .git.version (legacy); si no, vacío
+    git_ref=$(echo "$entry" | jq -r '.git.ref // .git.version // empty')
 
-    if grep -q "$name:" "$pubspec"; then
+    if grep -qE "^[[:space:]]*$name:" "$pubspec"; then
       echo "   | ✅ $name ya está en el pubspec.yaml"
     else
       if [[ -n "$git_url" ]]; then
-        echo "   | ➕ $name (git) no está en el pubspec. Añadiendo a la lista para [dependencies]..."
+        echo "   | ➕ $name (git) → [dependencies]"
         libraries_to_add+="  $name:\n    git:\n      url: \"$git_url\"\n"
-        if [[ -n "$git_version" ]]; then
-          libraries_to_add+="      version: \"$git_version\"\n"
+        if [[ -n "$git_ref" ]]; then
+          libraries_to_add+="      ref: \"$git_ref\"\n"
         fi
       elif [[ -n "$version" ]]; then
-        echo "   | ➕ $name no está en el pubspec. Añadiendo a la lista para [dependencies]..."
+        echo "   | ➕ $name → [dependencies]"
         libraries_to_add+="  $name: \"$version\"\n"
       else
         echo "   | ❌ No se encontró ni versión ni git para $name"
+        continue
       fi
       added_libraries+=("$name")
     fi
-  done < <(jq -c '.libraries[]' "$json_file")
+  done < <(jq -c '.libraries? // [] | .[]' "$json_file")
+
+  # ---- DEV_DEPENDENCIES ----
+  echo "   |"
+  echo "   | Instalando dev dependencias (dev_libraries)"
+  while read -r entry; do
+    name=$(echo "$entry" | jq -r '.name')
+    version=$(echo "$entry" | jq -r '.version // empty')
+    git_url=$(echo "$entry" | jq -r '.git.url // empty')
+    git_ref=$(echo "$entry" | jq -r '.git.ref // .git.version // empty')
+
+    # comprobamos si ya existe en cualquier sección
+    if grep -qE "^[[:space:]]*$name:" "$pubspec"; then
+      echo "   | ✅ $name ya está en el pubspec.yaml"
+    else
+      if [[ -n "$git_url" ]]; then
+        echo "   | ➕ $name (git) → [dev_dependencies]"
+        dev_libraries_to_add+="  $name:\n    git:\n      url: \"$git_url\"\n"
+        if [[ -n "$git_ref" ]]; then
+          dev_libraries_to_add+="      ref: \"$git_ref\"\n"
+        fi
+      elif [[ -n "$version" ]]; then
+        echo "   | ➕ $name → [dev_dependencies]"
+        dev_libraries_to_add+="  $name: \"$version\"\n"
+      else
+        echo "   | ❌ No se encontró ni versión ni git para $name (dev)"
+        continue
+      fi
+      added_dev_libraries+=("$name")
+    fi
+  done < <(jq -c '.dev_libraries? // [] | .[]' "$json_file")
+
+  # ---- APLICAR CAMBIOS ----
+  libraries_to_add=$(printf "%b" "$libraries_to_add")
+  dev_libraries_to_add=$(printf "%b" "$dev_libraries_to_add")
 
   if [[ ${#added_libraries[@]} -gt 0 ]]; then
     echo "   |"
-    echo "   | ✅ Librerías añadidas al archivo pubspec en la sección [dependencies]"
-
-    libraries_to_add=$(printf "%b" "$libraries_to_add")
-
+    echo "   | ✅ Añadiendo a [dependencies]…"
     if [[ "$OSTYPE" == "darwin"* ]]; then
-      # macOS
       printf '%s\n' "$libraries_to_add" | sed -i '' "/^dependencies:/r /dev/stdin" "$pubspec"
     else
       printf '%s\n' "$libraries_to_add" | sed -i "/^dependencies:/r /dev/stdin" "$pubspec"
     fi
-    echo "   |"
-    echo "   | ✅ Dependencias añadidas correctamente."
-    echo "   └──────────────────────────────────────────"
   else
     echo "   |"
-    echo "   | ❌ No se han añadido nuevas dependencias."
-    echo "   └──────────────────────────────────────────"
+    echo "   | ℹ️ No hay nuevas librerías para [dependencies]"
   fi
+
+  if [[ ${#added_dev_libraries[@]} -gt 0 ]]; then
+    echo "   |"
+    echo "   | ✅ Añadiendo a [dev_dependencies]…"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      printf '%s\n' "$dev_libraries_to_add" | sed -i '' "/^dev_dependencies:/r /dev/stdin" "$pubspec"
+    else
+      printf '%s\n' "$dev_libraries_to_add" | sed -i "/^dev_dependencies:/r /dev/stdin" "$pubspec"
+    fi
+  else
+    echo "   |"
+    echo "   | ℹ️ No hay nuevas librerías para [dev_dependencies]"
+  fi
+
+  echo "   └──────────────────────────────────────────"
 }
 
