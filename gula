@@ -32,6 +32,7 @@ source "$scripts_dir/ios/ios_template.sh"
 source "$scripts_dir/ios/ios_create_new_project.sh"
 source "$scripts_dir/flutter/flutter.sh"
 source "$scripts_dir/flutter/flutter_support.sh"
+source "$scripts_dir/flutter/flutter_create_new_project.sh"
 source "$scripts_dir/python/python.sh"
 source "$scripts_dir/python/python_create_project.sh"
 source "$scripts_dir/support/general_support.sh"
@@ -154,12 +155,16 @@ create_project() {
     echo -e "${GREEN}Empezando la instalación del arquetipo para android${NC}"
     echo ""
     android_create_project
+  elif [[ "$MODULE_NAME" == "flutter" ]]; then
+    echo -e "${GREEN}Empezando la instalación del arquetipo para Flutter${NC}"
+    echo ""
+    flutter_create_project
   elif [[ "$MODULE_NAME" == "python" ]]; then
     echo -e "${GREEN}Empezando la instalación del arquetipo para Python${NC}"
     echo ""
     python_create_project
   else 
-    echo -e "${RED}Error: solo esta permitido como opción: ios, android, python o flutter.${NC}"
+    echo -e "${RED}Error: solo esta permitido como opción: ios, android, flutter o python.${NC}"
     echo ""
     exit 0
   fi  
