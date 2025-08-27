@@ -34,8 +34,16 @@ remove_temporary_dir() {
   if [ -d "$TEMPORARY_DIR" ]; then
     rm -rf "$TEMPORARY_DIR"
   fi
+  
+  # Limpiar directorio temp-gula si existe
+  if [ -d "temp-gula" ]; then
+    echo -e "🗑️ Eliminando directorio temp-gula..."
+    rm -rf "temp-gula"
+    echo -e "✅ Directorio temp-gula eliminado"
+  fi
+  
   echo ""
-  echo -e "✅ Directorio temporal eliminado"
+  echo -e "✅ Limpieza de directorios temporales completada"
   echo ""
   echo -e "Fin de la ejecución"
   echo ""
