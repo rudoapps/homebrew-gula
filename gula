@@ -47,11 +47,34 @@ check_version
 echo "──────────────────────────────────────────────"
 
 function cleanup {
+    echo ""
+    echo -e "${YELLOW}🧹 Ejecutando limpieza...${NC}"
     remove_temporary_dir
 }
 
-# Asociar la señal SIGINT (Ctrl + C) con la función cleanup
-trap cleanup SIGINT
+function cleanup_on_exit {
+    # Limpieza sin exit para evitar loop infinito
+    if [ -d "$TEMPORARY_DIR" ]; then
+        rm -rf "$TEMPORARY_DIR"
+    fi
+    
+    # Limpiar directorio temp-gula si existe
+    if [ -d "temp-gula" ]; then
+        echo -e "🗑️ Eliminando directorio temp-gula..."
+        rm -rf "temp-gula"
+    fi
+    
+    # Limpiar cualquier directorio temporal relacionado con arquetipo
+    for temp_dir in temp-archetype architecture-* temp-*; do
+        if [ -d "$temp_dir" ]; then
+            rm -rf "$temp_dir"
+        fi
+    done
+}
+
+# Asociar señales con las funciones de limpieza
+trap cleanup SIGINT SIGTERM
+trap cleanup_on_exit EXIT
 
 install_module() {
   if check_type_of_project; then
