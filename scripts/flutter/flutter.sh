@@ -64,13 +64,14 @@ install_flutter_module() {
 	echo -e "${BOLD}STEP4 - Renombrar imports.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	
-	flutter_rename_imports
+	flutter_rename_imports	
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
   	echo -e "${BOLD}STEP5 - Actualización de dependencias.${NC}"
   	echo -e "${BOLD}-----------------------------------------------${NC}"
 
   	echo ""
+  	flutter clean
   	flutter pub get
   	echo ""
 
@@ -79,7 +80,7 @@ install_flutter_module() {
   	echo -e "${BOLD}-----------------------------------------------${NC}"
 
   	echo ""
-  	flutter pub run build_runner build --delete-conflicting-outputs
+  	dart run build_runner build --delete-conflicting-outputs
   	echo ""
 
   	echo -e "${GREEN}-----------------------------------------------${NC}"
