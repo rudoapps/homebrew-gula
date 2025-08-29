@@ -76,7 +76,13 @@ flutter_create_project() {
     # Moving to new app directory
     info "Clonando arquetipo Flutter…"
     get_token_for_flutter
-    git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-flutter.git" "$PROJECT_PATH"    
+    
+    if [ -n "${BRANCH:-}" ]; then
+        info "🌿 Usando rama: $BRANCH"
+        git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-flutter.git" "$PROJECT_PATH"
+    else
+        git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-flutter.git" "$PROJECT_PATH"
+    fi    
     ok "Repositorio clonado en ${PROJECT_PATH}"
 
     cd "$PROJECT_PATH"
