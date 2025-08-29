@@ -96,7 +96,12 @@ ios_create_project() {
     #if [ -z "$archVersion" ]
     #then
     #
-    git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"    
+    if [ -n "${BRANCH:-}" ]; then
+        echo -e "🌿 Usando rama: $BRANCH"
+        git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"
+    else
+        git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"
+    fi    
     #git clone $ARCH_REPO --branch master-arch --depth 1 $projectPath
     #git clone $ARCH_REPO --branch $archVersion --depth 1 $projectPath
     #fi
