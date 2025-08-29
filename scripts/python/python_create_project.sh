@@ -69,14 +69,17 @@ python_create_project() {
     done
     echo "Stack seleccionado: $STACK"
 
-    case "$STACK" in
-      fastapi)
-        BRANCH="fastapi"
-        ;;
-      django)
-        BRANCH="main"
-        ;;
-    esac
+    # Si no se proporciona BRANCH globalmente, usar el branch por defecto según el stack
+    if [ -z "${BRANCH:-}" ]; then
+        case "$STACK" in
+          fastapi)
+            BRANCH="fastapi"
+            ;;
+          django)
+            BRANCH="main"
+            ;;
+        esac
+    fi
 
     if [ -z "$projectPath" ]; then
         echo "│"
@@ -106,6 +109,7 @@ python_create_project() {
 
     echo "│"
     echo "│ ✅ Clonando arquetipo en carpeta temporal..."
+    echo "│ 🌿 Usando rama: $BRANCH"
 
     git clone --branch "$BRANCH" --depth 1  "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-python.git" "$TEMP_CLONE_DIR"
     checkResult "Clonando repositorio arquetipo"
