@@ -92,51 +92,71 @@ install_module() {
   esac
 }
 
-help_modules() {
-  check_type_of_project
-  type=$?
+show_help() {
+  echo ""
+  echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+  echo -e "${BOLD}                    GULA - AYUDA                 ${NC}"
+  echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+  echo ""
+  echo -e "${BOLD}DESCRIPCIÓN:${NC}"
+  echo "  Herramienta CLI para acelerar el desarrollo con arquetípicos y módulos"
+  echo "  predefinidos. Soporta proyectos Android, iOS, Flutter y Python."
+  echo ""
+  echo -e "${BOLD}USO:${NC}"
+  echo "  gula <comando> [opciones]"
+  echo ""
+  echo -e "${BOLD}COMANDOS PRINCIPALES:${NC}"
+  echo ""
+  echo -e "${BOLD}  list${NC}     Lista módulos disponibles para el proyecto actual"
+  echo -e "${BOLD}  install${NC}  Instala un módulo específico en el proyecto actual"
+  echo -e "${BOLD}  create${NC}   Crea un nuevo proyecto con arquitectura predefinida"
+  echo -e "${BOLD}  template${NC} Genera templates de Clean Architecture (solo iOS)"
+  echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
+  echo ""
+  echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
+  echo ""
+  echo -e "${BOLD}  --key=XXXX${NC}     Clave de acceso para repositorios privados (requerida)"
+  echo -e "${BOLD}  --branch=YYYY${NC}   Rama específica del repositorio (opcional)"
+  echo -e "${BOLD}  --help, -h${NC}     Muestra esta ayuda"
+  echo ""
+  echo -e "${BOLD}EJEMPLOS DE USO:${NC}"
+  echo ""
+  echo -e "${BOLD}  Listar módulos disponibles:${NC}"
+  echo "  gula list --key=mi_clave_secreta"
+  echo "  gula list --key=mi_clave --branch=development"
+  echo ""
+  echo -e "${BOLD}  Instalar un módulo:${NC}"
+  echo "  gula install authentication --key=mi_clave_secreta"
+  echo "  gula install network --key=mi_clave --branch=feature-branch"
+  echo ""
+  echo -e "${BOLD}  Crear nuevos proyectos:${NC}"
+  echo "  gula create android --key=mi_clave_secreta"
+  echo "  gula create flutter --key=mi_clave_secreta"
+  echo "  gula create ios --key=mi_clave_secreta"
+  echo "  gula create python --key=mi_clave_secreta"
+  echo ""
+  echo -e "${BOLD}  Generar templates (solo iOS):${NC}"
+  echo "  gula template authentication --key=mi_clave_secreta"
+  echo ""
+  echo -e "${BOLD}TIPOS DE PROYECTO SOPORTADOS:${NC}"
+  echo ""
+  echo -e "${BOLD}  📱 Android${NC}   - Proyectos nativos Android con Clean Architecture"
+  echo -e "${BOLD}  🍎 iOS${NC}       - Proyectos nativos iOS con Clean Architecture"
+  echo -e "${BOLD}  🦋 Flutter${NC}   - Aplicaciones multiplataforma Flutter"
+  echo -e "${BOLD}  🐍 Python${NC}    - APIs backend con FastAPI o Django"
+  echo ""
+  echo -e "${BOLD}NOTAS:${NC}"
+  echo ""
+  echo "  • La opción --key es requerida para acceder a los repositorios privados"
+  echo "  • La opción --branch permite usar ramas específicas (desarrollo, features, etc.)"
+  echo "  • Los comandos list/install detectan automáticamente el tipo de proyecto actual"
+  echo "  • El comando create requiere especificar la plataforma (android/ios/flutter/python)"
+  echo ""
+  echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+}
 
-  echo ""
-  echo -e "${BOLD}-----------------------------------------------${NC}"
-  echo -e "${BOLD} AYUDA${NC}"
-  echo -e "${BOLD}-----------------------------------------------${NC}"
-  echo " Este script tiene como principal objetivo proporcionar herramientas"
-  echo " que aumenten el rendimiento del desarrollador. Dependiendo del tipo"
-  echo " de proyecto se ofrecen distintas funcionalidades."
-  echo ""
-  echo -e "${BOLD} COMANDOS:${NC}"
-  echo ""
-  echo -e "${BOLD} gula list --key=XXXX [--branch=YYYY]${NC}"
-  echo ""
-  echo " └─ Proporciona el listado de módulos disponibles para instalar."
-  echo ""
-  echo -e "${BOLD} gula install {module_name} --key=XXXX [--branch=YYYY]${NC}"
-  echo ""
-  echo " └─ Instala el módulo indicado. Debe de estar disponible en el listado anterior"
-  echo ""
-  if [ $type -eq 0 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"    
-  elif [ $type -eq 1 ]; then
-    echo -e "${BOLD} gula template {dominio}${NC}"
-    echo ""
-    echo " └─ Crea todo el flujo de CLEAN ARCHITECTURE tanto ficheros como"
-    echo "    carpetas para el dominio dado"
-    echo ""
-    echo -e "${BOLD} gula create ${NC}"
-    echo ""
-    echo " └─ Crea un proyecto con CLEAN ARCHITECTURE"
-    echo ""
-  elif [ $type -eq 2 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}"
-    list_flutter
-  elif [ $type -eq 3 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto Python${NC}"
-    list_python
-  else 
-    echo -e "${RED}Error: No te encuentras en un proyecto Android/IOS/Flutter.${NC}"
-    exit 0
-  fi
-  echo -e "${BOLD}-----------------------------------------------${NC}"
+help_modules() {
+  show_help
 }
 
 list_modules() {
@@ -196,12 +216,17 @@ create_project() {
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
-  echo "Uso: $0 {install|list|template|create}"
+  echo "Uso: $0 {install|list|template|create|help} [opciones]"
+  echo "Usa '$0 --help' para más información."
   exit 1
 fi
 
 # Procesar los argumentos
 COMMAND="$1"
+# Manejar --help como primer argumento
+if [[ "$COMMAND" == "--help" || "$COMMAND" == "-h" ]]; then
+  COMMAND="help"
+fi
 shift
 
 while [[ "$#" -gt 0 ]]; do
@@ -211,6 +236,9 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --branch=*)
       BRANCH="${1#*=}"
+      ;;
+    --help|-h)
+      COMMAND="help"
       ;;
     install)
       COMMAND="install"
@@ -263,6 +291,7 @@ elif [ "$COMMAND" == "create" ]; then
   fi
   create_project "$MODULE_NAME"
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create} [--key=xxxx] [--branch=yyyy]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
