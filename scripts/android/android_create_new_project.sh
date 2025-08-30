@@ -77,7 +77,13 @@ android_create_project() {
     # Moving to new app directory
     info "Clonando arquetipo…"
     get_token_for_android
-    git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-android.git" "$PROJECT_PATH"    
+    
+    if [ -n "${BRANCH:-}" ]; then
+        info "🌿 Usando rama: $BRANCH"
+        git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-android.git" "$PROJECT_PATH"
+    else
+        git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-android.git" "$PROJECT_PATH"
+    fi    
     ok "Repositorio clonado en ${PROJECT_PATH}"
 
     cd "$PROJECT_PATH"
