@@ -106,11 +106,11 @@ help_modules() {
   echo ""
   echo -e "${BOLD} COMANDOS:${NC}"
   echo ""
-  echo -e "${BOLD} gula list --key=XXXX${NC}"
+  echo -e "${BOLD} gula list --key=XXXX [--branch=YYYY]${NC}"
   echo ""
   echo " └─ Proporciona el listado de módulos disponibles para instalar."
   echo ""
-  echo -e "${BOLD} gula install {module_name} --key=XXXX${NC}"
+  echo -e "${BOLD} gula install {module_name} --key=XXXX [--branch=YYYY]${NC}"
   echo ""
   echo " └─ Instala el módulo indicado. Debe de estar disponible en el listado anterior"
   echo ""
@@ -209,6 +209,9 @@ while [[ "$#" -gt 0 ]]; do
     --key=*)
       KEY="${1#*=}"
       ;;
+    --branch=*)
+      BRANCH="${1#*=}"
+      ;;
     install)
       COMMAND="install"
       MODULE_NAME="$(echo "${str:0:1}" | tr '[:lower:]' '[:upper:]')${str:1}" "$2"
@@ -260,6 +263,6 @@ elif [ "$COMMAND" == "create" ]; then
   fi
   create_project "$MODULE_NAME"
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create} [--key=xxxx]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create} [--key=xxxx] [--branch=yyyy]"
   exit 1
 fi
