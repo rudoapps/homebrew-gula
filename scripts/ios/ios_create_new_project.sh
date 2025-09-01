@@ -59,7 +59,7 @@ pause(){
 ios_create_project() {
     # Reading parameters
     # Preguntar parámetros al usuario  
-    echo -e "\nIntroduce la ruta de destino para el nuevo proyecto (por ejemplo, ../NuevaApp)"
+    echo -e "\nIntroduce la ruta de destino para el nuevo proyecto (por ejemplo: NuevaApp)"
     read -r projectPath
 
     echo -e "\nIntroduce el nombre de la nueva app (o dejalo en blanco para dejar el del arquetipo):"
