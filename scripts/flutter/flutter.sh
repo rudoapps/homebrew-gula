@@ -38,7 +38,13 @@ install_flutter_module() {
 	  echo "🗑️ Borrando directorio existente: $TEMPORARY_DIR"
 	  rm -rf "$TEMPORARY_DIR"
 	fi
-	git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
+	
+	if [ -n "${BRANCH:-}" ]; then
+		echo -e "🌿 Usando rama: ${YELLOW}$BRANCH${NC}"
+		git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
+	else
+		git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
+	fi
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP2 - Instalar dependencias generales.${NC}"
