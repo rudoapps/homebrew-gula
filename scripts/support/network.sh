@@ -14,6 +14,8 @@ get_bitbucket_access_token() {
     token=$(echo $body | jq -r '.token')    
     echo "$token"
   else
+    echo -e "${RED}❌ Error: KEY incorrecta o no autorizada (HTTP: $http_status)${NC}" >&2
+    echo -e "${RED}   Verifica que tu KEY sea válida y tenga permisos para la plataforma '$tech'${NC}" >&2
     exit 1
   fi
 }
