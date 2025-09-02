@@ -2,6 +2,7 @@
 
 ANDROID_PROJECT_SRC="app/src/main/java"
 GULA_PACKAGE="app.gula.com"
+MODULES_PATH="modules"
 
 list_android() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
