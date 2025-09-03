@@ -10,7 +10,18 @@ get_token() {
     echo "│"
     echo "│ Validando key"
     echo "│ "
-     get_access_token $KEY "back"
+    
+    # Validar que KEY no esté vacío
+    if [ -z "$KEY" ]; then
+        echo "│"
+        echo "│ ❌ Error: Se requiere una KEY para crear proyectos."
+        echo "│ ✅ Uso: gula create python --key=tu_clave_aqui"
+        echo "│"
+        echo "└──────────────────────────────────────────────"
+        exit 1
+    fi
+    
+    get_access_token $KEY "back"
 }
 
 # Función de ayuda
