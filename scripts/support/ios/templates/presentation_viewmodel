@@ -16,7 +16,7 @@ class {{TEMPLATE_NAME}}ViewModel: ObservableObject {
     }
 
     @objc @MainActor
-    func get{{TEMPLATE_NAME}}() {
+    func get{{TEMPLATE_NAME}}s() {
         Task {
             do {
                 let {{PARAM_NAME}}s = try await self.{{PARAM_NAME}}UseCases.get{{TEMPLATE_NAME}}s()
