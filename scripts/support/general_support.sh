@@ -3,7 +3,8 @@
 MAIN_DIRECTORY=""
 
 check_type_of_project() {
-  if [ -d "$ANDROID_PROJECT_SRC" ]; then
+  # Android: settings.gradle + directorio app
+  if ([ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]) && [ -d "app" ]; then
       return 0  # Proyecto Android
   elif find . -maxdepth 1 -name "*.xcodeproj" | grep -q .; then
       return 1  # Proyecto iOS (Xcode)
