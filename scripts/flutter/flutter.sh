@@ -95,3 +95,17 @@ install_flutter_module() {
   	remove_temporary_dir
 }
 
+install_templates_flutter() {
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}Iniciando instalación de templates Flutter.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  flutter_install_all_templates "$MODULE_NAME"
+
+  if [ $? -eq 0 ]; then
+    echo -e "✅ El template '$MODULE_NAME' fue generado correctamente."
+  else
+    echo -e "${RED}Error: Algo salió mal al ejecutar ${NC}"
+    exit 1
+  fi
+}
+
