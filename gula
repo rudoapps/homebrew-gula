@@ -26,6 +26,7 @@ echo -e "✅ Ruta de homebrew: $scripts_dir"
 source "$scripts_dir/android/android.sh"
 source "$scripts_dir/android/android_support.sh"
 source "$scripts_dir/android/android_create_new_project.sh"
+source "$scripts_dir/android/android_template.sh"
 source "$scripts_dir/ios/ios.sh"
 source "$scripts_dir/ios/ios_support.sh"
 source "$scripts_dir/ios/ios_template.sh"
@@ -33,8 +34,10 @@ source "$scripts_dir/ios/ios_create_new_project.sh"
 source "$scripts_dir/flutter/flutter.sh"
 source "$scripts_dir/flutter/flutter_support.sh"
 source "$scripts_dir/flutter/flutter_create_new_project.sh"
+source "$scripts_dir/flutter/flutter_template.sh"
 source "$scripts_dir/python/python.sh"
 source "$scripts_dir/python/python_create_project.sh"
+source "$scripts_dir/python/python_template.sh"
 source "$scripts_dir/support/general_support.sh"
 source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
@@ -115,9 +118,11 @@ show_help() {
   echo ""
   echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
   echo ""
-  echo -e "${BOLD}  --key=XXXX${NC}     Clave de acceso para repositorios privados (requerida)"
-  echo -e "${BOLD}  --branch=YYYY${NC}   Rama específica del repositorio (opcional)"
-  echo -e "${BOLD}  --help, -h${NC}     Muestra esta ayuda"
+  echo -e "${BOLD}  --key=XXXX${NC}      Clave de acceso para repositorios privados (requerida para install/list/create)"
+  echo -e "${BOLD}  --branch=YYYY${NC}    Rama específica del repositorio (opcional para install/list/create)"
+  echo -e "${BOLD}  --type=ZZZZ${NC}     Tipo de template: clean|mvvm|mvc|bloc|provider|fastapi|django (para template)"
+  echo -e "${BOLD}  --list${NC}          Lista todos los templates disponibles (para template)"
+  echo -e "${BOLD}  --help, -h${NC}      Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}EJEMPLOS DE USO:${NC}"
   echo ""
@@ -135,8 +140,11 @@ show_help() {
   echo "  gula create ios --key=mi_clave_secreta"
   echo "  gula create python --key=mi_clave_secreta"
   echo ""
-  echo -e "${BOLD}  Generar templates (solo iOS):${NC}"
-  echo "  gula template authentication --key=mi_clave_secreta"
+  echo -e "${BOLD}  Generar templates:${NC}"
+  echo "  gula template user"
+  echo "  gula template product --type=clean"
+  echo "  gula template user,product,order    # Múltiples templates"
+  echo "  gula template --list               # Ver todos los templates disponibles"
   echo ""
   echo -e "${BOLD}TIPOS DE PROYECTO SOPORTADOS:${NC}"
   echo ""
@@ -175,16 +183,96 @@ list_modules() {
   esac
 }
 
-install_template() {
-  check_type_of_project
-  type=$?
-
-  if [ $type -eq 1 ]; then
-    echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}"
-    install_templates_ios
-  else 
-    echo -e "${RED}Error: Opción solo disponible para IOS.${NC}"
+list_templates() {
+  if [ "$LIST_TEMPLATES" = "true" ]; then
+    echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}           TEMPLATES DISPONIBLES                ${NC}"
+    echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${BOLD}📱 Android:${NC}"
+    echo "  • clean - Clean Architecture (Repository, UseCase, ViewModel)"
+    echo "  • mvvm  - MVVM Pattern (disponible próximamente)"
+    echo "  • mvc   - MVC Pattern (disponible próximamente)"
+    echo ""
+    echo -e "${BOLD}🍎 iOS:${NC}"
+    echo "  • clean - Clean Architecture (SwiftUI + Repository + UseCase)"
+    echo ""
+    echo -e "${BOLD}🦋 Flutter:${NC}"
+    echo "  • clean    - Clean Architecture (BLoC + Repository + UseCase)"
+    echo "  • bloc     - BLoC Pattern (disponible próximamente)"
+    echo "  • provider - Provider Pattern (disponible próximamente)"
+    echo ""
+    echo -e "${BOLD}🐍 Python:${NC}"
+    echo "  • fastapi - FastAPI REST API (Repository + Service + Router)"
+    echo "  • django  - Django REST (disponible próximamente)"
+    echo ""
+    echo -e "${BOLD}Uso:${NC}"
+    echo "  gula template <nombre> [--type=clean]"
+    echo ""
+    echo -e "${BOLD}Ejemplos:${NC}"
+    echo "  gula template user"
+    echo "  gula template product --type=clean"
+    echo "  gula template user,product,order"
+    echo ""
+    echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
     exit 0
+  fi
+}
+
+install_single_template() {
+  local template_name=$1
+  
+  if check_type_of_project; then
+    type=0
+  else
+    type=$?
+  fi
+
+  # Guardar MODULE_NAME original y asignar el template actual
+  local original_module_name="$MODULE_NAME"
+  MODULE_NAME="$template_name"
+
+  case "$type" in
+    0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; install_templates_android ;;
+    1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     install_templates_ios ;;
+    2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  install_templates_flutter ;;
+    3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   install_templates_python ;;
+    *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
+  esac
+  
+  # Restaurar MODULE_NAME original
+  MODULE_NAME="$original_module_name"
+}
+
+install_template() {
+  # Verificar si MODULE_NAME contiene comas (múltiples templates)
+  if [[ "$MODULE_NAME" == *","* ]]; then
+    echo -e "${BOLD}───────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}🚀 GENERACIÓN BATCH DE TEMPLATES${NC}"
+    echo -e "${BOLD}───────────────────────────────────────────────${NC}"
+    echo ""
+    
+    # Dividir MODULE_NAME por comas
+    IFS=',' read -ra TEMPLATES <<< "$MODULE_NAME"
+    
+    echo -e "${YELLOW}Se generarán ${#TEMPLATES[@]} templates: ${TEMPLATES[*]}${NC}"
+    echo ""
+    
+    for template in "${TEMPLATES[@]}"; do
+      # Limpiar espacios en blanco
+      template=$(echo "$template" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      
+      if [ -n "$template" ]; then
+        echo -e "${BOLD}📝 Generando template: $template${NC}"
+        install_single_template "$template"
+        echo ""
+      fi
+    done
+    
+    echo -e "${GREEN}✅ Todos los templates han sido generados correctamente!${NC}"
+  else
+    # Un solo template
+    install_single_template "$MODULE_NAME"
   fi
 }
 
@@ -227,6 +315,13 @@ COMMAND="$1"
 if [[ "$COMMAND" == "--help" || "$COMMAND" == "-h" ]]; then
   COMMAND="help"
 fi
+
+# Manejar caso especial: gula template --list
+if [[ "$COMMAND" == "template" && "$2" == "--list" ]]; then
+  LIST_TEMPLATES="true"
+  MODULE_NAME=""
+fi
+
 shift
 
 while [[ "$#" -gt 0 ]]; do
@@ -236,6 +331,12 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --branch=*)
       BRANCH="${1#*=}"
+      ;;
+    --type=*)
+      TEMPLATE_TYPE="${1#*=}"
+      ;;
+    --list)
+      LIST_TEMPLATES="true"
       ;;
     --help|-h)
       COMMAND="help"
@@ -279,11 +380,14 @@ elif [ "$COMMAND" == "list" ]; then
 elif [ "$COMMAND" == "help" ]; then
   help_modules
 elif [ "$COMMAND" == "template" ]; then
-  if [ -z "$MODULE_NAME" ]; then
-    echo "Uso: $0 template <module_name>"
+  if [ "$LIST_TEMPLATES" == "true" ]; then
+    list_templates
+  elif [ -z "$MODULE_NAME" ]; then
+    echo "Uso: $0 template <module_name> [--type=clean] [--list]"
     exit 1
+  else
+    install_template "$MODULE_NAME"
   fi
-  install_template "$MODULE_NAME"
 elif [ "$COMMAND" == "create" ]; then
   if [ -z "$MODULE_NAME" ]; then
     echo "Uso: $0 create <platform {ios}>"
