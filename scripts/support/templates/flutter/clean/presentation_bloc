@@ -1,0 +1,31 @@
+import 'package:bloc/bloc.dart';
+import 'package:equatable/equatable.dart';
+
+import '../../domain/entities/{{PARAM_NAME}}.dart';
+import '../../domain/usecases/{{PARAM_NAME}}_usecases.dart';
+
+part '{{PARAM_NAME}}_event.dart';
+part '{{PARAM_NAME}}_state.dart';
+
+class {{TEMPLATE_NAME}}Bloc extends Bloc<{{TEMPLATE_NAME}}Event, {{TEMPLATE_NAME}}State> {
+  final GetAll{{TEMPLATE_NAME}}sUseCase getAll{{TEMPLATE_NAME}}sUseCase;
+
+  {{TEMPLATE_NAME}}Bloc({
+    required this.getAll{{TEMPLATE_NAME}}sUseCase,
+  }) : super({{TEMPLATE_NAME}}Initial()) {
+    on<GetAll{{TEMPLATE_NAME}}sEvent>(_onGetAll{{TEMPLATE_NAME}}s);
+  }
+
+  Future<void> _onGetAll{{TEMPLATE_NAME}}s(
+    GetAll{{TEMPLATE_NAME}}sEvent event,
+    Emitter<{{TEMPLATE_NAME}}State> emit,
+  ) async {
+    emit({{TEMPLATE_NAME}}Loading());
+    try {
+      final {{PARAM_NAME}}s = await getAll{{TEMPLATE_NAME}}sUseCase();
+      emit({{TEMPLATE_NAME}}Loaded({{PARAM_NAME}}s));
+    } catch (e) {
+      emit({{TEMPLATE_NAME}}Error(e.toString()));
+    }
+  }
+}

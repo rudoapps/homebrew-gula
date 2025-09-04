@@ -1,0 +1,5 @@
+import '../entities/{{PARAM_NAME}}.dart';
+
+abstract class {{TEMPLATE_NAME}}Repository {
+  Future<List<{{TEMPLATE_NAME}}>> getAll{{TEMPLATE_NAME}}s();
+}

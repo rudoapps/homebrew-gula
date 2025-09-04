@@ -1,0 +1,21 @@
+import '../../domain/entities/{{PARAM_NAME}}.dart';
+import '../../domain/repositories/{{PARAM_NAME}}_repository.dart';
+import '../datasources/{{PARAM_NAME}}_remote_data_source.dart';
+
+class {{TEMPLATE_NAME}}RepositoryImpl implements {{TEMPLATE_NAME}}Repository {
+  final {{TEMPLATE_NAME}}RemoteDataSource remoteDataSource;
+
+  {{TEMPLATE_NAME}}RepositoryImpl({
+    required this.remoteDataSource,
+  });
+
+  @override
+  Future<List<{{TEMPLATE_NAME}}>> getAll{{TEMPLATE_NAME}}s() async {
+    try {
+      final {{PARAM_NAME}}Models = await remoteDataSource.getAll{{TEMPLATE_NAME}}s();
+      return {{PARAM_NAME}}Models;
+    } catch (e) {
+      return [];
+    }
+  }
+}

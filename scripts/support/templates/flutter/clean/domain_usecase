@@ -1,0 +1,12 @@
+import '../entities/{{PARAM_NAME}}.dart';
+import '../repositories/{{PARAM_NAME}}_repository.dart';
+
+class GetAll{{TEMPLATE_NAME}}sUseCase {
+  final {{TEMPLATE_NAME}}Repository repository;
+
+  GetAll{{TEMPLATE_NAME}}sUseCase(this.repository);
+
+  Future<List<{{TEMPLATE_NAME}}>> call() async {
+    return await repository.getAll{{TEMPLATE_NAME}}s();
+  }
+}

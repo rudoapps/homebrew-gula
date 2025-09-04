@@ -1,0 +1,30 @@
+part of '{{PARAM_NAME}}_bloc.dart';
+
+abstract class {{TEMPLATE_NAME}}State extends Equatable {
+  const {{TEMPLATE_NAME}}State();
+  
+  @override
+  List<Object> get props => [];
+}
+
+class {{TEMPLATE_NAME}}Initial extends {{TEMPLATE_NAME}}State {}
+
+class {{TEMPLATE_NAME}}Loading extends {{TEMPLATE_NAME}}State {}
+
+class {{TEMPLATE_NAME}}Loaded extends {{TEMPLATE_NAME}}State {
+  final List<{{TEMPLATE_NAME}}> {{PARAM_NAME}}s;
+
+  const {{TEMPLATE_NAME}}Loaded(this.{{PARAM_NAME}}s);
+
+  @override
+  List<Object> get props => [{{PARAM_NAME}}s];
+}
+
+class {{TEMPLATE_NAME}}Error extends {{TEMPLATE_NAME}}State {
+  final String message;
+
+  const {{TEMPLATE_NAME}}Error(this.message);
+
+  @override
+  List<Object> get props => [message];
+}
