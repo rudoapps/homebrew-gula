@@ -49,9 +49,8 @@ ios_install_all_templates() {
     echo ""
 
 
-    SCRIPT_DIR=$(dirname "$(realpath "$0")")
-    HOMEBREW_PREFIX=$(brew --prefix)
-    TEMPLATES_DIR="$HOMEBREW_PREFIX/share/support/scripts/scripts/support/ios/templates"
+    # Usar ruta relativa desde el directorio de scripts
+    TEMPLATES_DIR="$scripts_dir/support/ios/templates"
 
     if [ ! -d "$TEMPLATES_DIR" ]; then
       echo "Error: No se encontró el directorio de plantillas en $TEMPLATES_DIR"
