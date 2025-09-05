@@ -138,8 +138,77 @@ python_create_project() {
     checkResult "Copiando contenido del arquetipo"
 
     echo "│"
-    echo "│ ✅ Eliminando carpeta temporal..."
+    echo "│ ✅ Configurando entorno Python con uv..."
+    echo "│"
 
+    # Cambiar al directorio del proyecto
+    cd "$projectPath"
+
+    # Verificar si uv está instalado
+    if ! command -v uv &> /dev/null; then
+        echo "│ 📦 uv no está instalado. Instalando..."
+        echo "│"
+        
+        # Detectar el sistema operativo e instalar uv
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            if command -v brew &> /dev/null; then
+                brew install uv
+            else
+                curl -LsSf https://astral.sh/uv/install.sh | sh
+                source ~/.bashrc 2>/dev/null || source ~/.zshrc 2>/dev/null || true
+            fi
+        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            # Linux
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            source ~/.bashrc 2>/dev/null || source ~/.zshrc 2>/dev/null || true
+        else
+            echo "│ ⚠️  Sistema operativo no soportado para instalación automática de uv"
+            echo "│    Instala uv manualmente desde: https://github.com/astral-sh/uv"
+            echo "│"
+        fi
+        
+        # Verificar si la instalación fue exitosa
+        if ! command -v uv &> /dev/null; then
+            echo "│ ❌ Error: No se pudo instalar uv automáticamente"
+            echo "│    Instala uv manualmente y ejecuta nuevamente"
+            echo "│"
+            cd "$execPath"
+            rm -rf "$TEMP_CLONE_DIR"
+            exit 1
+        else
+            echo "│ ✅ uv instalado correctamente"
+            echo "│"
+        fi
+    else
+        echo "│ ✅ uv ya está instalado"
+        echo "│"
+    fi
+
+    # Crear entorno virtual con uv
+    echo "│ 🐍 Creando entorno virtual..."
+    uv venv
+    checkResult "Creación del entorno virtual con uv"
+
+    # Activar entorno virtual y sincronizar dependencias
+    echo "│"
+    echo "│ 📦 Instalando dependencias..."
+    
+    # En lugar de source (que puede no funcionar en todos los shells), usar uv run
+    uv sync
+    checkResult "Sincronización de dependencias con uv"
+
+    echo "│"
+    echo "│ ✅ Entorno Python configurado correctamente"
+    echo "│ 💡 Para activar el entorno: source .venv/bin/activate"
+    echo "│ 💡 O usar directamente: uv run python tu_script.py"
+    echo "│"
+
+    # Volver al directorio original
+    cd "$execPath"
+
+    echo "│"
+    echo "│ ✅ Eliminando carpeta temporal..."
 
     rm -rf "$TEMP_CLONE_DIR"
 
