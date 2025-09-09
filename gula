@@ -118,13 +118,15 @@ show_help() {
   echo -e "${BOLD}  install${NC}  Instala un módulo específico en el proyecto actual"
   echo -e "${BOLD}  create${NC}   Crea un nuevo proyecto con arquitectura predefinida"
   echo -e "${BOLD}  template${NC} Genera templates con arquitecturas predefinidas"
+  echo -e "${BOLD}  branches${NC} Lista ramas disponibles en repositorios de módulos o arquetipos"
   echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
   echo ""
-  echo -e "${BOLD}  --key=XXXX${NC}      Clave de acceso para repositorios privados (requerida para install/list/create)"
+  echo -e "${BOLD}  --key=XXXX${NC}      Clave de acceso para repositorios privados (requerida para install/list/create/branches)"
   echo -e "${BOLD}  --branch=YYYY${NC}    Rama específica del repositorio (opcional para install/list/create)"
   echo -e "${BOLD}  --type=ZZZZ${NC}     Tipo de template: clean|fastapi (para template)"
+  echo -e "${BOLD}  --archetype=ZZZZ${NC} Plataforma de arquetipos: android|ios|flutter|python (para branches)"
   echo -e "${BOLD}  --list${NC}          Lista todos los templates disponibles (para template)"
   echo -e "${BOLD}  --help, -h${NC}      Muestra esta ayuda"
   echo ""
@@ -147,6 +149,10 @@ show_help() {
   echo -e "${BOLD}  Generar templates:${NC}"
   echo "  gula template user"
   echo "  gula template product --type=clean"
+  echo ""
+  echo -e "${BOLD}  Listar ramas disponibles:${NC}"
+  echo "  gula branches --key=mi_clave                    # Auto-detecta el tipo de proyecto"
+  echo "  gula branches --key=mi_clave --archetype=flutter # Para consultar arquetipos"
   echo "  gula template user,product,order    # Múltiples templates"
   echo "  gula template --list               # Ver todos los templates disponibles"
   echo ""
@@ -316,7 +322,7 @@ create_project() {
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
-  echo "Uso: $0 {install|list|template|create|help} [opciones]"
+  echo "Uso: $0 {install|list|template|create|branches|help} [opciones]"
   echo "Usa '$0 --help' para más información."
   exit 1
 fi
@@ -349,6 +355,9 @@ while [[ "$#" -gt 0 ]]; do
     --type=*)
       TEMPLATE_TYPE="${1#*=}"
       ;;
+    --archetype=*)
+      ARCHETYPE_TYPE="${1#*=}"
+      ;;
     --list)
       LIST_TEMPLATES="true"
       ;;
@@ -362,6 +371,9 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     list)
       COMMAND="list"
+      ;;
+    branches)
+      COMMAND="branches"
       ;;
     help)
       COMMAND="help"
@@ -382,6 +394,9 @@ while [[ "$#" -gt 0 ]]; do
   esac
   shift
 done  
+
+# Limpiar directorio temporal antes de ejecutar cualquier comando
+cleanup_temp_directory
 
 if [ "$COMMAND" == "install" ]; then
   if [ -z "$MODULE_NAME" ]; then
@@ -408,8 +423,55 @@ elif [ "$COMMAND" == "create" ]; then
     exit 1
   fi
   create_project "$MODULE_NAME"
+elif [ "$COMMAND" == "branches" ]; then
+  if [ -z "$KEY" ]; then
+    echo "Uso: $0 branches --key=xxxx [--archetype=<platform>]"
+    echo "Plataformas válidas para archetype: android, ios, flutter, python"
+    exit 1
+  fi
+  
+  if [ -n "$ARCHETYPE_TYPE" ]; then
+    # Consultar ramas de arquetipos
+    get_access_token "$KEY" "$ARCHETYPE_TYPE"
+    list_branches "archetype-$ARCHETYPE_TYPE"
+  else
+    # Detectar automáticamente el tipo de proyecto
+    if check_type_of_project; then
+      type=0
+    else
+      type=$?
+    fi
+
+    case "$type" in
+      0) 
+        echo -e "${GREEN}Detectado proyecto Android${NC}"
+        get_access_token "$KEY" "android"
+        list_branches "android"
+        ;;
+      1) 
+        echo -e "${GREEN}Detectado proyecto iOS${NC}"
+        get_access_token "$KEY" "ios"
+        list_branches "ios"
+        ;;
+      2) 
+        echo -e "${GREEN}Detectado proyecto Flutter${NC}"
+        get_access_token "$KEY" "flutter"
+        list_branches "flutter"
+        ;;
+      3) 
+        echo -e "${GREEN}Detectado proyecto Python${NC}"
+        get_access_token "$KEY" "back"
+        list_branches "python"
+        ;;
+      *) 
+        echo -e "${RED}Error: No se detectó un tipo de proyecto válido.${NC}"
+        echo "Si quieres consultar ramas de arquetipos usa: $0 branches --key=xxxx --archetype=<platform>"
+        exit 1
+        ;;
+    esac
+  fi
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|help} [--key=xxxx] [--branch=yyyy]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
