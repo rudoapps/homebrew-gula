@@ -1,24 +1,5 @@
 #!/bin/bash
 
-android_list_modules() {  
-  EXCLUDE_DIRS=("app" "gradle" "shared")
-  for dir in "$TEMPORARY_DIR"/*/; do
-    dir_name=$(basename "$dir")
-
-    exclude=0
-
-    for exclude_dir in "${EXCLUDE_DIRS[@]}"; do
-      if [[ "$dir_name" == "$exclude_dir" ]]; then
-        exclude=1
-        break
-      fi
-    done
-
-    if [[ $exclude -eq 0 ]]; then
-      echo -e "${GREEN}📦 $dir_name${NC}"
-    fi
-  done
-}
 
 android_check_module_in_temporary_dir() {
   local module=$1
