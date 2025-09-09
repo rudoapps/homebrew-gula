@@ -2,6 +2,39 @@
 
 MAIN_DIRECTORY=""
 
+standardized_list_modules() {
+  local modules_path=$1
+  shift
+  local exclude_dirs=("$@")  # Directorios a excluir (opcional)
+  
+  # Construir la ruta completa
+  local search_path="$TEMPORARY_DIR"
+  if [ -n "$modules_path" ]; then
+    search_path="$TEMPORARY_DIR/$modules_path"
+  fi
+  
+  for dir in "$search_path"/*/; do
+    [ ! -d "$dir" ] && continue
+    
+    dir_name=$(basename "$dir")
+    
+    # Verificar si debe excluirse
+    local exclude=0
+    if [ ${#exclude_dirs[@]} -gt 0 ]; then
+      for exclude_dir in "${exclude_dirs[@]}"; do
+        if [[ "$dir_name" == "$exclude_dir" ]]; then
+          exclude=1
+          break
+        fi
+      done
+    fi
+    
+    if [[ $exclude -eq 0 ]]; then
+      echo "$dir_name"
+    fi
+  done
+}
+
 check_type_of_project() {
   # Android: settings.gradle + directorio app
   if ([ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]) && [ -d "app" ]; then
