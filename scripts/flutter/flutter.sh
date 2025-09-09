@@ -15,10 +15,10 @@ list_flutter() {
 
  	git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
 
-	echo -e "${GREEN}Lista de módulos disponibles:"
-	echo -e "${GREEN}-----------------------------------------------"
-	ls -l "${TEMPORARY_DIR}/${MODULES_PATH_FLUTTER}/" | grep '^d' | awk '{print $9}'  
-	echo -e "${GREEN}-----------------------------------------------${NC}"
+	echo -e "${BOLD}Lista de módulos disponibles:"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	standardized_list_modules "${MODULES_PATH_FLUTTER}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
 
 	remove_temporary_dir
 }

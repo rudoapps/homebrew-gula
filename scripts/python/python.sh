@@ -14,10 +14,10 @@ list_python() {
 
  	clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-python.git"
 
-	echo -e "${GREEN}Lista de módulos disponibles:"
-	echo -e "${GREEN}-----------------------------------------------"
-	ls -l "${TEMPORARY_DIR}/features/" | grep '^d' | awk '{print $9}'  
-	echo -e "${GREEN}-----------------------------------------------${NC}"
+	echo -e "${BOLD}Lista de módulos disponibles:"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	standardized_list_modules "features"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
 
 	remove_temporary_dir
 }
