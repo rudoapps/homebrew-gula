@@ -13,6 +13,38 @@ install_ios_module() {
 	echo -e "${BOLD}Prerequisitos: Validando.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
+	# Verificar si el módulo ya está instalado
+	local is_reinstall=false
+	if is_module_installed "ios" "$MODULE_NAME"; then
+		if ! handle_module_reinstallation "ios" "$MODULE_NAME" "${BRANCH:-main}"; then
+			exit 0  # Usuario canceló la instalación
+		fi
+		is_reinstall=true
+	else
+		# Log inicio de operación (solo para nuevas instalaciones)
+		log_operation "install" "ios" "$MODULE_NAME" "${BRANCH:-main}" "started"
+	fi
+
+	# Variable para controlar si la instalación fue exitosa
+	local installation_success=false
+
+	# Función para manejar errores durante la instalación
+	handle_installation_error() {
+		# Solo registrar error si la instalación no fue marcada como exitosa
+		if [ "$installation_success" = false ]; then
+			echo -e "${RED}❌ Error durante la instalación del módulo iOS${NC}"
+			if [ "$is_reinstall" = true ]; then
+				log_operation "reinstall" "ios" "$MODULE_NAME" "${BRANCH:-main}" "error" "Instalación interrumpida o falló"
+			else
+				log_operation "install" "ios" "$MODULE_NAME" "${BRANCH:-main}" "error" "Instalación interrumpida o falló"
+			fi
+			remove_temporary_dir
+		fi
+	}
+
+	# Configurar trap para capturar errores y interrupciones
+	trap handle_installation_error ERR EXIT
+
 	get_access_token $KEY "ios"
 	
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -50,6 +82,20 @@ install_ios_module() {
   	echo -e "${GREEN}Proceso finalizado.${NC}"
   	echo -e "${GREEN}-----------------------------------------------${NC}"
   	
+  	# Marcar instalación como exitosa antes de la limpieza
+  	installation_success=true
+  	
+  	# Log éxito de instalación
+  	if [ "$is_reinstall" = true ]; then
+    	log_operation "reinstall" "ios" "$MODULE_NAME" "${BRANCH:-main}" "success"
+  	else
+    	log_operation "install" "ios" "$MODULE_NAME" "${BRANCH:-main}" "success"
+  	fi
+  	log_installed_module "ios" "$MODULE_NAME" "${BRANCH:-main}"
+  	
+  	# Remover trap de error ya que la instalación fue exitosa
+  	trap - ERR EXIT
+  	
   	remove_temporary_dir
 }
 
@@ -64,7 +110,12 @@ list_ios() {
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
- 	git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "$TEMPORARY_DIR"
+	if [ -n "${BRANCH:-}" ]; then
+		echo -e "🌿 Usando rama: ${YELLOW}$BRANCH${NC}"
+		git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "$TEMPORARY_DIR"
+	else
+		git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "$TEMPORARY_DIR"
+	fi
 	
 	echo -e "${BOLD}Lista de módulos disponibles:"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
