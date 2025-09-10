@@ -52,6 +52,8 @@ echo "────────────────────────�
 # Inicializar variables
 LIST_TEMPLATES="false"
 TEMPLATE_TYPE=""
+FORCE_INSTALL="false"
+export FORCE_INSTALL
 
 function cleanup {
     echo ""
@@ -119,6 +121,7 @@ show_help() {
   echo -e "${BOLD}  create${NC}   Crea un nuevo proyecto con arquitectura predefinida"
   echo -e "${BOLD}  template${NC} Genera templates con arquitecturas predefinidas"
   echo -e "${BOLD}  branches${NC} Lista ramas disponibles en repositorios de módulos o arquetipos"
+  echo -e "${BOLD}  status${NC}   Muestra el estado del proyecto y módulos instalados"
   echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
@@ -127,6 +130,7 @@ show_help() {
   echo -e "${BOLD}  --branch=YYYY${NC}    Rama específica del repositorio (opcional para install/list/create)"
   echo -e "${BOLD}  --type=ZZZZ${NC}     Tipo de template: clean|fastapi (para template)"
   echo -e "${BOLD}  --archetype=ZZZZ${NC} Plataforma de arquetipos: android|ios|flutter|python (para branches)"
+  echo -e "${BOLD}  --force${NC}         Forzar reinstalación sin confirmar (para install)"
   echo -e "${BOLD}  --list${NC}          Lista todos los templates disponibles (para template)"
   echo -e "${BOLD}  --help, -h${NC}      Muestra esta ayuda"
   echo ""
@@ -139,6 +143,7 @@ show_help() {
   echo -e "${BOLD}  Instalar un módulo:${NC}"
   echo "  gula install authentication --key=mi_clave_secreta"
   echo "  gula install network --key=mi_clave --branch=feature-branch"
+  echo "  gula install authentication --key=mi_clave --force     # Reinstalar sin confirmar"
   echo ""
   echo -e "${BOLD}  Crear nuevos proyectos:${NC}"
   echo "  gula create android --key=mi_clave_secreta"
@@ -153,6 +158,9 @@ show_help() {
   echo -e "${BOLD}  Listar ramas disponibles:${NC}"
   echo "  gula branches --key=mi_clave                    # Auto-detecta el tipo de proyecto"
   echo "  gula branches --key=mi_clave --archetype=flutter # Para consultar arquetipos"
+  echo ""
+  echo -e "${BOLD}  Ver estado del proyecto:${NC}"
+  echo "  gula status                                     # Muestra módulos instalados y logs"
   echo "  gula template user,product,order    # Múltiples templates"
   echo "  gula template --list               # Ver todos los templates disponibles"
   echo ""
@@ -322,7 +330,7 @@ create_project() {
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
-  echo "Uso: $0 {install|list|template|create|branches|help} [opciones]"
+  echo "Uso: $0 {install|list|template|create|branches|status|help} [opciones]"
   echo "Usa '$0 --help' para más información."
   exit 1
 fi
@@ -358,6 +366,10 @@ while [[ "$#" -gt 0 ]]; do
     --archetype=*)
       ARCHETYPE_TYPE="${1#*=}"
       ;;
+    --force)
+      FORCE_INSTALL="true"
+      export FORCE_INSTALL
+      ;;
     --list)
       LIST_TEMPLATES="true"
       ;;
@@ -374,6 +386,9 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     branches)
       COMMAND="branches"
+      ;;
+    status)
+      COMMAND="status"
       ;;
     help)
       COMMAND="help"
@@ -470,8 +485,10 @@ elif [ "$COMMAND" == "branches" ]; then
         ;;
     esac
   fi
+elif [ "$COMMAND" == "status" ]; then
+  show_project_status
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|help} [--key=xxxx] [--branch=yyyy]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
