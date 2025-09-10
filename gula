@@ -182,9 +182,12 @@ show_help() {
   echo "  • ${BOLD}template${NC}: No requiere --key (usa templates locales)"
   echo "  • ${BOLD}install/list${NC}: Requiere --key para acceder a repositorios privados"
   echo "  • ${BOLD}create${NC}: Requiere --key para descargar arquetipos"
-  echo "  • La opción --branch permite usar ramas específicas (desarrollo, features, etc.)"
+  echo "  • La opción --branch permite usar ramas específicas en install/list/create"
+  echo "  • La opción --force permite reinstalar módulos sin confirmación"
   echo "  • Los comandos list/install detectan automáticamente el tipo de proyecto actual"
   echo "  • El comando create requiere especificar la plataforma (android/ios/flutter/python)"
+  echo "  • Todas las operaciones se registran en el archivo .gula.log (formato JSON)"
+  echo "  • Use 'gula status' para ver el historial de operaciones y módulos instalados"
   echo ""
   echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
 }
