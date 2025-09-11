@@ -131,12 +131,20 @@ install_templates_ios() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}Iniciando instalación.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
+  
+  # Log inicio de generación de template
+  log_operation "template" "ios" "$MODULE_NAME" "local" "started"
+  
   ios_install_all_templates "$MODULE_NAME"
 
   if [ $? -eq 0 ]; then
   	echo -e "✅ El módulo '$MODULE_NAME' fue generado correctamente."
+  	# Log éxito de generación de template
+    log_operation "template" "ios" "$MODULE_NAME" "local" "success"
   else
     echo -e "${RED}Error: Algo salió mal al ejecutar ${NC}"
+    # Log error de generación de template
+    log_operation "template" "ios" "$MODULE_NAME" "local" "error" "Error durante la generación del template"
     exit 1
   fi
 }

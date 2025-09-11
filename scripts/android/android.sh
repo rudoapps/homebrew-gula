@@ -163,12 +163,20 @@ install_templates_android() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}Iniciando instalación de templates Android.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
+  
+  # Log inicio de generación de template
+  log_operation "template" "android" "$MODULE_NAME" "local" "started"
+  
   android_install_all_templates "$MODULE_NAME"
 
   if [ $? -eq 0 ]; then
     echo -e "✅ El template '$MODULE_NAME' fue generado correctamente."
+    # Log éxito de generación de template
+    log_operation "template" "android" "$MODULE_NAME" "local" "success"
   else
     echo -e "${RED}Error: Algo salió mal al ejecutar ${NC}"
+    # Log error de generación de template
+    log_operation "template" "android" "$MODULE_NAME" "local" "error" "Error durante la generación del template"
     exit 1
   fi
 }
