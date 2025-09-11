@@ -99,13 +99,30 @@ show_project_status() {
     if [ "$modules_count" -eq 0 ]; then
       echo "  No hay módulos instalados"
     else
-      jq -r '.installed_modules | to_entries[] | "  \(.value.platform) → \(.value.module) (\(.value.branch)) - \(.value.installed_at)"' "$GULA_LOG_FILE"
+      jq -r '.installed_modules | to_entries[] | "  📦 \(.value.platform) → \(.value.module) (\(.value.branch)) - \(.value.installed_at)"' "$GULA_LOG_FILE"
     fi
     
     echo ""
-    echo -e "${BOLD}ÚLTIMAS OPERACIONES:${NC}"
+    
+    # Estadísticas de operaciones
+    echo -e "${BOLD}ESTADÍSTICAS:${NC}"
     echo -e "${BOLD}───────────────────────────────────────────────${NC}"
-    jq -r '.operations[-5:] | reverse[] | "\(.timestamp) - \(.operation) \(.platform):\(.module) (\(.status))"' "$GULA_LOG_FILE" | head -5
+    local total_ops=$(jq -r '.operations | length' "$GULA_LOG_FILE")
+    local installs=$(jq -r '[.operations[] | select(.operation == "install" and .status == "success")] | length' "$GULA_LOG_FILE")
+    local templates=$(jq -r '[.operations[] | select(.operation == "template" and .status == "success")] | length' "$GULA_LOG_FILE")
+    local lists=$(jq -r '[.operations[] | select(.operation == "list" and .status == "success")] | length' "$GULA_LOG_FILE")
+    local errors=$(jq -r '[.operations[] | select(.status == "error")] | length' "$GULA_LOG_FILE")
+    
+    echo "  🔧 Instalaciones exitosas: $installs"
+    echo "  📝 Templates generados: $templates"
+    echo "  📋 Listados realizados: $lists"
+    echo "  ❌ Operaciones con error: $errors"
+    echo "  📊 Total de operaciones: $total_ops"
+    
+    echo ""
+    echo -e "${BOLD}OPERACIONES:${NC}"
+    echo -e "${BOLD}───────────────────────────────────────────────${NC}"
+    jq -r '.operations | reverse[] | "\(.timestamp) - \(.operation) \(.platform):\(.module) (\(.status))"' "$GULA_LOG_FILE"
     echo ""
     echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
   else
