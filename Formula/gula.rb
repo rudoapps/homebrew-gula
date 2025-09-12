@@ -11,7 +11,7 @@ class Gula < Formula
   
   resource "xcodeproj" do
     url "https://rubygems.org/downloads/xcodeproj-1.23.0.gem"
-    sha256 "6b8663e2ad7b7ff31e4b8a4b998e8c1a8d4a20a7e72c8cebcf62f5f4e2b4e6a5"
+    sha256 "16224a3104e0c8286f9bb9e9bcc956413fcb8ddfe6044c40f75abbc2a06ad69c"
   end
 
   def install
