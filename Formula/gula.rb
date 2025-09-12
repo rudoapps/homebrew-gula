@@ -13,31 +13,6 @@ class Gula < Formula
     bin.install "gula"
     (share/"support/scripts").install "scripts"
     
-    # Instalar xcodeproj y todas sus dependencias en el directorio de homebrew
-    ENV["GEM_HOME"] = libexec
-    # Instalar dependencias base primero
-    system Formula["ruby"].opt_bin/"gem", "install", "rexml", "--no-document", "--quiet"
-    system Formula["ruby"].opt_bin/"gem", "install", "nkf", "--no-document", "--quiet"
-    system Formula["ruby"].opt_bin/"gem", "install", "atomos", "--no-document", "--quiet"
-    system Formula["ruby"].opt_bin/"gem", "install", "claide", "--no-document", "--quiet"
-    system Formula["ruby"].opt_bin/"gem", "install", "colored2", "--no-document", "--quiet"
-    system Formula["ruby"].opt_bin/"gem", "install", "nanaimo", "--no-document", "--quiet"
-    system Formula["ruby"].opt_bin/"gem", "install", "CFPropertyList", "--no-document", "--quiet"
-    # Finalmente instalar xcodeproj
-    system Formula["ruby"].opt_bin/"gem", "install", "xcodeproj", "--no-document", "--quiet"
-    
-    # Crear wrapper script que use las gemas instaladas
-    original_gula = bin/"gula"
-    original_gula.rename(libexec/"gula-original")
-    
-    (bin/"gula").write <<~EOS
-      #!/bin/bash
-      export GEM_HOME="#{libexec}"
-      export GEM_PATH="#{libexec}"
-      export PATH="#{Formula["ruby"].opt_bin}:$PATH"
-      exec "#{libexec}/gula-original" "$@"
-    EOS
-    (bin/"gula").chmod 0755
   end
 
   def post_install
