@@ -52,6 +52,7 @@ echo "────────────────────────�
 # Inicializar variables
 LIST_TEMPLATES="false"
 TEMPLATE_TYPE=""
+ARCHETYPE_TYPE=""
 FORCE_INSTALL="false"
 export FORCE_INSTALL
 
