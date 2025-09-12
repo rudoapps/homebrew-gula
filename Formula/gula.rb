@@ -9,21 +9,12 @@ class Gula < Formula
   depends_on "ruby"
   depends_on "jq" # Añade jq como una dependencia
   
-  resource "xcodeproj" do
-    url "https://rubygems.org/downloads/xcodeproj-1.23.0.gem"
-    sha256 "6b8663e2ad7b7ff31e4b8a4b998e8c1a8d4a20a7e72c8cebcf62f5f4e2b4e6a5"
-  end
-
   def install
     bin.install "gula"
     (share/"support/scripts").install "scripts"
     
-    # Instalar gemas Ruby necesarias
-    resources.each do |r|
-      r.stage do
-        system "gem", "install", Dir["*.gem"].first, "--install-dir", libexec
-      end
-    end
+    # Instalar xcodeproj automáticamente usando gem install
+    system "gem", "install", "xcodeproj", "--no-document", "--quiet"
   end
 
   def post_install
