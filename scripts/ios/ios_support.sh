@@ -4,7 +4,7 @@ ios_check_xcodeproj() {
 	# Comprobar si la gema 'xcodeproj' está instalada
 	if ! gem list -i xcodeproj > /dev/null 2>&1; then
 		echo "La gema 'xcodeproj' no está instalada. Procediendo con la instalación..."
-		sudo gem install xcodeproj -v '~> 1.27.0'
+		gem install xcodeproj -v '~> 1.27.0' --user-install --no-document
 		if [ $? -eq 0 ]; then
 			echo -e "✅ 'xcodeproj' se ha instalado correctamente en la versión requerida."
 		else
@@ -19,7 +19,7 @@ ios_check_xcodeproj() {
 		# Comprobar si la versión es menor que 1.27.0
 		if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]; then
 			echo "La versión de 'xcodeproj' es $VERSION, menor a la requerida ($REQUIRED_VERSION). Actualizando..."
-			sudo gem install xcodeproj -v '~> 1.27.0'
+			gem install xcodeproj -v '~> 1.27.0' --user-install --no-document
 			if [ $? -eq 0 ]; then
 				echo -e "✅ 'xcodeproj' se ha actualizado correctamente a la versión requerida."
 			else
