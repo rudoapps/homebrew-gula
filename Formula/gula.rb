@@ -18,12 +18,14 @@ class Gula < Formula
     system Formula["ruby"].opt_bin/"gem", "install", "xcodeproj", "--no-document", "--quiet"
     
     # Crear wrapper script que use las gemas instaladas
-    (bin/"gula").unlink
+    original_gula = bin/"gula"
+    original_gula.rename(libexec/"gula-original")
+    
     (bin/"gula").write <<~EOS
       #!/bin/bash
       export GEM_HOME="#{libexec}"
       export GEM_PATH="#{libexec}"
-      exec "#{buildpath}/gula" "$@"
+      exec "#{libexec}/gula-original" "$@"
     EOS
     (bin/"gula").chmod 0755
   end
