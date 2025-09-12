@@ -1,8 +1,8 @@
 class Gula < Formula
   desc "Instalador de componentes de gula"
   homepage "https://github.com/rudoapps/gula"
-  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/0.0.84.tar.gz"
-  sha256 "f940a2a775476f2a09cbac72c70dd9b28841d852c7fced09245d295ba6fc54a3"
+  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/0.0.85.tar.gz"
+  sha256 "c1e6e3ae37c8a8d7f97d0d82654335d3f8bc4ef4949d4fa54d1b3225c867c6dd"
   license "MIT"
 
   # Dependencias
@@ -11,7 +11,7 @@ class Gula < Formula
   
   resource "xcodeproj" do
     url "https://rubygems.org/downloads/xcodeproj-1.23.0.gem"
-    sha256 "16224a3104e0c8286f9bb9e9bcc956413fcb8ddfe6044c40f75abbc2a06ad69c"
+    sha256 "6b8663e2ad7b7ff31e4b8a4b998e8c1a8d4a20a7e72c8cebcf62f5f4e2b4e6a5"
   end
 
   def install
