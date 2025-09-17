@@ -248,9 +248,18 @@ android_read_versions_and_install_toml() {
     else
       echo "   │ ➕ $name no está en el TOML. Añadiendo a la lista para [versions]..."
       libraries_to_add+="$name = \"$version\"\n"
-      added_libraries+=("$name")  # Añadir al array de añadidos
+      added_libraries+=("$name")
     fi
-  done < <(jq -c '.toml[]' "$json_file")
+  done < <(
+    jq -c '
+      . as $root
+      | (if ($root | has("toml") and (.toml|type=="array")) then .toml
+         elif ($root | has("versions") and (.versions|type=="array")) then .versions
+         elif ($root | has("dependencies") and (.dependencies|type=="array")) then .dependencies
+         elif ($root | has("libs") and (.libs|type=="array")) then .libs
+         else [] end
+        )[]' "$json_file"
+  )
 
   if [[ ${#added_libraries[@]} -gt 0 ]]; then
     echo "   │ Librerías añadidas al archivo TOML en la sección [versions]:"
@@ -311,7 +320,15 @@ android_read_libraries_and_install_toml() {
       libraries_to_add+="$new_library\n"
     fi
 
-  done < <(jq -c '.toml[]' "$json_file")
+  done < <(
+    jq -c '
+      . as $root
+      | (if ($root | has("toml") and (.toml|type=="array")) then .toml
+         elif ($root | has("libraries") and (.libraries|type=="array")) then .libraries
+         elif ($root | has("libs") and (.libs|type=="array")) then .libs
+         else [] end
+        )[]' "$json_file"
+  )
  
   if [[ -n "$libraries_to_add" ]]; then
     libraries_to_add=$(printf "%b" "$libraries_to_add")
@@ -363,7 +380,14 @@ android_read_plugins_and_install_toml() {
     else
       plugins_to_add+="$new_plugin\n"
     fi
-  done < <(jq -c '.toml[]' "$json_file")
+  done < <(
+    jq -c '
+      . as $root
+      | (if ($root | has("toml") and (.toml|type=="array")) then .toml
+         elif ($root | has("plugins") and (.plugins|type=="array")) then .plugins
+         else [] end
+        )[]' "$json_file"
+  )
 
   if [[ -n "$plugins_to_add" ]]; then
     plugins_to_add=$(printf "%b" "$plugins_to_add")
@@ -499,7 +523,7 @@ android_install_main_dependencies() {
       echo "   │ ➕ $alias no está en el archivo. Añadiendo..."
       plugins_to_add+="\talias($alias) apply $apply\n"
     fi
-  done < <(jq -c '.plugins[]' "$json_file")
+  done < <(jq -c '.plugins // [] | .[]' "$json_file")
 
   if [[ -n "$plugins_to_add" ]]; then
     echo "   │ Añadiendo nuevos plugins al archivo..."
