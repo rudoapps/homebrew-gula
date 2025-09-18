@@ -62,7 +62,7 @@ copy_file_or_create_folder() {
   local origin=$1
   local destination=$2
 
-  if !(check_path_exists "$destination"); then  
+  if !(check_path_exists "$destination"); then
     echo "No existe CREAMOS DIRECTORIO"
     mkdir -p "$destination"
   fi
@@ -75,13 +75,16 @@ copy_file_or_create_folder() {
     echo "│ ✅ Copiado a ${destination} correctamente"
     echo "│"
     echo "└──────────────────────────────────────────────"
-    
+
   else
     echo -e "${RED}Error: No se pudo copiar el fichero.${NC}"
     return
   fi
   android_install_libraries_dependencies "${origin}/configuration.gula"
   android_install_gradle_dependencies "${origin}/configuration.gula"
+
+  # También procesar módulos anidados recursivamente
+  android_install_modules_dependencies_recursive "${origin}/configuration.gula"
 } 
 
 android_rename_imports() {
@@ -201,14 +204,18 @@ transform_string() {
 }
 
 android_install_modules_dependencies() {
-  json_file="$TEMPORARY_DIR/${MODULE_NAME}/configuration.gula"
+  android_install_modules_dependencies_recursive "$TEMPORARY_DIR/${MODULE_NAME}/configuration.gula"
+}
+
+android_install_modules_dependencies_recursive() {
+  local json_file="$1"
 
   if [[ ! -f "$json_file" ]]; then
     return
   fi
 
   modules=$(jq -r '.modules // empty' "$json_file")
-  
+
   if [[ -z "$modules" ]]; then
     echo "El campo 'modules' no existe o está vacío en el archivo JSON: $json_file"
     return
@@ -217,6 +224,13 @@ android_install_modules_dependencies() {
   # Iterar sobre el array 'modules'
   for module in $(echo "$modules" | jq -r '.[]'); do
     copy_file_or_create_folder "${TEMPORARY_DIR}/${module}" "./${module}"
+
+    # Procesar recursivamente las dependencias del módulo recién instalado
+    local nested_config="${TEMPORARY_DIR}/${module}/configuration.gula"
+    if [[ -f "$nested_config" ]]; then
+      echo "✅ Procesando dependencias anidadas de: $module"
+      android_install_modules_dependencies_recursive "$nested_config"
+    fi
   done
 }
 
