@@ -545,10 +545,6 @@ validate_ios_configuration() {
             fi
 
             # Intentar encontrar la ruta en diferentes ubicaciones
-            # Debug: mostrar valores
-            echo "      DEBUG: app_dir=$app_dir, local_path=$local_path"
-            echo "      DEBUG: test=$app_dir/$local_path"
-            echo "      DEBUG: exists=$([ -d "$app_dir/$local_path" ] && echo yes || echo no)"
 
             if [ -n "$app_dir" ] && [ -d "$app_dir/$local_path" ]; then
               search_path="$app_dir/$local_path"
