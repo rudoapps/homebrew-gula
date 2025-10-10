@@ -3,8 +3,7 @@
 HOMEBREW_PREFIX=$(brew --prefix)
 # scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
 # Obtener el directorio donde está ubicado este script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-scripts_dir="$SCRIPT_DIR/scripts"
+scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
 source "$scripts_dir/global_vars.sh"
 source "$scripts_dir/support/logo.sh"
 
