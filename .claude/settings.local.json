@@ -48,7 +48,8 @@
       "Bash(echo \"=== $file ===\")",
       "Bash(done)",
       "Bash(strace:*)",
-      "Bash(/Users/fer/gula/gula validate)"
+      "Bash(/Users/fer/gula/gula validate)",
+      "Bash(git diff:*)"
     ],
     "deny": [],
     "ask": []

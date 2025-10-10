@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Asegurar que los errores en funciones no detengan el script
-set +e
-
 # Función para instalar el pre-commit hook
 install_validation_hook() {
   echo ""
@@ -221,8 +218,11 @@ validate_configuration_files() {
       continue
     fi
 
+    # Capturar el resultado sin que el script se detenga
     validate_single_configuration "$config_file" "$project_type"
     local result=$?
+    # Prevenir que errexit detenga el bucle
+    true
 
     if [ $result -eq 0 ]; then
       validated_count=$((validated_count + 1))
@@ -822,8 +822,13 @@ validate_staged_configurations() {
   # Validar cada archivo staged
   while IFS= read -r config_file; do
     if [ -n "$config_file" ]; then
+      # Capturar el resultado sin que el script se detenga
       validate_single_configuration "$config_file" "$project_type"
-      if [ $? -eq 1 ]; then
+      local result=$?
+      # Prevenir que errexit detenga el bucle
+      true
+
+      if [ $result -eq 1 ]; then
         error_count=$((error_count + 1))
       fi
     fi
