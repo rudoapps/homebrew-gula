@@ -218,11 +218,8 @@ validate_configuration_files() {
       continue
     fi
 
-    # Capturar el resultado sin que el script se detenga
-    validate_single_configuration "$config_file" "$project_type"
-    local result=$?
-    # Prevenir que errexit detenga el bucle
-    true
+    # Capturar el resultado - no usar local result=$? directamente
+    validate_single_configuration "$config_file" "$project_type" && result=0 || result=$?
 
     if [ $result -eq 0 ]; then
       validated_count=$((validated_count + 1))
@@ -626,15 +623,28 @@ validate_flutter_configuration() {
     local libraries_count=$(jq '[.libraries[]?] | length' "$config_file")
 
     if [ "$libraries_count" -gt 0 ]; then
-      # Validar que cada librería tenga name
-      local no_name=$(jq -r '[.libraries[]? | select(.name == null or .name == "")] | length' "$config_file")
-      if [ "$no_name" -gt 0 ]; then
-        echo -e "${RED}    ❌ Hay $no_name librerías sin 'name'${NC}"
+      # Validar librerías inválidas (excluyendo dependencias especiales como flutter sdk)
+      # Una librería es inválida si:
+      # - No tiene 'name' Y tampoco tiene referencias especiales (flutter, cupertino_icons con path, etc)
+      # - O tiene 'name' pero no tiene ni 'version' ni 'git.url'
+      local invalid_libs=$(jq -r '[.libraries[]? | select(
+        (.name == null or .name == "") and
+        (.flutter == null) and
+        (.cupertino_icons == null)
+      )] | length' "$config_file")
+
+      if [ "$invalid_libs" -gt 0 ]; then
+        echo -e "${RED}    ❌ Hay $invalid_libs librerías sin 'name' ni referencia válida${NC}"
         has_errors=1
       fi
 
-      # Validar que tengan version o git.url
-      local no_source=$(jq -r '[.libraries[]? | select((.version == null or .version == "") and (.git.url == null or .git.url == ""))] | length' "$config_file")
+      # Validar que las librerías con name tengan version o git.url
+      local no_source=$(jq -r '[.libraries[]? | select(
+        (.name != null and .name != "") and
+        (.version == null or .version == "") and
+        (.git.url == null or .git.url == "")
+      )] | length' "$config_file")
+
       if [ "$no_source" -gt 0 ]; then
         echo -e "${RED}    ❌ Hay $no_source librerías sin 'version' ni 'git.url'${NC}"
         has_errors=1
@@ -822,11 +832,8 @@ validate_staged_configurations() {
   # Validar cada archivo staged
   while IFS= read -r config_file; do
     if [ -n "$config_file" ]; then
-      # Capturar el resultado sin que el script se detenga
-      validate_single_configuration "$config_file" "$project_type"
-      local result=$?
-      # Prevenir que errexit detenga el bucle
-      true
+      # Capturar el resultado - no usar local result=$? directamente
+      validate_single_configuration "$config_file" "$project_type" && result=0 || result=$?
 
       if [ $result -eq 1 ]; then
         error_count=$((error_count + 1))
