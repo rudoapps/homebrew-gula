@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Variables
 HOMEBREW_PREFIX=$(brew --prefix)
-scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
-
+# scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
+# Obtener el directorio donde está ubicado este script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+scripts_dir="$SCRIPT_DIR/scripts"
 source "$scripts_dir/global_vars.sh"
 source "$scripts_dir/support/logo.sh"
-
 
 echo ""
 echo -e "${BOLD}versión: ${VERSION}"
@@ -42,6 +42,7 @@ source "$scripts_dir/support/general_support.sh"
 source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
+source "$scripts_dir/support/validation.sh"
 
 echo -e "✅ Imports cargados correctamente"
 
@@ -123,6 +124,8 @@ show_help() {
   echo -e "${BOLD}  template${NC} Genera templates con arquitecturas predefinidas"
   echo -e "${BOLD}  branches${NC} Lista ramas disponibles en repositorios de módulos o arquetipos"
   echo -e "${BOLD}  status${NC}   Muestra el estado del proyecto y módulos instalados"
+  echo -e "${BOLD}  validate${NC} Valida archivos configuration.gula del proyecto"
+  echo -e "${BOLD}  install-hook${NC} Instala pre-commit hook para validar configuration.gula"
   echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
@@ -155,6 +158,8 @@ show_help() {
   echo -e "${BOLD}  Generar templates:${NC}"
   echo "  gula template user"
   echo "  gula template product --type=clean"
+  echo "  gula template user,product,order    # Múltiples templates"
+  echo "  gula template --list               # Ver todos los templates disponibles"
   echo ""
   echo -e "${BOLD}  Listar ramas disponibles:${NC}"
   echo "  gula branches --key=mi_clave                    # Auto-detecta el tipo de proyecto"
@@ -162,8 +167,13 @@ show_help() {
   echo ""
   echo -e "${BOLD}  Ver estado del proyecto:${NC}"
   echo "  gula status                                     # Muestra módulos instalados y logs"
-  echo "  gula template user,product,order    # Múltiples templates"
-  echo "  gula template --list               # Ver todos los templates disponibles"
+  echo ""
+  echo -e "${BOLD}  Validar configuration.gula:${NC}"
+  echo "  gula validate                                   # Valida todos los configuration.gula del proyecto"
+  echo "  gula validate --staged                          # Valida solo los archivos en staging (pre-commit)"
+  echo ""
+  echo -e "${BOLD}  Instalar pre-commit hook:${NC}"
+  echo "  gula install-hook                               # Instala hook para validar en cada commit"
   echo ""
   echo -e "${BOLD}TIPOS DE PROYECTO SOPORTADOS:${NC}"
   echo ""
@@ -183,6 +193,8 @@ show_help() {
   echo "  • ${BOLD}template${NC}: No requiere --key (usa templates locales)"
   echo "  • ${BOLD}install/list${NC}: Requiere --key para acceder a repositorios privados"
   echo "  • ${BOLD}create${NC}: Requiere --key para descargar arquetipos"
+  echo "  • ${BOLD}validate${NC}: Valida archivos configuration.gula del proyecto"
+  echo "  • ${BOLD}install-hook${NC}: Instala pre-commit hook para validación automática"
   echo "  • La opción --branch permite usar ramas específicas en install/list/create"
   echo "  • La opción --force permite reinstalar módulos sin confirmación"
   echo "  • Los comandos list/install detectan automáticamente el tipo de proyecto actual"
@@ -221,20 +233,15 @@ list_templates() {
     echo ""
     echo -e "${BOLD}📱 Android:${NC}"
     echo "  • clean - Clean Architecture (Repository, UseCase, ViewModel)"
-    echo "  • mvvm  - MVVM Pattern (disponible próximamente)"
-    echo "  • mvc   - MVC Pattern (disponible próximamente)"
     echo ""
     echo -e "${BOLD}🍎 iOS:${NC}"
     echo "  • clean - Clean Architecture (SwiftUI + Repository + UseCase)"
     echo ""
     echo -e "${BOLD}🦋 Flutter:${NC}"
-    echo "  • clean    - Clean Architecture (BLoC + Repository + UseCase)"
-    echo "  • bloc     - BLoC Pattern (disponible próximamente)"
-    echo "  • provider - Provider Pattern (disponible próximamente)"
+    echo "  • clean - Clean Architecture (BLoC + Repository + UseCase)"
     echo ""
     echo -e "${BOLD}🐍 Python:${NC}"
-    echo "  • fastapi - FastAPI REST API (Repository + Service + Router)"
-    echo "  • django  - Django REST (disponible próximamente)"
+    echo "  • fastapi - Arquitectura Hexagonal (Adaptadores y Puertos Driven/Driving)"
     echo ""
     echo -e "${BOLD}Uso:${NC}"
     echo "  gula template <nombre> [--type=clean]"
@@ -334,7 +341,7 @@ create_project() {
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
-  echo "Uso: $0 {install|list|template|create|branches|status|help} [opciones]"
+  echo "Uso: $0 {install|list|template|create|branches|status|validate|install-hook|help} [opciones]"
   echo "Usa '$0 --help' para más información."
   exit 1
 fi
@@ -352,6 +359,12 @@ if [[ "$COMMAND" == "template" && "$2" == "--list" ]]; then
   MODULE_NAME=""
 elif [[ "$COMMAND" == "template" && -n "$2" && "$2" != "--list" ]]; then
   MODULE_NAME="$2"
+fi
+
+# Manejar caso especial: gula validate --staged
+VALIDATE_STAGED="false"
+if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
+  VALIDATE_STAGED="true"
 fi
 
 shift
@@ -394,6 +407,12 @@ while [[ "$#" -gt 0 ]]; do
     status)
       COMMAND="status"
       ;;
+    validate)
+      COMMAND="validate"
+      ;;
+    install-hook)
+      COMMAND="install-hook"
+      ;;
     help)
       COMMAND="help"
       ;;
@@ -426,7 +445,7 @@ if [ "$COMMAND" == "install" ]; then
 elif [ "$COMMAND" == "list" ]; then
   list_modules
 elif [ "$COMMAND" == "help" ]; then
-  help_modules
+  show_help
 elif [ "$COMMAND" == "template" ]; then
   if [ "$LIST_TEMPLATES" == "true" ]; then
     list_templates
@@ -491,8 +510,16 @@ elif [ "$COMMAND" == "branches" ]; then
   fi
 elif [ "$COMMAND" == "status" ]; then
   show_project_status
+elif [ "$COMMAND" == "validate" ]; then
+  if [ "$VALIDATE_STAGED" == "true" ]; then
+    validate_staged_configurations
+  else
+    validate_configuration_files
+  fi
+elif [ "$COMMAND" == "install-hook" ]; then
+  install_validation_hook
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|install-hook|help} [--key=xxxx] [--branch=yyyy]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
