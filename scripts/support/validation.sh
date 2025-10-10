@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Asegurar que los errores en funciones no detengan el script
+set +e
+
 # Función para instalar el pre-commit hook
 install_validation_hook() {
   echo ""
@@ -214,6 +217,10 @@ validate_configuration_files() {
 
   # Validar cada archivo
   while IFS= read -r config_file; do
+    if [ -z "$config_file" ]; then
+      continue
+    fi
+
     validate_single_configuration "$config_file" "$project_type"
     local result=$?
 
@@ -568,9 +575,17 @@ validate_ios_configuration() {
           if [ "$found" = true ] && [ -n "$search_path" ] && [ -d "$search_path" ]; then
             echo -e "${GREEN}    ✅ Ruta encontrada: $shared_path${NC}"
           else
-            echo -e "${YELLOW}    ⚠️  Ruta no encontrada: $shared_path${NC}"
-            echo -e "${YELLOW}       Puede ser válida si el módulo aún no está instalado${NC}"
-            has_warnings=1
+            # Determinar si estamos en el repositorio de módulos o en un proyecto de usuario
+            if [[ -d "$project_root/Gula" ]]; then
+              # Estamos en el repositorio, esto es un error
+              echo -e "${RED}    ❌ Módulo no existe: $shared_path${NC}"
+              has_errors=1
+            else
+              # Estamos en un proyecto de usuario, puede no estar instalado aún
+              echo -e "${YELLOW}    ⚠️  Ruta no encontrada: $shared_path${NC}"
+              echo -e "${YELLOW}       Puede ser válida si el módulo aún no está instalado${NC}"
+              has_warnings=1
+            fi
           fi
         fi
       done <<< "$shared_items"
