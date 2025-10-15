@@ -409,32 +409,23 @@ validate_android_configuration() {
       echo -e "  🔍 Validando dependencias TOML..."
 
       # Validar estructura de cada dependencia
+      # En Android TOML, 'id' es obligatorio siempre
       local invalid_deps=$(jq -r '[.toml[]? | select(.id == null or .id == "")] | length' "$config_file")
       if [ "$invalid_deps" -gt 0 ]; then
         echo -e "${RED}    ❌ Hay $invalid_deps dependencias sin 'id'${NC}"
         has_errors=1
       fi
 
-      # Validar que tienen name
-      local no_name=$(jq -r '[.toml[]? | select(.name == null or .name == "")] | length' "$config_file")
-      if [ "$no_name" -gt 0 ]; then
-        echo -e "${RED}    ❌ Hay $no_name dependencias sin 'name'${NC}"
-        has_errors=1
-      fi
-
-      # Validar que tienen version
-      local no_version=$(jq -r '[.toml[]? | select(.version == null or .version == "")] | length' "$config_file")
-      if [ "$no_version" -gt 0 ]; then
-        echo -e "${RED}    ❌ Hay $no_version dependencias sin 'version'${NC}"
-        has_errors=1
-      fi
-
-      # Verificar que tienen module, plugin o group
+      # Verificar que tienen module, plugin o group (al menos uno es requerido)
       local no_source=$(jq -r '[.toml[]? | select(.module == null and .plugin == null and .group == null)] | length' "$config_file")
       if [ "$no_source" -gt 0 ]; then
         echo -e "${RED}    ❌ Hay $no_source dependencias sin 'module', 'plugin' ni 'group'${NC}"
         has_errors=1
       fi
+
+      # NOTA: 'name' y 'version' son opcionales en Android
+      # Algunas dependencias no los necesitan (ej: cuando usan BOM para gestionar versiones)
+      # Por lo tanto, no se valida su presencia como obligatoria
 
       if [ $has_errors -eq 0 ]; then
         echo -e "${GREEN}    ✅ Dependencias TOML válidas ($toml_count encontradas)${NC}"
