@@ -9,6 +9,7 @@ list_python() {
 	# Log operación de listado
 	log_operation "list" "python" "modules" "${BRANCH:-main}" "started"
 
+	GULA_COMMAND="list"
 	get_access_token $KEY "back"
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -69,6 +70,7 @@ install_python_module() {
 	# Configurar trap para capturar errores y interrupciones
 	trap handle_installation_error ERR EXIT
 
+	GULA_COMMAND="install"
 	get_access_token "$KEY" "back"
 
   echo -e "${BOLD}-----------------------------------------------${NC}"

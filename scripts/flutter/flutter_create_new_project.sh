@@ -51,7 +51,8 @@ ns_to_path() {
 get_token_for_flutter() {
     echo "│"
     echo "│ Validando key"
-    echo "│ " 
+    echo "│ "
+    GULA_COMMAND="create"
     get_access_token $KEY "flutter"
 }
 

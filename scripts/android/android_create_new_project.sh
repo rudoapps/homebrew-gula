@@ -51,7 +51,8 @@ ns_to_path() {
 get_token_for_android() {
     echo "│"
     echo "│ Validando key"
-    echo "│ " 
+    echo "│ "
+    GULA_COMMAND="create"
     get_access_token $KEY "android"
 }
 

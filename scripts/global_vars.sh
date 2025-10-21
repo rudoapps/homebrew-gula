@@ -3,7 +3,8 @@
 TEMPORARY_DIR="temp-gula"
 MODULE_NAME=""
 KEY=""
-ACCESSTOKEN="" 
+ACCESSTOKEN=""
+GULA_COMMAND=""
 VERSION="0.0.100"
 
 # Definir colores 

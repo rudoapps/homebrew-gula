@@ -478,27 +478,31 @@ elif [ "$COMMAND" == "branches" ]; then
     fi
 
     case "$type" in
-      0) 
+      0)
         echo -e "${GREEN}Detectado proyecto Android${NC}"
+        GULA_COMMAND="branches"
         get_access_token "$KEY" "android"
         list_branches "android"
         ;;
-      1) 
+      1)
         echo -e "${GREEN}Detectado proyecto iOS${NC}"
+        GULA_COMMAND="branches"
         get_access_token "$KEY" "ios"
         list_branches "ios"
         ;;
-      2) 
+      2)
         echo -e "${GREEN}Detectado proyecto Flutter${NC}"
+        GULA_COMMAND="branches"
         get_access_token "$KEY" "flutter"
         list_branches "flutter"
         ;;
-      3) 
+      3)
         echo -e "${GREEN}Detectado proyecto Python${NC}"
+        GULA_COMMAND="branches"
         get_access_token "$KEY" "back"
         list_branches "python"
         ;;
-      *) 
+      *)
         echo -e "${RED}Error: No se detectó un tipo de proyecto válido.${NC}"
         echo "Si quieres consultar ramas de arquetipos usa: $0 branches --key=xxxx --archetype=<platform>"
         exit 1

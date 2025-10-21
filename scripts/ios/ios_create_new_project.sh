@@ -24,7 +24,8 @@ get_token_for_ios() {
     echo "│"
     echo "│ Validando key"
     echo "│ "
-    echo "└──────────────────────────────────────────────"   
+    echo "└──────────────────────────────────────────────"
+    GULA_COMMAND="create"
     get_access_token $KEY "ios"
 }
 

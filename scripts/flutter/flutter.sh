@@ -7,6 +7,7 @@ list_flutter() {
 	echo -e "${BOLD}Prerequisitos: Validando.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
+	GULA_COMMAND="list"
 	get_access_token $KEY "flutter"
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -66,6 +67,7 @@ install_flutter_module() {
 	# Configurar trap para capturar errores y interrupciones
 	trap handle_installation_error ERR EXIT
 
+	GULA_COMMAND="install"
 	get_access_token $KEY "flutter"
 
 	echo -e "${BOLD}-----------------------------------------------${NC}"

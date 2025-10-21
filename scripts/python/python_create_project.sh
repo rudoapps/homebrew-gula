@@ -20,7 +20,8 @@ get_token() {
         echo "└──────────────────────────────────────────────"
         exit 1
     fi
-    
+
+    GULA_COMMAND="create"
     get_access_token $KEY "back"
 }
 

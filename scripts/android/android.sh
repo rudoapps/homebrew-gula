@@ -12,6 +12,7 @@ list_android() {
   # Log operación de listado
   log_operation "list" "android" "modules" "${BRANCH:-main}" "started"
 
+  GULA_COMMAND="list"
   get_access_token $KEY "android"
   
   echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -73,6 +74,7 @@ install_android_module() {
   # Configurar trap para capturar errores y interrupciones
   trap handle_installation_error ERR EXIT
 
+  GULA_COMMAND="install"
   get_access_token $KEY "android"
   
   echo -e "${BOLD}-----------------------------------------------${NC}"

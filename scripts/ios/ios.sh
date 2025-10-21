@@ -45,6 +45,7 @@ install_ios_module() {
 	# Configurar trap para capturar errores y interrupciones
 	trap handle_installation_error ERR EXIT
 
+	GULA_COMMAND="install"
 	get_access_token $KEY "ios"
 	
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -104,6 +105,7 @@ list_ios() {
 	echo -e "${BOLD}Prerequisitos: Validando.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
+	GULA_COMMAND="list"
 	get_access_token $KEY "ios"
 	
 	echo -e "${BOLD}-----------------------------------------------${NC}"
