@@ -83,6 +83,52 @@ get_access_token() {
   fi
 }
 
+get_allowed_modules() {
+  local API_KEY="$1"
+  local tech="$2"
+  local response
+
+  # Mapear 'back' a 'python' para el microservicio
+  local tech_name="$tech"
+  if [ "$tech" = "back" ]; then
+    tech_name="python"
+  fi
+
+  # Llamar al nuevo endpoint de módulos permitidos
+  response=$(curl --location --silent --show-error --write-out "HTTPSTATUS:%{http_code}" \
+    "https://services.rudo.es/api/gula/repositories/modules/allowed?api_key=${API_KEY}&tech=${tech_name}" \
+    --header "Content-Type: application/json" 2>/dev/null)
+
+  local body=$(echo $response | sed -e 's/HTTPSTATUS\:.*//g')
+  local http_status=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+
+  # Si el endpoint responde correctamente
+  if [ "$http_status" -eq 200 ]; then
+    local unrestricted=$(echo $body | jq -r '.unrestricted')
+
+    # Si unrestricted es true, devolver señal especial
+    if [ "$unrestricted" = "true" ]; then
+      echo "UNRESTRICTED"
+      return 0
+    fi
+
+    # Si unrestricted es false, devolver lista de módulos
+    local modules=$(echo $body | jq -r '.modules[]' 2>/dev/null)
+    if [ -n "$modules" ]; then
+      echo "$modules"
+      return 0
+    else
+      # No hay módulos permitidos
+      echo "NO_MODULES_ALLOWED"
+      return 1
+    fi
+  else
+    # Si falla el endpoint, devolver señal para usar método antiguo
+    echo "FALLBACK_TO_OLD_METHOD"
+    return 2
+  fi
+}
+
 check_version() {
   latest_tag=$(curl -s https://api.github.com/repos/rudoapps/homebrew-gula/releases/latest | jq -r '.tag_name')
   if [ "$latest_tag" == "$VERSION" ]; then
