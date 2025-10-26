@@ -107,7 +107,31 @@ list_ios() {
 
 	GULA_COMMAND="list"
 	get_access_token $KEY "ios"
-	
+
+	# Intentar obtener módulos permitidos del backend
+	local allowed_modules=$(get_allowed_modules "$KEY" "ios")
+	local get_modules_result=$?
+
+	# Si el backend devuelve módulos filtrados, mostrarlos sin clonar
+	if [ $get_modules_result -eq 0 ] && [ "$allowed_modules" != "UNRESTRICTED" ] && [ "$allowed_modules" != "FALLBACK_TO_OLD_METHOD" ]; then
+		echo ""
+		echo -e "${GREEN}✅ Usando lista de módulos desde el servidor${NC}"
+		echo -e "${BOLD}Lista de módulos disponibles:"
+		echo -e "${BOLD}-----------------------------------------------${NC}"
+		echo "$allowed_modules"
+		echo -e "${BOLD}-----------------------------------------------${NC}"
+		return 0
+	fi
+
+	# Si no hay módulos permitidos
+	if [ "$allowed_modules" = "NO_MODULES_ALLOWED" ]; then
+		echo ""
+		echo -e "${RED}⚠️  Tu cuenta no tiene acceso a ningún módulo de iOS${NC}"
+		echo -e "${RED}   Contacta con el administrador para obtener permisos${NC}"
+		return 1
+	fi
+
+	# Si unrestricted o fallback, usar método tradicional (clonar repo)
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -118,7 +142,7 @@ list_ios() {
 	else
 		git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "$TEMPORARY_DIR"
 	fi
-	
+
 	echo -e "${BOLD}Lista de módulos disponibles:"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	standardized_list_modules "${MODULES_PATH_IOS}"
