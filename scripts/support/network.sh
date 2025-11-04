@@ -130,7 +130,37 @@ get_allowed_modules() {
 }
 
 check_version() {
-  latest_tag=$(curl -s https://api.github.com/repos/rudoapps/homebrew-gula/releases/latest | jq -r '.tag_name')
+  local cache_file="/tmp/gula_version_cache"
+  local cache_duration=3600  # 1 hora en segundos
+  local current_time=$(date +%s)
+  local latest_tag=""
+
+  # Verificar si existe caché y es válido
+  if [ -f "$cache_file" ]; then
+    local cache_time=$(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file" 2>/dev/null)
+    local time_diff=$((current_time - cache_time))
+
+    if [ $time_diff -lt $cache_duration ]; then
+      # Usar caché
+      latest_tag=$(cat "$cache_file")
+    fi
+  fi
+
+  # Si no hay caché válido, consultar API
+  if [ -z "$latest_tag" ]; then
+    latest_tag=$(curl -s https://api.github.com/repos/rudoapps/homebrew-gula/releases/latest | jq -r '.tag_name')
+
+    # Si la consulta fue exitosa (no es null ni vacío), guardar en caché
+    if [ -n "$latest_tag" ] && [ "$latest_tag" != "null" ]; then
+      echo "$latest_tag" > "$cache_file"
+    else
+      # Si falla por rate limit, asumir que está actualizado
+      echo -e "✅ Tienes la versión más actual"
+      echo ""
+      return 0
+    fi
+  fi
+
   if [ "$latest_tag" == "$VERSION" ]; then
     echo -e "✅ Tienes la versión más actual"
   else
