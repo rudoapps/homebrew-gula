@@ -33,8 +33,8 @@ flutter_install_all_templates() {
     echo -e "${BOLD}Instalando templates Flutter ($TEMPLATE_TYPE).${NC}"
     echo -e "${BOLD}-----------------------------------------------${NC}"
 
-    # Preserve original PascalCase naming (UserProfile stays UserProfile)
-    CapitalizedModuleName="$TEMPLATE_NAME"
+    # Capitalizar primera letra para asegurar PascalCase (user -> User, UserProfile -> UserProfile)
+    CapitalizedModuleName=$(echo "$TEMPLATE_NAME" | awk '{print toupper(substr($0, 1, 1)) substr($0, 2)}')
     camelCaseModuleName=$(echo "$TEMPLATE_NAME" | awk '{print tolower(substr($0, 1, 1)) substr($0, 2)}')
     # Convertir a snake_case correctamente (UserProfile -> user_profile)
     snake_case_name=$(echo "$TEMPLATE_NAME" | sed 's/\([a-z0-9]\)\([A-Z]\)/\1_\2/g' | tr '[:upper:]' '[:lower:]')
