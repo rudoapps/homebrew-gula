@@ -1,23 +1,19 @@
-class {{TEMPLATE_NAME}} {
-  final int id;
+class {{TEMPLATE_NAME}}Entity {
+  final String id;
   final String name;
 
-  const {{TEMPLATE_NAME}}({
+  const {{TEMPLATE_NAME}}Entity({
     required this.id,
     required this.name,
   });
 
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is {{TEMPLATE_NAME}} &&
-        other.id == id &&
-        other.name == name;
+  {{TEMPLATE_NAME}}Entity copyWith({
+    String? id,
+    String? name,
+  }) {
+    return {{TEMPLATE_NAME}}Entity(
+      id: id ?? this.id,
+      name: name ?? this.name,
+    );
   }
-
-  @override
-  int get hashCode => id.hashCode ^ name.hashCode;
-
-  @override
-  String toString() => '{{TEMPLATE_NAME}}(id: $id, name: $name)';
 }

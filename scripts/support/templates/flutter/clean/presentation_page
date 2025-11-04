@@ -1,92 +1,72 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../domain/entities/{{PARAM_NAME}}.dart';
-import '../bloc/{{PARAM_NAME}}_bloc.dart';
+import '../../../../core/config/di/locator.dart';
+import '../../../../core/services/navigation/source/navigation_service.dart';
+import '../../../domain/use_cases/{{PARAM_NAME}}/{{PARAM_NAME}}_use_case.dart';
+import 'bloc/{{PARAM_NAME}}_bloc.dart';
+import 'bloc/{{PARAM_NAME}}_event.dart';
+import 'bloc/{{PARAM_NAME}}_state.dart';
 
 class {{TEMPLATE_NAME}}Page extends StatelessWidget {
-  const {{TEMPLATE_NAME}}Page({Key? key}) : super(key: key);
+  const {{TEMPLATE_NAME}}Page({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => {{TEMPLATE_NAME}}Bloc(
+        {{PARAM_NAME}}UseCase: locator.get<{{TEMPLATE_NAME}}UseCase>(),
+        navigationService: locator.get<NavigationService>(),
+      )..add({{TEMPLATE_NAME}}Started()),
+      child: const {{TEMPLATE_NAME}}View(),
+    );
+  }
+}
+
+class {{TEMPLATE_NAME}}View extends StatelessWidget {
+  const {{TEMPLATE_NAME}}View({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('{{TEMPLATE_NAME}}s'),
+        title: const Text('{{TEMPLATE_NAME}}'),
       ),
       body: BlocBuilder<{{TEMPLATE_NAME}}Bloc, {{TEMPLATE_NAME}}State>(
         builder: (context, state) {
-          if (state is {{TEMPLATE_NAME}}Loading) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (state is {{TEMPLATE_NAME}}Loaded) {
-            return {{TEMPLATE_NAME}}ListView({{PARAM_NAME}}s: state.{{PARAM_NAME}}s);
-          } else if (state is {{TEMPLATE_NAME}}Error) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Error: ${state.message}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.read<{{TEMPLATE_NAME}}Bloc>()
-                        .add(GetAll{{TEMPLATE_NAME}}sEvent()),
-                    child: const Text('Retry'),
-                  ),
-                ],
+          return switch (state) {
+            {{TEMPLATE_NAME}}Initial() => const Center(
+                child: Text('Initial state'),
               ),
-            );
-          }
-          return const Center(child: Text('Welcome to {{TEMPLATE_NAME}}s'));
+            {{TEMPLATE_NAME}}Loading() => const Center(
+                child: CircularProgressIndicator(),
+              ),
+            {{TEMPLATE_NAME}}Success() => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('ID: \${state.data.id}'),
+                    Text('Name: \${state.data.name}'),
+                  ],
+                ),
+              ),
+            {{TEMPLATE_NAME}}Failure() => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error, color: Colors.red, size: 48),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error: \${state.error.message}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ),
+              ),
+          };
         },
       ),
-    );
-  }
-}
-
-class {{TEMPLATE_NAME}}ListView extends StatelessWidget {
-  final List<{{TEMPLATE_NAME}}> {{PARAM_NAME}}s;
-
-  const {{TEMPLATE_NAME}}ListView({
-    Key? key,
-    required this.{{PARAM_NAME}}s,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    if ({{PARAM_NAME}}s.isEmpty) {
-      return const Center(
-        child: Text('No {{PARAM_NAME}}s found'),
-      );
-    }
-
-    return ListView.builder(
-      itemCount: {{PARAM_NAME}}s.length,
-      itemBuilder: (context, index) {
-        final {{PARAM_NAME}} = {{PARAM_NAME}}s[index];
-        return {{TEMPLATE_NAME}}ListTile({{PARAM_NAME}}: {{PARAM_NAME}});
-      },
-    );
-  }
-}
-
-class {{TEMPLATE_NAME}}ListTile extends StatelessWidget {
-  final {{TEMPLATE_NAME}} {{PARAM_NAME}};
-
-  const {{TEMPLATE_NAME}}ListTile({
-    Key? key,
-    required this.{{PARAM_NAME}},
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      title: Text({{PARAM_NAME}}.name),
-      subtitle: Text('ID: ${{{PARAM_NAME}}.id}'),
-      onTap: () {
-        // Navigate to detail page if needed
-      },
     );
   }
 }
