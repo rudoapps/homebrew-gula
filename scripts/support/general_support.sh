@@ -50,15 +50,94 @@ log_operation() {
   fi
 }
 
+# Función para registrar la creación de un proyecto
+log_project_creation() {
+  local platform=$1
+  local project_name=$2
+  local project_path=$3
+  local branch=${4:-"main"}
+  local status=$5
+  local details=${6:-""}
+
+  # Capturar fecha de creación
+  local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+  # Obtener información de git del proyecto clonado
+  local git_commit=""
+  local git_branch="$branch"
+
+  if [ -d "$project_path/.git" ]; then
+    cd "$project_path" 2>/dev/null
+    git_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$branch")
+    git_commit=$(git rev-parse HEAD 2>/dev/null || echo "")
+    cd - > /dev/null 2>&1
+  fi
+
+  # Crear el archivo de log en el nuevo proyecto
+  local project_log_file="$project_path/.gula.log"
+
+  # Crear estructura inicial del log en el proyecto creado
+  if [ "$status" = "success" ] && [ -d "$project_path" ]; then
+    cat > "$project_log_file" <<EOF
+{
+  "project_info": {
+    "created": "$timestamp",
+    "platform": "$platform",
+    "project_name": "$project_name",
+    "branch": "$git_branch",
+    "commit": "$git_commit",
+    "gula_version": "$VERSION"
+  },
+  "operations": [
+    {
+      "timestamp": "$timestamp",
+      "operation": "create",
+      "platform": "$platform",
+      "module": "$project_name",
+      "branch": "$git_branch",
+      "commit": "$git_commit",
+      "status": "$status",
+      "details": "Project created",
+      "gula_version": "$VERSION"
+    }
+  ],
+  "installed_modules": {}
+}
+EOF
+  fi
+
+  # También registrar en el log del directorio actual (para tracking global)
+  init_gula_log
+
+  local log_entry='{
+    "timestamp": "'$timestamp'",
+    "operation": "create",
+    "platform": "'$platform'",
+    "module": "'$project_name'",
+    "branch": "'$git_branch'",
+    "commit": "'$git_commit'",
+    "status": "'$status'",
+    "details": "'$details'",
+    "gula_version": "'$VERSION'"
+  }'
+
+  if command -v jq >/dev/null 2>&1; then
+    local temp_file=$(mktemp)
+    jq ".operations += [$log_entry]" "$GULA_LOG_FILE" > "$temp_file" && mv "$temp_file" "$GULA_LOG_FILE"
+  else
+    echo "[$timestamp] create $platform:$project_name ($git_branch:$git_commit) - $status" >> ".gula-simple.log"
+  fi
+}
+
 # Función para registrar módulo instalado exitosamente
 log_installed_module() {
   local platform=$1
   local module_name=$2
   local branch=${3:-"main"}
   local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  
+
   init_gula_log
-  
+
   if command -v jq >/dev/null 2>&1; then
     local temp_file=$(mktemp)
     jq ".installed_modules[\"$platform:$module_name\"] = {

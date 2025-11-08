@@ -72,9 +72,21 @@ get_bitbucket_access_token() {
 }
 
 get_access_token() {
-  local apikey=$1
-  local platform=$2
-  ACCESSTOKEN=$(get_bitbucket_access_token $apikey $platform)
+  local apikey=${1:-}
+  local platform=${2:-}
+
+  # Validar que ambos parámetros estén presentes
+  if [ -z "$apikey" ]; then
+    echo -e "${RED}Error: No se proporcionó la KEY. Usa --key=tu_clave${NC}" >&2
+    exit 1
+  fi
+
+  if [ -z "$platform" ]; then
+    echo -e "${RED}Error interno: No se especificó la plataforma${NC}" >&2
+    exit 1
+  fi
+
+  ACCESSTOKEN=$(get_bitbucket_access_token "$apikey" "$platform")
   if [ $? -eq 0 ]; then
     echo -e "✅ Obtención del código de acceso"
   else

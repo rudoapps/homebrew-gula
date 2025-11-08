@@ -392,8 +392,10 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     install)
       COMMAND="install"
-      MODULE_NAME="$(echo "${str:0:1}" | tr '[:lower:]' '[:upper:]')${str:1}" "$2"
-      shift
+      if [ -n "${2:-}" ]; then
+        MODULE_NAME="$2"
+        shift
+      fi
       ;;
     list)
       COMMAND="list"
@@ -415,8 +417,10 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     create)
       COMMAND="create"
-      MODULE_NAME="$(echo "${str:0:1}" | tr '[:lower:]' '[:upper:]')${str:1}" "$2"
-      shift
+      if [ -n "${2:-}" ]; then
+        MODULE_NAME="$2"
+        shift
+      fi
       ;;
     template)
       COMMAND="template"

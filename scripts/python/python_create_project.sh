@@ -215,8 +215,12 @@ python_create_project() {
 
     echo "│"
     echo "│ 👍 Proyecto python preparado en: $(pwd)"
+
+    # Registrar la creación del proyecto
+    log_project_creation "python" "$projectPath" "$(pwd)" "${BRANCH:-main}" "success" "Python project created with stack: ${STACK:-fastapi}"
+
     echo "│"
     echo "└──────────────────────────────────────────────"
-   
+
 }
 
