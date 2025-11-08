@@ -289,7 +289,7 @@ android_create_project() {
     echo "│ • namespace = ${NEW_NAMESPACE}"
 
     # Registrar la creación del proyecto
-    log_project_creation "android" "${APP_NAME:-ArchetypeAndroid}" "$(pwd)" "${BRANCH:-main}" "success" "Android project created with namespace: $NEW_NAMESPACE"
+    log_project_creation "android" "${APP_NAME:-ArchetypeAndroid}" "$(pwd)" "${BRANCH:-main}" "success" "Android project created with namespace: $NEW_NAMESPACE" "$KEY"
 
     echo "│ "
     echo "└──────────────────────────────────────────────"

@@ -274,7 +274,7 @@ ios_create_project() {
 
     # Registrar la creación del proyecto
     cd "$projectPath" 2>/dev/null
-    log_project_creation "ios" "$appName" "$(pwd)" "${BRANCH:-main}" "success" "iOS project created with bundle ID: $appId"
+    log_project_creation "ios" "$appName" "$(pwd)" "${BRANCH:-main}" "success" "iOS project created with bundle ID: $appId" "$KEY"
     cd - > /dev/null 2>&1
 
     echo "│"

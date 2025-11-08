@@ -1,5 +1,35 @@
 #!/bin/bash
 
+# Función para obtener el username desde la API key
+get_username_from_api() {
+  local API_KEY="$1"
+  local response
+  local username
+
+  # Llamar al endpoint para obtener el username
+  response=$(curl --location --silent --show-error --write-out "HTTPSTATUS:%{http_code}" \
+    "https://services.rudo.es/api/gula/auth/resolve-username/$API_KEY" \
+    --header "Content-Type: application/json" 2>/dev/null)
+
+  local body=$(echo $response | sed -e 's/HTTPSTATUS\:.*//g')
+  local http_status=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+
+  # Si el endpoint funciona (HTTP 200) y devuelve un username válido
+  if [ "$http_status" -eq 200 ]; then
+    username=$(echo $body | jq -r '.username')
+
+    # Si el username es válido, devolverlo
+    if [ "$username" != "null" ] && [ -n "$username" ]; then
+      echo "$username"
+      return 0
+    fi
+  fi
+
+  # Si falla, devolver "unknown"
+  echo "unknown"
+  return 1
+}
+
 get_bitbucket_access_token() {
   local API_KEY="$1"
   local tech="$2"

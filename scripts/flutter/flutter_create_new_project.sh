@@ -253,7 +253,7 @@ flutter_create_project() {
     echo "│ • package = ${NEW_PACKAGE}"
 
     # Registrar la creación del proyecto
-    log_project_creation "flutter" "${SNAKE_CASE_NAME:-$APP_NAME:-ArchetypeFlutter}" "$(pwd)" "${BRANCH:-main}" "success" "Flutter project created with package: $NEW_PACKAGE"
+    log_project_creation "flutter" "${SNAKE_CASE_NAME:-$APP_NAME:-ArchetypeFlutter}" "$(pwd)" "${BRANCH:-main}" "success" "Flutter project created with package: $NEW_PACKAGE" "$KEY"
 
     echo "│ "
     echo "└──────────────────────────────────────────────"

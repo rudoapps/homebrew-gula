@@ -58,9 +58,16 @@ log_project_creation() {
   local branch=${4:-"main"}
   local status=$5
   local details=${6:-""}
+  local api_key=${7:-""}  # Nuevo parámetro para la API key
 
   # Capturar fecha de creación
   local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+  # Obtener el username desde la API si se proporciona la key
+  local created_by="unknown"
+  if [ -n "$api_key" ] && [ "$api_key" != "" ]; then
+    created_by=$(get_username_from_api "$api_key" 2>/dev/null || echo "unknown")
+  fi
 
   # Obtener información de git del proyecto clonado
   local git_commit=""
@@ -86,6 +93,7 @@ log_project_creation() {
     "project_name": "$project_name",
     "branch": "$git_branch",
     "commit": "$git_commit",
+    "created_by": "$created_by",
     "gula_version": "$VERSION"
   },
   "operations": [
@@ -98,6 +106,7 @@ log_project_creation() {
       "commit": "$git_commit",
       "status": "$status",
       "details": "Project created",
+      "created_by": "$created_by",
       "gula_version": "$VERSION"
     }
   ],
@@ -118,6 +127,7 @@ EOF
     "commit": "'$git_commit'",
     "status": "'$status'",
     "details": "'$details'",
+    "created_by": "'$created_by'",
     "gula_version": "'$VERSION'"
   }'
 
