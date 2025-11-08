@@ -6,7 +6,7 @@ get_username_from_api() {
   local response
   local username
 
-  # Llamar al endpoint para obtener el username
+  # Llamar al endpoint para obtener el username (sin autenticación)
   response=$(curl --location --silent --show-error --write-out "HTTPSTATUS:%{http_code}" \
     "https://services.rudo.es/api/gula/auth/resolve-username/$API_KEY" \
     --header "Content-Type: application/json" 2>/dev/null)
