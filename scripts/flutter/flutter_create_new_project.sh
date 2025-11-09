@@ -253,7 +253,20 @@ flutter_create_project() {
     echo "│ • package = ${NEW_PACKAGE}"
 
     # Registrar la creación del proyecto
-    log_project_creation "flutter" "${SNAKE_CASE_NAME:-$APP_NAME:-ArchetypeFlutter}" "$(pwd)" "${BRANCH:-main}" "success" "Flutter project created with package: $NEW_PACKAGE" "$KEY"
+    echo "│"
+    echo "│ 📝 Creando archivo de auditoría .gula.log..."
+
+    if type -t log_project_creation > /dev/null 2>&1; then
+        log_project_creation "flutter" "${SNAKE_CASE_NAME:-${APP_NAME:-ArchetypeFlutter}}" "$(pwd)" "${BRANCH:-main}" "success" "Flutter project created with package: $NEW_PACKAGE" "$KEY"
+
+        if [ -f ".gula.log" ]; then
+            echo "│ ✅ Archivo .gula.log creado exitosamente"
+        else
+            echo "│ ⚠️ No se pudo crear el archivo .gula.log"
+        fi
+    else
+        echo "│ ❌ Error: La función log_project_creation no está disponible"
+    fi
 
     echo "│ "
     echo "└──────────────────────────────────────────────"

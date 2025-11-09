@@ -273,9 +273,27 @@ ios_create_project() {
     echo "│ Proyecto creado en $projectPath"
 
     # Registrar la creación del proyecto
-    cd "$projectPath" 2>/dev/null
-    log_project_creation "ios" "$appName" "$(pwd)" "${BRANCH:-main}" "success" "iOS project created with bundle ID: $appId" "$KEY"
-    cd - > /dev/null 2>&1
+    echo "│"
+    echo "│ 📝 Creando archivo de auditoría .gula.log..."
+
+    # Verificar si la función existe
+    if type -t log_project_creation > /dev/null 2>&1; then
+        cd "$projectPath" 2>/dev/null
+        local current_dir=$(pwd)
+        echo "│ Directorio actual: $current_dir"
+        echo "│ Llamando a log_project_creation..."
+        log_project_creation "ios" "$appName" "$current_dir" "${BRANCH:-main}" "success" "iOS project created with bundle ID: $appId" "$KEY"
+        cd - > /dev/null 2>&1
+
+        # Verificar si se creó el archivo
+        if [ -f "$projectPath/.gula.log" ]; then
+            echo "│ ✅ Archivo .gula.log creado exitosamente"
+        else
+            echo "│ ⚠️ No se pudo crear el archivo .gula.log"
+        fi
+    else
+        echo "│ ❌ Error: La función log_project_creation no está disponible"
+    fi
 
     echo "│"
     echo "└──────────────────────────────────────────────"

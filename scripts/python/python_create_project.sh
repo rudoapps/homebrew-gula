@@ -217,7 +217,20 @@ python_create_project() {
     echo "│ 👍 Proyecto python preparado en: $(pwd)"
 
     # Registrar la creación del proyecto
-    log_project_creation "python" "$projectPath" "$(pwd)" "${BRANCH:-main}" "success" "Python project created with stack: ${STACK:-fastapi}" "$KEY"
+    echo "│"
+    echo "│ 📝 Creando archivo de auditoría .gula.log..."
+
+    if type -t log_project_creation > /dev/null 2>&1; then
+        log_project_creation "python" "$projectPath" "$(pwd)" "${BRANCH:-main}" "success" "Python project created with stack: ${STACK:-fastapi}" "$KEY"
+
+        if [ -f ".gula.log" ]; then
+            echo "│ ✅ Archivo .gula.log creado exitosamente"
+        else
+            echo "│ ⚠️ No se pudo crear el archivo .gula.log"
+        fi
+    else
+        echo "│ ❌ Error: La función log_project_creation no está disponible"
+    fi
 
     echo "│"
     echo "└──────────────────────────────────────────────"
