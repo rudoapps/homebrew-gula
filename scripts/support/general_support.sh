@@ -52,6 +52,7 @@ log_operation() {
 
 # Función para registrar la creación de un proyecto
 log_project_creation() {
+  echo "│ DEBUG: Entrando en log_project_creation" >&2
   local platform=$1
   local project_name=$2
   local project_path=$3
@@ -59,6 +60,8 @@ log_project_creation() {
   local status=$5
   local details=${6:-""}
   local api_key=${7:-""}  # Nuevo parámetro para la API key
+
+  echo "│ DEBUG: Platform=$platform, Name=$project_name, Path=$project_path" >&2
 
   # Capturar fecha de creación
   local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

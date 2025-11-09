@@ -292,16 +292,51 @@ android_create_project() {
     echo "│"
     echo "│ 📝 Creando archivo de auditoría .gula.log..."
 
-    if type -t log_project_creation > /dev/null 2>&1; then
-        log_project_creation "android" "${APP_NAME:-ArchetypeAndroid}" "$(pwd)" "${BRANCH:-main}" "success" "Android project created with namespace: $NEW_NAMESPACE" "$KEY"
+    # Ya estamos en el directorio del proyecto
+    TIMESTAMP_LOG=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    BRANCH_LOG="${BRANCH:-main}"
+    COMMIT_LOG=""
+    CREATED_BY_LOG="unknown"
 
-        if [ -f ".gula.log" ]; then
-            echo "│ ✅ Archivo .gula.log creado exitosamente"
-        else
-            echo "│ ⚠️ No se pudo crear el archivo .gula.log"
+    # Intentar obtener el username
+    if [ -n "$KEY" ]; then
+        if command -v get_username_from_api >/dev/null 2>&1; then
+            CREATED_BY_LOG=$(get_username_from_api "$KEY" 2>/dev/null || echo "unknown")
         fi
+    fi
+
+    # Crear el archivo .gula.log
+    echo "{
+  \"project_info\": {
+    \"created\": \"$TIMESTAMP_LOG\",
+    \"platform\": \"android\",
+    \"project_name\": \"${APP_NAME:-ArchetypeAndroid}\",
+    \"branch\": \"$BRANCH_LOG\",
+    \"commit\": \"$COMMIT_LOG\",
+    \"created_by\": \"$CREATED_BY_LOG\",
+    \"gula_version\": \"$VERSION\"
+  },
+  \"operations\": [
+    {
+      \"timestamp\": \"$TIMESTAMP_LOG\",
+      \"operation\": \"create\",
+      \"platform\": \"android\",
+      \"module\": \"${APP_NAME:-ArchetypeAndroid}\",
+      \"branch\": \"$BRANCH_LOG\",
+      \"commit\": \"$COMMIT_LOG\",
+      \"status\": \"success\",
+      \"details\": \"Android project created with namespace: $NEW_NAMESPACE\",
+      \"created_by\": \"$CREATED_BY_LOG\",
+      \"gula_version\": \"$VERSION\"
+    }
+  ],
+  \"installed_modules\": {}
+}" > .gula.log
+
+    if [ -f ".gula.log" ]; then
+        echo "│ ✅ Archivo .gula.log creado exitosamente"
     else
-        echo "│ ❌ Error: La función log_project_creation no está disponible"
+        echo "│ ⚠️ No se pudo crear el archivo .gula.log"
     fi
 
     echo "│ "
