@@ -106,8 +106,8 @@ flutter_copy_custom_plugins() {
     # Extraer el nombre del plugin (última parte del path)
     plugin_name=$(basename "$plugin_path")
 
-    # Ruta origen y destino
-    origin="${TEMPORARY_DIR}/lib/${plugin_path}"
+    # Ruta origen y destino - los plugins están en la raíz del repositorio
+    origin="${TEMPORARY_DIR}/${plugin_path}"
     destination="plugins/${plugin_name}"
 
     echo "   | 📦 Instalando plugin: $plugin_name"
