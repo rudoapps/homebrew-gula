@@ -176,6 +176,7 @@ check_version() {
   local cache_duration=3600  # 1 hora en segundos
   local current_time=$(date +%s)
   local latest_tag=""
+  local using_cache=false
 
   # Verificar si existe caché y es válido
   if [ -f "$cache_file" ]; then
@@ -185,34 +186,35 @@ check_version() {
     if [ $time_diff -lt $cache_duration ]; then
       # Usar caché
       latest_tag=$(cat "$cache_file")
+      using_cache=true
     fi
   fi
 
-  # Si no hay caché válido, consultar API
+  # Si no hay caché válido, consultar API con timeout
   if [ -z "$latest_tag" ]; then
-    latest_tag=$(curl -s https://api.github.com/repos/rudoapps/homebrew-gula/releases/latest | jq -r '.tag_name')
+    latest_tag=$(curl -s --max-time 3 https://api.github.com/repos/rudoapps/homebrew-gula/releases/latest 2>/dev/null | jq -r '.tag_name' 2>/dev/null)
 
     # Si la consulta fue exitosa (no es null ni vacío), guardar en caché
     if [ -n "$latest_tag" ] && [ "$latest_tag" != "null" ]; then
       echo "$latest_tag" > "$cache_file"
     else
-      # Si falla por rate limit, asumir que está actualizado
-      echo -e "✅ Tienes la versión más actual"
+      # Si falla la consulta, indicarlo y continuar
+      echo -e "${YELLOW}⚠️  No se pudo verificar actualizaciones (versión actual: $VERSION)${NC}"
       echo ""
       return 0
     fi
   fi
 
+  # Comparar versiones
   if [ "$latest_tag" == "$VERSION" ]; then
-    echo -e "✅ Tienes la versión más actual"
+    if [ "$using_cache" = true ]; then
+      echo -e "✅ Versión $VERSION (última verificada)"
+    else
+      echo -e "✅ Versión $VERSION (actualizada)"
+    fi
   else
-    echo -e "Es necesario actualizar el script tu versión: $VERSION es antigua"
-    brew update
-    brew upgrade gula
-    echo ""
-    echo -e "✅ Script actualizado. Lanza el script de nuevo"
-    echo -e "${BOLD}-----------------------------------------------${NC}"
-    exit 1
+    echo -e "${YELLOW}📦 Nueva versión disponible: $latest_tag (actual: $VERSION)${NC}"
+    echo -e "${YELLOW}   Actualiza con: ${BOLD}brew upgrade gula${NC}"
   fi
   echo ""
 }
