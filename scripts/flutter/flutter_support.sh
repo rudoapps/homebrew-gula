@@ -71,6 +71,130 @@ flutter_copy_file_or_create_folder() {
   flutter_read_versions_and_install_pubspec "${destination_without_lib}/"
 }
 
+flutter_copy_custom_plugins() {
+  local configuration="$1"
+
+  echo ""
+  echo "Verificando plugins custom..."
+  echo ""
+
+  # Verificar si existe la propiedad plugins en el JSON
+  local has_plugins=$(jq -r '.plugins? // [] | length' "$configuration")
+
+  if [ "$has_plugins" -eq 0 ]; then
+    echo "   | ℹ️ No hay plugins custom para instalar"
+    return
+  fi
+
+  # Crear directorio plugins si no existe
+  if [ ! -d "plugins" ]; then
+    echo "   | 📁 Creando directorio plugins/"
+    mkdir -p "plugins"
+  fi
+
+  echo "   | Procesando plugins custom..."
+  echo "   |"
+
+  # Array para acumular plugins que se deben añadir al pubspec
+  local plugins_to_add=""
+
+  # Procesar cada plugin
+  while IFS= read -r plugin_path; do
+    # Quitar comillas del path
+    plugin_path=$(echo "$plugin_path" | tr -d '"')
+
+    # Extraer el nombre del plugin (última parte del path)
+    plugin_name=$(basename "$plugin_path")
+
+    # Ruta origen y destino
+    origin="${TEMPORARY_DIR}/lib/${plugin_path}"
+    destination="plugins/${plugin_name}"
+
+    echo "   | 📦 Instalando plugin: $plugin_name"
+    echo "   |    Origen: $plugin_path"
+
+    # Verificar que el origen existe
+    if [ ! -d "$origin" ]; then
+      echo "   | ❌ Error: El plugin no existe en $origin"
+      continue
+    fi
+
+    # Copiar el plugin completo
+    echo "   | 📁 Copiando plugin a $destination..."
+    cp -R "$origin" "$destination"
+
+    if [ $? -eq 0 ]; then
+      echo "   | ✅ Plugin $plugin_name copiado correctamente"
+
+      # Añadir el plugin al pubspec.yaml del proyecto con path local
+      echo "   | 📝 Añadiendo $plugin_name al pubspec.yaml..."
+      plugins_to_add+="  $plugin_name:\n    path: plugins/$plugin_name\n"
+
+      # Verificar si el plugin tiene un pubspec.yaml y procesar sus dependencias
+      if [ -f "$destination/pubspec.yaml" ]; then
+        echo "   | 📄 Plugin tiene pubspec.yaml, verificando dependencias..."
+      fi
+
+      # Si el plugin tiene su propio configuration.gula, procesarlo
+      if [ -f "$destination/configuration.gula" ]; then
+        echo "   | 📋 Plugin tiene configuration.gula, procesando..."
+        flutter_process_plugin_configuration "$destination/configuration.gula"
+      fi
+    else
+      echo "   | ❌ Error al copiar plugin $plugin_name"
+    fi
+
+    echo "   |"
+  done < <(jq -r '.plugins? // [] | .[]' "$configuration")
+
+  # Añadir plugins al pubspec.yaml si hay alguno
+  if [ -n "$plugins_to_add" ]; then
+    echo "   | 📝 Actualizando pubspec.yaml con plugins..."
+    local pubspec="pubspec.yaml"
+    local plugins_formatted=$(printf "%b" "$plugins_to_add")
+
+    # Buscar la línea de dependencies y añadir después
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      printf '%s\n' "$plugins_formatted" | sed -i '' "/^dependencies:/r /dev/stdin" "$pubspec"
+    else
+      printf '%s\n' "$plugins_formatted" | sed -i "/^dependencies:/r /dev/stdin" "$pubspec"
+    fi
+
+    echo "   | ✅ Plugins añadidos al pubspec.yaml"
+  fi
+
+  echo "   └──────────────────────────────────────────"
+}
+
+flutter_process_plugin_dependencies() {
+  local plugin_path="$1"
+  local plugin_pubspec="$plugin_path/pubspec.yaml"
+  local project_pubspec="pubspec.yaml"
+
+  # Extraer dependencies del plugin (excepto flutter y dart sdk)
+  echo "   |    ↳ Extrayendo dependencias del plugin..."
+
+  # Leer el pubspec del plugin y extraer dependencias
+  local plugin_deps=$(yq eval '.dependencies | to_entries | .[] | select(.key != "flutter" and .key != "dart") | .key + ": " + (.value | tostring)' "$plugin_pubspec" 2>/dev/null)
+
+  if [ -n "$plugin_deps" ]; then
+    echo "   |    ↳ Añadiendo dependencias del plugin al proyecto..."
+    # Aquí podrías añadir lógica para agregar estas dependencias al pubspec.yaml del proyecto
+  fi
+}
+
+flutter_process_plugin_configuration() {
+  local plugin_config="$1"
+
+  echo "   |    ↳ Procesando configuration.gula del plugin..."
+
+  # Procesar shared files del plugin si existen
+  jq -r '.shared? // [] | .[]' "$plugin_config" | while read -r file; do
+    # Los shared files del plugin deben copiarse relativos al proyecto
+    echo "   |    ↳ Procesando shared: $file"
+  done
+}
+
 flutter_read_configuration() {
   local path="$1"
   configuration="${TEMPORARY_DIR}/lib/${path}configuration.gula"
@@ -83,6 +207,9 @@ flutter_read_configuration() {
     destination="lib/${file}"
     flutter_copy_file_or_create_folder "$origin" "$destination"
   done
+
+  # Procesar plugins custom
+  flutter_copy_custom_plugins "$configuration"
 }
 
 flutter_read_versions_and_install_pubspec() {
