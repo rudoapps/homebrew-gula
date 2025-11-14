@@ -145,6 +145,7 @@ show_help() {
   echo ""
   echo -e "${BOLD}  --key=XXXX${NC}      Clave de acceso para repositorios privados (requerida para install/list/create/branches)"
   echo -e "${BOLD}  --branch=YYYY${NC}    Rama específica del repositorio (opcional para install/list/create)"
+  echo -e "${BOLD}  --tag=ZZZZ${NC}      Tag específico del repositorio (opcional para install/list/create)"
   echo -e "${BOLD}  --type=ZZZZ${NC}     Tipo de template: clean|fastapi (para template)"
   echo -e "${BOLD}  --archetype=ZZZZ${NC} Plataforma de arquetipos: android|ios|flutter|python (para branches)"
   echo -e "${BOLD}  --force${NC}         Forzar reinstalación sin confirmar (para install)"
@@ -160,6 +161,7 @@ show_help() {
   echo -e "${BOLD}  Instalar un módulo:${NC}"
   echo "  gula install authentication --key=mi_clave_secreta"
   echo "  gula install network --key=mi_clave --branch=feature-branch"
+  echo "  gula install network --key=mi_clave --tag=v1.0.0"
   echo "  gula install authentication --key=mi_clave --force     # Reinstalar sin confirmar"
   echo ""
   echo -e "${BOLD}  Crear nuevos proyectos:${NC}"
@@ -389,6 +391,9 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --branch=*)
       BRANCH="${1#*=}"
+      ;;
+    --tag=*)
+      TAG="${1#*=}"
       ;;
     --type=*)
       TEMPLATE_TYPE="${1#*=}"

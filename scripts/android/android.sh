@@ -45,7 +45,10 @@ list_android() {
   echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
 
-  if [ -n "${BRANCH:-}" ]; then
+  if [ -n "${TAG:-}" ]; then
+    echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
+    git clone --branch "$TAG" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "$TEMPORARY_DIR"
+  elif [ -n "${BRANCH:-}" ]; then
     echo -e "🌿 Usando rama: ${YELLOW}$BRANCH${NC}"
     git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "$TEMPORARY_DIR"
   else
@@ -106,8 +109,11 @@ install_android_module() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  
-  if [ -n "${BRANCH:-}" ]; then
+
+  if [ -n "${TAG:-}" ]; then
+    echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
+    git clone --branch "$TAG" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "$TEMPORARY_DIR"
+  elif [ -n "${BRANCH:-}" ]; then
     echo -e "🌿 Usando rama: ${YELLOW}$BRANCH${NC}"
     git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "$TEMPORARY_DIR"
   else

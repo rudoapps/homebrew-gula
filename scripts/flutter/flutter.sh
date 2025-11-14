@@ -38,7 +38,10 @@ list_flutter() {
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	if [ -n "${BRANCH:-}" ]; then
+	if [ -n "${TAG:-}" ]; then
+		echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
+		git clone --branch "$TAG" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
+	elif [ -n "${BRANCH:-}" ]; then
 		echo -e "🌿 Usando rama: ${YELLOW}$BRANCH${NC}"
 		git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
 	else
@@ -102,7 +105,10 @@ install_flutter_module() {
 	  rm -rf "$TEMPORARY_DIR"
 	fi
 	
-	if [ -n "${BRANCH:-}" ]; then
+	if [ -n "${TAG:-}" ]; then
+		echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
+		git clone --branch "$TAG" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
+	elif [ -n "${BRANCH:-}" ]; then
 		echo -e "🌿 Usando rama: ${YELLOW}$BRANCH${NC}"
 		git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
 	else
