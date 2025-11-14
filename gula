@@ -1,25 +1,40 @@
 #!/bin/bash
 
+# Detectar si se usa --json antes de mostrar cualquier output
+JSON_OUTPUT="false"
+for arg in "$@"; do
+  if [ "$arg" = "--json" ]; then
+    JSON_OUTPUT="true"
+    break
+  fi
+done
+export JSON_OUTPUT
+
 HOMEBREW_PREFIX=$(brew --prefix)
 scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
 source "$scripts_dir/global_vars.sh"
-source "$scripts_dir/support/logo.sh"
 
-echo ""
-echo -e "${BOLD}versión: ${VERSION}"
-echo -e "${BOLD}propiedad: Rudo apps${NC}"
+# Solo mostrar logo y mensajes si no está en modo JSON
+if [ "$JSON_OUTPUT" != "true" ]; then
+  source "$scripts_dir/support/logo.sh"
 
-echo ""
-echo -e "${BOLD}──────────────────────────────────────────────${NC}"
-echo -e "${BOLD}Cargando prerequisitos:${NC}"
-echo ""
-if [ -z "$HOMEBREW_PREFIX" ]; then
-    echo "No se encontró el prefijo de Homebrew. Verifica si brew está instalado correctamente."
-else
-    echo "✅ El prefijo de Homebrew es: $HOMEBREW_PREFIX"
+  echo ""
+  echo -e "${BOLD}versión: ${VERSION}"
+  echo -e "${BOLD}propiedad: Rudo apps${NC}"
+
+  echo ""
+  echo -e "${BOLD}──────────────────────────────────────────────${NC}"
+  echo -e "${BOLD}Cargando prerequisitos:${NC}"
+  echo ""
+  if [ -z "$HOMEBREW_PREFIX" ]; then
+      echo "No se encontró el prefijo de Homebrew. Verifica si brew está instalado correctamente."
+  else
+      echo "✅ El prefijo de Homebrew es: $HOMEBREW_PREFIX"
+  fi
+
+  echo -e "✅ Ruta de homebrew: $scripts_dir"
 fi
 
-echo -e "✅ Ruta de homebrew: $scripts_dir"
 source "$scripts_dir/android/android.sh"
 source "$scripts_dir/android/android_support.sh"
 source "$scripts_dir/android/android_create_new_project.sh"
@@ -35,17 +50,18 @@ source "$scripts_dir/flutter/flutter_template.sh"
 source "$scripts_dir/python/python.sh"
 source "$scripts_dir/python/python_create_project.sh"
 source "$scripts_dir/python/python_template.sh"
+unset -f list_branches 2>/dev/null
 source "$scripts_dir/support/general_support.sh"
 source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
 source "$scripts_dir/support/validation.sh"
 
-echo -e "✅ Imports cargados correctamente"
-
-check_version
-
-echo "──────────────────────────────────────────────"
+if [ "$JSON_OUTPUT" != "true" ]; then
+  echo -e "✅ Imports cargados correctamente"
+  check_version
+  echo "──────────────────────────────────────────────"
+fi
 
 # Inicializar variables
 LIST_TEMPLATES="false"
@@ -380,6 +396,9 @@ while [[ "$#" -gt 0 ]]; do
     --archetype=*)
       ARCHETYPE_TYPE="${1#*=}"
       ;;
+    --json)
+      JSON_OUTPUT="true"
+      ;;
     --force)
       FORCE_INSTALL="true"
       export FORCE_INSTALL
@@ -464,15 +483,25 @@ elif [ "$COMMAND" == "create" ]; then
   create_project "$MODULE_NAME"
 elif [ "$COMMAND" == "branches" ]; then
   if [ -z "$KEY" ]; then
-    echo "Uso: $0 branches --key=xxxx [--archetype=<platform>]"
-    echo "Plataformas válidas para archetype: android, ios, flutter, python"
+    if [ "$JSON_OUTPUT" = "true" ]; then
+      echo "{\"status\":\"error\",\"message\":\"KEY requerida\"}"
+    else
+      echo "Uso: $0 branches --key=xxxx [--archetype=<platform>] [--json]"
+      echo "Plataformas válidas para archetype: android, ios, flutter, python"
+    fi
     exit 1
   fi
-  
+
+  # Determinar formato de salida
+  output_format="normal"
+  if [ "$JSON_OUTPUT" = "true" ]; then
+    output_format="json"
+  fi
+
   if [ -n "$ARCHETYPE_TYPE" ]; then
     # Consultar ramas de arquetipos
     get_access_token "$KEY" "$ARCHETYPE_TYPE"
-    list_branches "archetype-$ARCHETYPE_TYPE"
+    list_branches "archetype-$ARCHETYPE_TYPE" "$output_format"
   else
     # Detectar automáticamente el tipo de proyecto
     if check_type_of_project; then
@@ -482,29 +511,41 @@ elif [ "$COMMAND" == "branches" ]; then
     fi
 
     case "$type" in
-      0) 
-        echo -e "${GREEN}Detectado proyecto Android${NC}"
+      0)
+        if [ "$JSON_OUTPUT" != "true" ]; then
+          echo -e "${GREEN}Detectado proyecto Android${NC}"
+        fi
         get_access_token "$KEY" "android"
-        list_branches "android"
+        list_branches "android" "$output_format"
         ;;
-      1) 
-        echo -e "${GREEN}Detectado proyecto iOS${NC}"
+      1)
+        if [ "$JSON_OUTPUT" != "true" ]; then
+          echo -e "${GREEN}Detectado proyecto iOS${NC}"
+        fi
         get_access_token "$KEY" "ios"
-        list_branches "ios"
+        list_branches "ios" "$output_format"
         ;;
-      2) 
-        echo -e "${GREEN}Detectado proyecto Flutter${NC}"
+      2)
+        if [ "$JSON_OUTPUT" != "true" ]; then
+          echo -e "${GREEN}Detectado proyecto Flutter${NC}"
+        fi
         get_access_token "$KEY" "flutter"
-        list_branches "flutter"
+        list_branches "flutter" "$output_format"
         ;;
-      3) 
-        echo -e "${GREEN}Detectado proyecto Python${NC}"
+      3)
+        if [ "$JSON_OUTPUT" != "true" ]; then
+          echo -e "${GREEN}Detectado proyecto Python${NC}"
+        fi
         get_access_token "$KEY" "back"
-        list_branches "python"
+        list_branches "python" "$output_format"
         ;;
-      *) 
-        echo -e "${RED}Error: No se detectó un tipo de proyecto válido.${NC}"
-        echo "Si quieres consultar ramas de arquetipos usa: $0 branches --key=xxxx --archetype=<platform>"
+      *)
+        if [ "$JSON_OUTPUT" = "true" ]; then
+          echo "{\"status\":\"error\",\"message\":\"No se detectó un tipo de proyecto válido\"}"
+        else
+          echo -e "${RED}Error: No se detectó un tipo de proyecto válido.${NC}"
+          echo "Si quieres consultar ramas de arquetipos usa: $0 branches --key=xxxx --archetype=<platform>"
+        fi
         exit 1
         ;;
     esac

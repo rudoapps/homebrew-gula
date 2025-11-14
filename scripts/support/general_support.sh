@@ -359,8 +359,9 @@ standardized_list_modules() {
 
 list_branches() {
   local repo_type=$1
+  local output_format=${2:-"normal"}  # normal o json
   local repo_url=""
-  
+
   case "$repo_type" in
     "android")
       repo_url="https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git"
@@ -387,16 +388,70 @@ list_branches() {
       repo_url="https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-archetype-python.git"
       ;;
     *)
-      echo -e "${RED}Error: Tipo de repositorio no válido: $repo_type${NC}"
-      echo "Tipos válidos: android, ios, flutter, python, archetype-android, archetype-ios, archetype-flutter, archetype-python"
+      if [ "$output_format" = "json" ]; then
+        echo "{\"status\":\"error\",\"message\":\"Tipo de repositorio no válido: $repo_type\"}"
+      else
+        echo -e "${RED}Error: Tipo de repositorio no válido: $repo_type${NC}"
+        echo "Tipos válidos: android, ios, flutter, python, archetype-android, archetype-ios, archetype-flutter, archetype-python"
+      fi
       exit 1
       ;;
   esac
-  
-  echo -e "${BOLD}Ramas disponibles para $repo_type:"
-  echo -e "${BOLD}-----------------------------------------------${NC}"
-  git ls-remote --heads "$repo_url" | sed 's/.*refs\/heads\///' | sort
-  echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  if [ "$output_format" = "json" ]; then
+    # Obtener branches
+    local branches=$(git ls-remote --heads "$repo_url" 2>/dev/null | sed 's/.*refs\/heads\///' | sort)
+
+    # Obtener tags
+    local tags=$(git ls-remote --tags "$repo_url" 2>/dev/null | sed 's/.*refs\/tags\///' | grep -v '\^{}' | sort)
+
+    # Construir JSON
+    echo "{"
+    echo "  \"platform\": \"$repo_type\","
+    echo "  \"branches\": ["
+
+    # Convertir branches a JSON array
+    local first=true
+    while IFS= read -r branch; do
+      if [ -n "$branch" ]; then
+        if [ "$first" = true ]; then
+          echo -n "    \"$branch\""
+          first=false
+        else
+          echo ","
+          echo -n "    \"$branch\""
+        fi
+      fi
+    done <<< "$branches"
+    echo ""
+    echo "  ],"
+
+    echo "  \"tags\": ["
+    # Convertir tags a JSON array
+    first=true
+    while IFS= read -r tag; do
+      if [ -n "$tag" ]; then
+        if [ "$first" = true ]; then
+          echo -n "    \"$tag\""
+          first=false
+        else
+          echo ","
+          echo -n "    \"$tag\""
+        fi
+      fi
+    done <<< "$tags"
+    echo ""
+    echo "  ],"
+
+    echo "  \"status\": \"success\""
+    echo "}"
+  else
+    # Output normal
+    echo -e "${BOLD}Ramas disponibles para $repo_type:"
+    echo -e "${BOLD}-----------------------------------------------${NC}"
+    git ls-remote --heads "$repo_url" | sed 's/.*refs\/heads\///' | sort
+    echo -e "${BOLD}-----------------------------------------------${NC}"
+  fi
 }
 
 check_type_of_project() {
