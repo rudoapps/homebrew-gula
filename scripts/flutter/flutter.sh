@@ -2,6 +2,142 @@
 
 MODULES_PATH_FLUTTER="lib/modules"
 
+install_flutter_modules_batch() {
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}Instalación BATCH de ${#MODULE_NAMES[@]} módulos Flutter${NC}"
+	echo -e "${BOLD}Módulos: ${MODULE_NAMES[*]}${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}Prerequisitos: Validando KEY.${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	# Variable para controlar si la instalación fue exitosa
+	local installation_success=false
+	local modules_installed=()
+
+	# Función para manejar errores durante la instalación
+	handle_installation_error() {
+		if [ "$installation_success" = false ]; then
+			echo -e "${RED}❌ Error durante la instalación batch de módulos Flutter${NC}"
+			for module in "${modules_installed[@]}"; do
+				log_operation "install" "flutter" "$module" "${BRANCH:-main}" "error" "Instalación batch interrumpida"
+			done
+			remove_temporary_dir
+		fi
+	}
+
+	# Configurar trap para capturar errores y interrupciones
+	trap handle_installation_error ERR EXIT
+
+	GULA_COMMAND="install"
+	get_access_token $KEY "flutter"
+
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	if [ -d "$TEMPORARY_DIR" ]; then
+		echo "🗑️ Borrando directorio existente: $TEMPORARY_DIR"
+		rm -rf "$TEMPORARY_DIR"
+	fi
+
+	if [ -n "${TAG:-}" ]; then
+		echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
+		git clone --branch "$TAG" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
+	elif [ -n "${BRANCH:-}" ]; then
+		echo -e "🌿 Usando rama: ${YELLOW}$BRANCH${NC}"
+		git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
+	else
+		git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-flutter.git" "$TEMPORARY_DIR"
+	fi
+
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}STEP2 - Instalar dependencias generales.${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	flutter_read_versions_and_install_pubspec "lib/"
+
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}STEP3 - Copiar ficheros de todos los módulos.${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	flutter_create_modules_dir
+
+	# Iterar sobre cada módulo
+	for MODULE_NAME in "${MODULE_NAMES[@]}"; do
+		echo ""
+		echo -e "${YELLOW}📦 Procesando módulo: ${BOLD}$MODULE_NAME${NC}"
+
+		# Verificar si el módulo ya está instalado
+		local is_reinstall=false
+		if is_module_installed "flutter" "$MODULE_NAME"; then
+			if ! handle_module_reinstallation "flutter" "$MODULE_NAME" "${BRANCH:-main}"; then
+				echo -e "${YELLOW}⏭️  Saltando módulo $MODULE_NAME${NC}"
+				continue
+			fi
+			is_reinstall=true
+		else
+			log_operation "install" "flutter" "$MODULE_NAME" "${BRANCH:-main}" "started"
+		fi
+
+		modules_installed+=("$MODULE_NAME")
+
+		# Copiar archivos del módulo
+		if [ -d "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" ]; then
+			copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
+			flutter_read_configuration "modules/${MODULE_NAME}/"
+			echo -e "${GREEN}✅ Módulo $MODULE_NAME copiado${NC}"
+		else
+			echo -e "${RED}❌ Error: Módulo $MODULE_NAME no encontrado en el repositorio${NC}"
+			log_operation "install" "flutter" "$MODULE_NAME" "${BRANCH:-main}" "error" "Módulo no encontrado"
+			continue
+		fi
+	done
+
+	echo ""
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}STEP4 - Renombrar imports de todos los módulos.${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	flutter_rename_imports
+
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}STEP5 - Actualización de dependencias (una sola vez).${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	echo ""
+	flutter clean
+	flutter pub get
+	echo ""
+
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+	echo -e "${BOLD}STEP6 - Generando archivo de configuración de DI.${NC}"
+	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	echo ""
+	dart run build_runner build --delete-conflicting-outputs
+	echo ""
+
+	echo -e "${GREEN}-----------------------------------------------${NC}"
+	echo -e "${GREEN}Proceso batch finalizado. ${#modules_installed[@]} módulos instalados.${NC}"
+	echo -e "${GREEN}-----------------------------------------------${NC}"
+
+	# Marcar instalación como exitosa
+	installation_success=true
+
+	# Log éxito de cada módulo instalado
+	for MODULE_NAME in "${modules_installed[@]}"; do
+		log_operation "install" "flutter" "$MODULE_NAME" "${BRANCH:-main}" "success"
+		log_installed_module "flutter" "$MODULE_NAME" "${BRANCH:-main}"
+	done
+
+	# Remover trap de error ya que la instalación fue exitosa
+	trap - ERR EXIT
+
+	remove_temporary_dir
+}
+
 list_flutter() {
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}Prerequisitos: Validando.${NC}"

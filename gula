@@ -68,7 +68,10 @@ LIST_TEMPLATES="false"
 TEMPLATE_TYPE=""
 ARCHETYPE_TYPE=""
 FORCE_INSTALL="false"
+BATCH_MODE="false"
+MODULE_NAMES=()
 export FORCE_INSTALL
+export BATCH_MODE
 
 function cleanup {
     echo ""
@@ -107,13 +110,25 @@ install_module() {
     type=$?
   fi
 
-  case "$type" in
-    0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; install_android_module ;;
-    1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     install_ios_module ;;
-    2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  install_flutter_module ;;
-    3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   install_python_module ;;
-    *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
-  esac
+  if [ "$BATCH_MODE" = "true" ]; then
+    # Modo batch: instalar múltiples módulos
+    case "$type" in
+      0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; install_android_modules_batch ;;
+      1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     install_ios_modules_batch ;;
+      2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  install_flutter_modules_batch ;;
+      3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   install_python_modules_batch ;;
+      *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
+    esac
+  else
+    # Modo individual: instalar un solo módulo
+    case "$type" in
+      0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; install_android_module ;;
+      1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     install_ios_module ;;
+      2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  install_flutter_module ;;
+      3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   install_python_module ;;
+      *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
+    esac
+  fi
 }
 
 show_help() {
@@ -158,11 +173,18 @@ show_help() {
   echo "  gula list --key=mi_clave_secreta"
   echo "  gula list --key=mi_clave --branch=development"
   echo ""
-  echo -e "${BOLD}  Instalar un módulo:${NC}"
+  echo -e "${BOLD}  Instalar uno o más módulos:${NC}"
   echo "  gula install authentication --key=mi_clave_secreta"
   echo "  gula install network --key=mi_clave --branch=feature-branch"
   echo "  gula install network --key=mi_clave --tag=v1.0.0"
   echo "  gula install authentication --key=mi_clave --force     # Reinstalar sin confirmar"
+  echo ""
+  echo -e "${BOLD}  Instalar múltiples módulos (batch):${NC}"
+  echo "  gula install login,wallet,payments --key=mi_clave_secreta"
+  echo "  gula install network,auth,database --key=mi_clave --branch=develop"
+  echo "  gula install user,product,order --key=mi_clave --tag=v2.0.0"
+  echo "  ${YELLOW}# Nota: En modo batch, el repositorio se clona una sola vez${NC}"
+  echo "  ${YELLOW}# Flutter ejecuta pub get y build_runner solo al final${NC}"
   echo ""
   echo -e "${BOLD}  Crear nuevos proyectos:${NC}"
   echo "  gula create android --key=mi_clave_secreta"
@@ -417,7 +439,16 @@ while [[ "$#" -gt 0 ]]; do
     install)
       COMMAND="install"
       if [ -n "${2:-}" ]; then
-        MODULE_NAME="$2"
+        # Detectar si hay múltiples módulos separados por comas
+        if [[ "$2" == *","* ]]; then
+          # Modo batch: convertir string "mod1,mod2,mod3" a array
+          IFS=',' read -ra MODULE_NAMES <<< "$2"
+          BATCH_MODE="true"
+        else
+          # Modo individual
+          MODULE_NAME="$2"
+          BATCH_MODE="false"
+        fi
         shift
       fi
       ;;

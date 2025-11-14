@@ -4,6 +4,135 @@ ANDROID_PROJECT_SRC="app/src/main/java"
 GULA_PACKAGE="app.gula.com"
 MODULES_PATH="modules"
 
+install_android_modules_batch() {
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}Instalación BATCH de ${#MODULE_NAMES[@]} módulos Android${NC}"
+  echo -e "${BOLD}Módulos: ${MODULE_NAMES[*]}${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}Prerequisitos: Validando.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  # Variable para controlar si la instalación fue exitosa
+  local installation_success=false
+  local modules_installed=()
+
+  # Función para manejar errores durante la instalación
+  handle_installation_error() {
+    if [ "$installation_success" = false ]; then
+      echo -e "${RED}❌ Error durante la instalación batch de módulos Android${NC}"
+      for module in "${modules_installed[@]}"; do
+        log_operation "install" "android" "$module" "${BRANCH:-main}" "error" "Instalación batch interrumpida"
+      done
+      remove_temporary_dir
+    fi
+  }
+
+  # Configurar trap para capturar errores y interrupciones
+  trap handle_installation_error ERR EXIT
+
+  GULA_COMMAND="install"
+  get_access_token $KEY "android"
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  if [ -n "${TAG:-}" ]; then
+    echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
+    git clone --branch "$TAG" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "$TEMPORARY_DIR"
+  elif [ -n "${BRANCH:-}" ]; then
+    echo -e "🌿 Usando rama: ${YELLOW}$BRANCH${NC}"
+    git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "$TEMPORARY_DIR"
+  else
+    git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-android.git" "$TEMPORARY_DIR"
+  fi
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP2 - Localizar package name del proyecto.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  android_detect_package_name
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP3 - Verificar existencia carpeta modules.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  android_create_modules_dir
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP4 - Copiar ficheros de todos los módulos.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+
+  # Iterar sobre cada módulo
+  for MODULE_NAME in "${MODULE_NAMES[@]}"; do
+    echo ""
+    echo -e "${YELLOW}📦 Procesando módulo: ${BOLD}$MODULE_NAME${NC}"
+
+    # Verificar si el módulo ya está instalado
+    local is_reinstall=false
+    if is_module_installed "android" "$MODULE_NAME"; then
+      if ! handle_module_reinstallation "android" "$MODULE_NAME" "${BRANCH:-main}"; then
+        echo -e "${YELLOW}⏭️  Saltando módulo $MODULE_NAME${NC}"
+        continue
+      fi
+      is_reinstall=true
+    else
+      log_operation "install" "android" "$MODULE_NAME" "${BRANCH:-main}" "started"
+    fi
+
+    modules_installed+=("$MODULE_NAME")
+
+    # Verificar que el módulo existe en el repositorio clonado
+    if ! android_check_module_in_temporary_dir "$MODULE_NAME"; then
+      echo -e "${RED}❌ Error: Módulo $MODULE_NAME no encontrado en el repositorio${NC}"
+      log_operation "install" "android" "$MODULE_NAME" "${BRANCH:-main}" "error" "Módulo no encontrado"
+      continue
+    fi
+
+    # Copiar el módulo al proyecto destino
+    echo -e "${YELLOW}Inicio copiado del módulo ${TEMPORARY_DIR}/${MODULE_NAME} en: ${MODULE_NAME}${NC}"
+    copy_files "${TEMPORARY_DIR}/${MODULE_NAME}" "."
+    echo -e "${GREEN}✅ Módulo $MODULE_NAME copiado${NC}"
+
+    # Instalar dependencias del módulo
+    android_install_libraries_dependencies "$TEMPORARY_DIR/${MODULE_NAME}/configuration.gula"
+    android_install_gradle_dependencies "$TEMPORARY_DIR/${MODULE_NAME}/configuration.gula"
+  done
+
+  echo ""
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP5 - Instalar dependencias principales.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  android_install_main_dependencies
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP6 - Instalar dependencias de módulos.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  android_install_modules_dependencies
+
+  echo -e "${GREEN}-----------------------------------------------${NC}"
+  echo -e "${GREEN}Proceso batch finalizado. ${#modules_installed[@]} módulos instalados.${NC}"
+  echo -e "${GREEN}-----------------------------------------------${NC}"
+
+  # Marcar instalación como exitosa
+  installation_success=true
+
+  # Log éxito de cada módulo instalado
+  for MODULE_NAME in "${modules_installed[@]}"; do
+    log_operation "install" "android" "$MODULE_NAME" "${BRANCH:-main}" "success"
+    log_installed_module "android" "$MODULE_NAME" "${BRANCH:-main}"
+  done
+
+  # Remover trap de error ya que la instalación fue exitosa
+  trap - ERR EXIT
+
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  echo -e "${BOLD}STEP7 - Eliminación repositorio temporal.${NC}"
+  echo -e "${BOLD}-----------------------------------------------${NC}"
+  remove_temporary_dir
+}
+
 list_android() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}Prerequisitos: Validando.${NC}"
