@@ -30,15 +30,12 @@ log_operation() {
 
   local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-  # Determinar si es branch o tag
-  local source_type="branch"
-  local source_value="$branch"
+  # Determinar la fuente (branch o tag)
+  local source="$branch"
   if [ -n "${TAG:-}" ]; then
-    source_type="tag"
-    source_value="$TAG"
+    source="$TAG"
   elif [ -n "${BRANCH:-}" ]; then
-    source_type="branch"
-    source_value="$BRANCH"
+    source="$BRANCH"
   fi
 
   local log_entry='{
@@ -46,9 +43,7 @@ log_operation() {
     "operation": "'$operation'",
     "platform": "'$platform'",
     "module": "'$module_name'",
-    "source_type": "'$source_type'",
-    "source_value": "'$source_value'",
-    "branch": "'$branch'",
+    "source": "'$source'",
     "status": "'$status'",
     "details": "'$details'",
     "gula_version": "'$VERSION'"
@@ -97,15 +92,12 @@ log_project_creation() {
     cd - > /dev/null 2>&1
   fi
 
-  # Determinar si es branch o tag
-  local source_type="branch"
-  local source_value="$git_branch"
+  # Determinar la fuente (branch o tag)
+  local source="$git_branch"
   if [ -n "${TAG:-}" ]; then
-    source_type="tag"
-    source_value="$TAG"
+    source="$TAG"
   elif [ -n "${BRANCH:-}" ]; then
-    source_type="branch"
-    source_value="$BRANCH"
+    source="$BRANCH"
   fi
 
   # Crear el archivo de log en el nuevo proyecto
@@ -119,9 +111,7 @@ log_project_creation() {
     "created": "$timestamp",
     "platform": "$platform",
     "project_name": "$project_name",
-    "source_type": "$source_type",
-    "source_value": "$source_value",
-    "branch": "$git_branch",
+    "source": "$source",
     "commit": "$git_commit",
     "created_by": "$created_by",
     "gula_version": "$VERSION"
@@ -132,9 +122,7 @@ log_project_creation() {
       "operation": "create",
       "platform": "$platform",
       "module": "$project_name",
-      "source_type": "$source_type",
-      "source_value": "$source_value",
-      "branch": "$git_branch",
+      "source": "$source",
       "commit": "$git_commit",
       "status": "$status",
       "details": "Project created",
@@ -155,9 +143,7 @@ EOF
     "operation": "create",
     "platform": "'$platform'",
     "module": "'$project_name'",
-    "source_type": "'$source_type'",
-    "source_value": "'$source_value'",
-    "branch": "'$git_branch'",
+    "source": "'$source'",
     "commit": "'$git_commit'",
     "status": "'$status'",
     "details": "'$details'",
@@ -182,15 +168,12 @@ log_installed_module() {
 
   init_gula_log
 
-  # Determinar si es branch o tag
-  local source_type="branch"
-  local source_value="$branch"
+  # Determinar la fuente (branch o tag)
+  local source="$branch"
   if [ -n "${TAG:-}" ]; then
-    source_type="tag"
-    source_value="$TAG"
+    source="$TAG"
   elif [ -n "${BRANCH:-}" ]; then
-    source_type="branch"
-    source_value="$BRANCH"
+    source="$BRANCH"
   fi
 
   if command -v jq >/dev/null 2>&1; then
@@ -198,9 +181,7 @@ log_installed_module() {
     jq ".installed_modules[\"$platform:$module_name\"] = {
       \"platform\": \"$platform\",
       \"module\": \"$module_name\",
-      \"source_type\": \"$source_type\",
-      \"source_value\": \"$source_value\",
-      \"branch\": \"$branch\",
+      \"source\": \"$source\",
       \"installed_at\": \"$timestamp\",
       \"gula_version\": \"$VERSION\"
     }" "$GULA_LOG_FILE" > "$temp_file" && mv "$temp_file" "$GULA_LOG_FILE"
