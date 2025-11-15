@@ -496,9 +496,16 @@ copy_files() {
   
   echo -e "${YELLOW}📋 Copiando desde: $origin${NC}"
   echo -e "${YELLOW}📋 Copiando hacia: $destination${NC}"
-  
-  cp -R "$origin" "$destination"
-  if [ $? -eq 0 ]; then
+
+  # Copiar de forma síncrona y esperar a que termine
+  # -R: recursivo, -X: no copiar extended attributes (evita problemas en macOS)
+  cp -RX "$origin" "$destination" 2>&1
+  local cp_exit_code=$?
+
+  # Esperar a que todos los procesos de copia terminen
+  wait 2>/dev/null
+
+  if [ $cp_exit_code -eq 0 ]; then
     echo -e "✅ Ficheros copiados exitosamente en: $destination"
   else
     echo -e "${RED}❌ Error: No se pudo copiar desde $origin hacia $destination${NC}"
@@ -512,23 +519,34 @@ copy_files() {
 }
 
 remove_temporary_dir() {
-  if [ -d "$TEMPORARY_DIR" ]; then
-    rm -rf "$TEMPORARY_DIR"
+  # Esperar a que todos los procesos en background terminen
+  wait 2>/dev/null
+
+  # Limpiar usando la variable TEMPORARY_DIR
+  if [ -n "$TEMPORARY_DIR" ] && [ -d "$TEMPORARY_DIR" ]; then
+    echo -e "🗑️ Eliminando directorio temporal: $TEMPORARY_DIR..."
+    # Usar timeout para evitar colgarse indefinidamente
+    timeout 10 rm -rf "$TEMPORARY_DIR" 2>/dev/null || {
+      echo -e "${YELLOW}⚠️  No se pudo eliminar $TEMPORARY_DIR automáticamente${NC}"
+      echo -e "${YELLOW}   Puedes eliminarlo manualmente con: rm -rf $TEMPORARY_DIR${NC}"
+    }
   fi
-  
-  # Limpiar directorio temp-gula si existe
+
+  # Limpiar directorio temp-gula si existe (fallback)
   if [ -d "temp-gula" ]; then
     echo -e "🗑️ Eliminando directorio temp-gula..."
-    rm -rf "temp-gula"
-    echo -e "✅ Directorio temp-gula eliminado"
+    # Usar timeout para evitar colgarse indefinidamente
+    timeout 10 rm -rf "temp-gula" 2>/dev/null || {
+      echo -e "${YELLOW}⚠️  No se pudo eliminar temp-gula automáticamente${NC}"
+      echo -e "${YELLOW}   Puedes eliminarlo manualmente con: rm -rf temp-gula${NC}"
+    }
   fi
-  
+
   echo ""
   echo -e "✅ Limpieza de directorios temporales completada"
   echo ""
   echo -e "Fin de la ejecución"
   echo ""
-  exit 1
 }
 
 check_path_exists() {
