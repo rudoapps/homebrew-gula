@@ -25,15 +25,29 @@ log_operation() {
   local branch=${4:-"main"}
   local status=$5
   local details=${6:-""}
-  
+
   init_gula_log
-  
+
   local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+  # Determinar si es branch o tag
+  local source_type="branch"
+  local source_value="$branch"
+  if [ -n "${TAG:-}" ]; then
+    source_type="tag"
+    source_value="$TAG"
+  elif [ -n "${BRANCH:-}" ]; then
+    source_type="branch"
+    source_value="$BRANCH"
+  fi
+
   local log_entry='{
     "timestamp": "'$timestamp'",
     "operation": "'$operation'",
     "platform": "'$platform'",
     "module": "'$module_name'",
+    "source_type": "'$source_type'",
+    "source_value": "'$source_value'",
     "branch": "'$branch'",
     "status": "'$status'",
     "details": "'$details'",
@@ -83,6 +97,17 @@ log_project_creation() {
     cd - > /dev/null 2>&1
   fi
 
+  # Determinar si es branch o tag
+  local source_type="branch"
+  local source_value="$git_branch"
+  if [ -n "${TAG:-}" ]; then
+    source_type="tag"
+    source_value="$TAG"
+  elif [ -n "${BRANCH:-}" ]; then
+    source_type="branch"
+    source_value="$BRANCH"
+  fi
+
   # Crear el archivo de log en el nuevo proyecto
   local project_log_file="$project_path/.gula.log"
 
@@ -94,6 +119,8 @@ log_project_creation() {
     "created": "$timestamp",
     "platform": "$platform",
     "project_name": "$project_name",
+    "source_type": "$source_type",
+    "source_value": "$source_value",
     "branch": "$git_branch",
     "commit": "$git_commit",
     "created_by": "$created_by",
@@ -105,6 +132,8 @@ log_project_creation() {
       "operation": "create",
       "platform": "$platform",
       "module": "$project_name",
+      "source_type": "$source_type",
+      "source_value": "$source_value",
       "branch": "$git_branch",
       "commit": "$git_commit",
       "status": "$status",
@@ -126,6 +155,8 @@ EOF
     "operation": "create",
     "platform": "'$platform'",
     "module": "'$project_name'",
+    "source_type": "'$source_type'",
+    "source_value": "'$source_value'",
     "branch": "'$git_branch'",
     "commit": "'$git_commit'",
     "status": "'$status'",
@@ -151,11 +182,24 @@ log_installed_module() {
 
   init_gula_log
 
+  # Determinar si es branch o tag
+  local source_type="branch"
+  local source_value="$branch"
+  if [ -n "${TAG:-}" ]; then
+    source_type="tag"
+    source_value="$TAG"
+  elif [ -n "${BRANCH:-}" ]; then
+    source_type="branch"
+    source_value="$BRANCH"
+  fi
+
   if command -v jq >/dev/null 2>&1; then
     local temp_file=$(mktemp)
     jq ".installed_modules[\"$platform:$module_name\"] = {
       \"platform\": \"$platform\",
       \"module\": \"$module_name\",
+      \"source_type\": \"$source_type\",
+      \"source_value\": \"$source_value\",
       \"branch\": \"$branch\",
       \"installed_at\": \"$timestamp\",
       \"gula_version\": \"$VERSION\"
