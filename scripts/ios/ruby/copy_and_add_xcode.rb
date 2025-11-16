@@ -60,7 +60,7 @@ def copy_all_files(origin, destination)
       # Manejar caso cuando STDIN.gets devuelve nil (no hay entrada)
       if response.nil?
         puts "❌ No se pudo obtener respuesta. Usa --force para reinstalar automáticamente."
-        exit 1
+        return
       end
 
       response = response.chomp.downcase
@@ -79,8 +79,28 @@ def copy_all_files(origin, destination)
       FileUtils.mkdir_p(destination_path)
     else
       FileUtils.mkdir_p(File.dirname(destination_path))
-      FileUtils.cp(item, destination_path)
-      puts "✅ Código añadido en: #{destination_path}"
+
+      # Intentar copiar con retry para manejar timeouts temporales
+      max_retries = 3
+      retry_count = 0
+      success = false
+
+      while retry_count < max_retries && !success
+        begin
+          FileUtils.cp(item, destination_path)
+          puts "✅ Código añadido en: #{destination_path}"
+          success = true
+        rescue Errno::ETIMEDOUT => e
+          retry_count += 1
+          if retry_count < max_retries
+            puts "⚠️  Timeout al copiar #{item}, reintentando (#{retry_count}/#{max_retries})..."
+            sleep 0.5
+          else
+            puts "❌ Error: No se pudo copiar #{item} después de #{max_retries} intentos"
+            raise e
+          end
+        end
+      end
     end
   end
 end
