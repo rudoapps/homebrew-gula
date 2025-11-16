@@ -43,6 +43,15 @@ install_ios_modules_batch() {
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
+	# Limpiar directorio temporal corrupto si existe
+	if [ -d "$TEMPORARY_DIR" ]; then
+		echo "🗑️ Limpiando directorio temporal existente..."
+		timeout 10 rm -rf "$TEMPORARY_DIR" 2>/dev/null || {
+			echo -e "${YELLOW}⚠️  No se pudo limpiar automáticamente. Intenta manualmente: rm -rf $TEMPORARY_DIR${NC}"
+			exit 1
+		}
+	fi
+
 	if [ -n "${TAG:-}" ]; then
 		echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
 		git clone --branch "$TAG" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/gula-ios.git" "$TEMPORARY_DIR"
@@ -153,10 +162,19 @@ install_ios_module() {
 
 	GULA_COMMAND="install"
 	get_access_token $KEY "ios"
-	
+
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	# Limpiar directorio temporal corrupto si existe
+	if [ -d "$TEMPORARY_DIR" ]; then
+		echo "🗑️ Limpiando directorio temporal existente..."
+		timeout 10 rm -rf "$TEMPORARY_DIR" 2>/dev/null || {
+			echo -e "${YELLOW}⚠️  No se pudo limpiar automáticamente. Intenta manualmente: rm -rf $TEMPORARY_DIR${NC}"
+			exit 1
+		}
+	fi
 
 	if [ -n "${TAG:-}" ]; then
 		echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
@@ -244,6 +262,15 @@ list_ios() {
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}STEP1 - Clonación temporal del proyecto de GULA.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
+
+	# Limpiar directorio temporal corrupto si existe
+	if [ -d "$TEMPORARY_DIR" ]; then
+		echo "🗑️ Limpiando directorio temporal existente..."
+		timeout 10 rm -rf "$TEMPORARY_DIR" 2>/dev/null || {
+			echo -e "${YELLOW}⚠️  No se pudo limpiar automáticamente. Intenta manualmente: rm -rf $TEMPORARY_DIR${NC}"
+			exit 1
+		}
+	fi
 
 	if [ -n "${TAG:-}" ]; then
 		echo -e "🏷️  Usando tag: ${YELLOW}$TAG${NC}"
