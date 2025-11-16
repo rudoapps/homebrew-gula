@@ -46,14 +46,29 @@ end
 
 def copy_all_files(origin, destination)
   if Dir.exist?(destination)
-    puts"-----------------------------------------------"
-    puts "Directorio '#{destination}' ya existe. ¿Deseas reemplazarlo? (s/n)"
-    puts"-----------------------------------------------"
-    response = STDIN.gets.chomp.downcase
-    if response == 's'
-      puts "Actualizando código..."
+    # Verificar si FORCE_INSTALL está activado
+    force_install = ENV['FORCE_INSTALL'] == 'true'
+
+    if force_install
+      puts "⚠️  Directorio ya existe, actualizando con --force..."
     else
-      return
+      puts"-----------------------------------------------"
+      puts "Directorio '#{destination}' ya existe. ¿Deseas reemplazarlo? (s/n)"
+      puts"-----------------------------------------------"
+      response = STDIN.gets
+
+      # Manejar caso cuando STDIN.gets devuelve nil (no hay entrada)
+      if response.nil?
+        puts "❌ No se pudo obtener respuesta. Usa --force para reinstalar automáticamente."
+        exit 1
+      end
+
+      response = response.chomp.downcase
+      if response == 's'
+        puts "Actualizando código..."
+      else
+        return
+      end
     end
   end
   FileUtils.mkdir_p(destination)
