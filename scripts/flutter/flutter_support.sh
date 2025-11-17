@@ -151,16 +151,30 @@ flutter_copy_custom_plugins() {
   if [ -n "$plugins_to_add" ]; then
     echo "   | 📝 Actualizando pubspec.yaml con plugins..."
     local pubspec="pubspec.yaml"
-    local plugins_formatted=$(printf "%b" "$plugins_to_add")
 
-    # Buscar la línea de dependencies y añadir después
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      printf '%s\n' "$plugins_formatted" | sed -i '' "/^dependencies:/r /dev/stdin" "$pubspec"
-    else
-      printf '%s\n' "$plugins_formatted" | sed -i "/^dependencies:/r /dev/stdin" "$pubspec"
-    fi
+    # Procesar cada plugin para verificar si ya existe
+    echo "$plugins_to_add" | while IFS= read -r line; do
+      if [[ "$line" =~ ^[[:space:]]+([a-z_]+): ]]; then
+        local plugin_name="${BASH_REMATCH[1]}"
 
-    echo "   | ✅ Plugins añadidos al pubspec.yaml"
+        # Verificar si el plugin ya existe en el pubspec.yaml
+        if grep -q "^[[:space:]]*${plugin_name}:" "$pubspec"; then
+          echo "   | ℹ️  Plugin $plugin_name ya existe en pubspec.yaml, omitiendo..."
+        else
+          # Añadir el plugin
+          echo "   | ➕ Añadiendo $plugin_name al pubspec.yaml..."
+          local plugin_entry="  $plugin_name:\n    path: plugins/$plugin_name"
+
+          if [[ "$OSTYPE" == "darwin"* ]]; then
+            printf '%s\n' "$plugin_entry" | sed -i '' "/^dependencies:/r /dev/stdin" "$pubspec"
+          else
+            printf '%s\n' "$plugin_entry" | sed -i "/^dependencies:/r /dev/stdin" "$pubspec"
+          fi
+        fi
+      fi
+    done
+
+    echo "   | ✅ Actualización de pubspec.yaml completada"
   fi
 
   echo "   └──────────────────────────────────────────"
