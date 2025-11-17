@@ -216,7 +216,7 @@ show_project_status() {
     if [ "$modules_count" -eq 0 ]; then
       echo "  No hay módulos instalados"
     else
-      jq -r '.installed_modules | to_entries[] | "  📦 \(.value.platform) → \(.value.module) (\(.value.branch)) - \(.value.installed_at)"' "$GULA_LOG_FILE"
+      jq -r '.installed_modules | to_entries[] | "  📦 \(.value.platform) → \(.value.module) (\(.value.source // .value.branch)) - \(.value.installed_at)"' "$GULA_LOG_FILE"
     fi
     
     echo ""
