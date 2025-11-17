@@ -83,13 +83,23 @@ install_flutter_modules_batch() {
 
 		modules_installed+=("$MODULE_NAME")
 
-		# Copiar archivos del módulo
-		if [ -d "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" ]; then
+		# Copiar archivos del módulo (detectar si está en plugins o lib/modules)
+		if [ -d "${TEMPORARY_DIR}/plugins/${MODULE_NAME}" ]; then
+			echo -e "${YELLOW}📦 Detectado como plugin (en plugins/${MODULE_NAME})${NC}"
+			mkdir -p "plugins"
+			copy_files "${TEMPORARY_DIR}/plugins/${MODULE_NAME}" "plugins/."
+			# Para plugins, pasar path sin lib/ prefix
+			if [ -f "${TEMPORARY_DIR}/plugins/${MODULE_NAME}/configuration.gula" ]; then
+				flutter_read_configuration "../plugins/${MODULE_NAME}/"
+			fi
+			echo -e "${GREEN}✅ Plugin $MODULE_NAME copiado${NC}"
+		elif [ -d "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" ]; then
+			echo -e "${YELLOW}📦 Detectado como módulo (en lib/modules/${MODULE_NAME})${NC}"
 			copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
 			flutter_read_configuration "modules/${MODULE_NAME}/"
 			echo -e "${GREEN}✅ Módulo $MODULE_NAME copiado${NC}"
 		else
-			echo -e "${RED}❌ Error: Módulo $MODULE_NAME no encontrado en el repositorio${NC}"
+			echo -e "${RED}❌ Error: ${MODULE_NAME} no encontrado ni en plugins/ ni en lib/modules/${NC}"
 			log_operation "install" "flutter" "$MODULE_NAME" "${BRANCH:-main}" "error" "Módulo no encontrado"
 			continue
 		fi
@@ -261,9 +271,24 @@ install_flutter_module() {
 	echo -e "${BOLD}STEP3 - Copiar ficheros al proyecto.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	flutter_create_modules_dir
-	copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
-	flutter_read_configuration "modules/${MODULE_NAME}/"
+	# Detectar si el módulo está en plugins o en lib/modules
+	if [ -d "${TEMPORARY_DIR}/plugins/${MODULE_NAME}" ]; then
+		echo -e "${YELLOW}📦 Detectado como plugin (en plugins/${MODULE_NAME})${NC}"
+		mkdir -p "plugins"
+		copy_files "${TEMPORARY_DIR}/plugins/${MODULE_NAME}" "plugins/."
+		# Para plugins, pasar path sin lib/ prefix
+		if [ -f "${TEMPORARY_DIR}/plugins/${MODULE_NAME}/configuration.gula" ]; then
+			flutter_read_configuration "../plugins/${MODULE_NAME}/"
+		fi
+	elif [ -d "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" ]; then
+		echo -e "${YELLOW}📦 Detectado como módulo (en lib/modules/${MODULE_NAME})${NC}"
+		flutter_create_modules_dir
+		copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
+		flutter_read_configuration "modules/${MODULE_NAME}/"
+	else
+		echo -e "${RED}❌ Error: No se encontró ${MODULE_NAME} ni en plugins/ ni en lib/modules/${NC}"
+		exit 1
+	fi
     
 	#echo -e "${BOLD}-----------------------------------------------${NC}"
 	#echo -e "${BOLD}STEP4 - Cargando dependencias.${NC}"
