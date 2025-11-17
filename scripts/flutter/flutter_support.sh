@@ -163,13 +163,18 @@ flutter_copy_custom_plugins() {
         else
           # Añadir el plugin
           echo "   | ➕ Añadiendo $plugin_name al pubspec.yaml..."
-          local plugin_entry="  $plugin_name:\n    path: plugins/$plugin_name"
+
+          # Crear archivo temporal con el contenido correcto
+          local temp_file=$(mktemp)
+          printf "  %s:\n    path: plugins/%s\n" "$plugin_name" "$plugin_name" > "$temp_file"
 
           if [[ "$OSTYPE" == "darwin"* ]]; then
-            printf '%s\n' "$plugin_entry" | sed -i '' "/^dependencies:/r /dev/stdin" "$pubspec"
+            sed -i '' "/^dependencies:/r $temp_file" "$pubspec"
           else
-            printf '%s\n' "$plugin_entry" | sed -i "/^dependencies:/r /dev/stdin" "$pubspec"
+            sed -i "/^dependencies:/r $temp_file" "$pubspec"
           fi
+
+          rm "$temp_file"
         fi
       fi
     done
