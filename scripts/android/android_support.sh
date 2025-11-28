@@ -32,14 +32,20 @@ android_verify_module() {
   MODULE_PATH="$module"
   if [ -d "$MODULE_PATH" ]; then
     echo -e "${YELLOW}El módulo $module ya existe en el proyecto destino.${NC}"
-    read -p "¿Deseas actualizar el módulo existente? (s/n): " CONFIRM
-    if [ "$CONFIRM" != "s" ]; then
-      echo -e "${RED}Instalación del módulo cancelada.${NC}"
-      exit 0
+
+    # Si --force está activo, no preguntar
+    if [ "$FORCE_INSTALL" == "true" ]; then
+      echo -e "${GREEN}🔄 Actualizando con --force...${NC}"
+    else
+      read -p "¿Deseas actualizar el módulo existente? (s/n): " CONFIRM
+      if [ "$CONFIRM" != "s" ]; then
+        echo -e "${RED}Instalación del módulo cancelada.${NC}"
+        exit 0
+      fi
     fi
     rm -rf "$MODULE_PATH"
     echo -e "✅ Actualización en curso"
-  else 
+  else
     echo -e "✅ Módulo no detectado continua la instalación"
   fi
 }
