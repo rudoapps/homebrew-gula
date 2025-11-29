@@ -5,7 +5,7 @@ MODULE_NAME=""
 KEY=""
 ACCESSTOKEN=""
 GULA_COMMAND=""
-VERSION="0.0.129"
+VERSION="0.0.130"
 
 # Definir colores 
 RED='\033[1;31m'
