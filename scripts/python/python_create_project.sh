@@ -66,31 +66,14 @@ python_create_project() {
     validate_project_name
     echo ""
     set -eu
-    while :; do
-      echo "Elige stack (1-2):"
-      echo "1) fastapi"
-      echo "2) django"
-      printf "> "
-      read ans || exit 1
 
-      case "$ans" in
-        1|fastapi) STACK="fastapi"; break ;;
-        2|django) STACK="django"; break ;;
-        *) echo "Opción inválida. Usa 1/2 o fastapi/django." ;;
-      esac
-    done
-    echo "Stack seleccionado: $STACK"
+    # Stack fijo: fastapi
+    STACK="fastapi"
+    echo "Stack: $STACK"
 
-    # Si no se proporciona BRANCH globalmente, usar el branch por defecto según el stack
+    # Rama fija: develop
     if [ -z "${BRANCH:-}" ]; then
-        case "$STACK" in
-          fastapi)
-            BRANCH="fastapi"
-            ;;
-          django)
-            BRANCH="main"
-            ;;
-        esac
+        BRANCH="develop"
     fi
 
     if [ -z "$projectPath" ]; then

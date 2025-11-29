@@ -30,9 +30,9 @@ copy_packages() {
 }
 
 install_packages() {
-  poetry add ./$GULA_PACKAGES_DIR/*
+  uv add ./$GULA_PACKAGES_DIR/*
 }
 
 install_python_dependencies() {
-  poetry add build wheel setuptools
+  uv add build wheel setuptools
 }
