@@ -1,82 +1,168 @@
-
 # Gula
 
-## Descripción
+## Descripcion
 
-El Gula Module Installer es un script bash diseñado para facilitar la instalación y gestión de módulos en proyectos Android e iOS. Este script permite identificar el tipo de proyecto (Android o iOS) y ejecutar los comandos correspondientes para instalar o listar módulos en dichos proyectos.
+Gula es una herramienta CLI para acelerar el desarrollo con arquetipos y modulos predefinidos. Soporta proyectos **Android**, **iOS**, **Flutter** y **Python**.
 
 ## Requisitos
-Antes de utilizar el script, asegúrate de cumplir con los siguientes requisitos:
 
-Homebrew: El script depende de Homebrew para gestionar algunos recursos, asegúrate de tenerlo instalado. Si no instalalo desde: https://brew.sh/
+Antes de utilizar gula, asegurate de tener instalado Homebrew: https://brew.sh/
 
-```
+```bash
 brew tap rudoapps/gula
-```
-
-```
 brew install gula
 ```
 
-## Actualización
+## Actualizacion
 
-Este script puede ser actualizado con cierta frencuencia recomendamos mantenerlo actualizado.
+Recomendamos mantener gula actualizado:
 
-```
-brew update
-brew upgrade gula
+```bash
+brew update && brew upgrade gula
 ```
 
 ## Uso
-Sintaxis básica
 
-```
-gula {install|list} [nombre-del-modulo] [--key=xxxx]
-```
-
-**Comandos disponibles**
-
-**install**: Instala un módulo en el proyecto. Debes especificar el nombre del módulo a instalar.
-
-```
-gula install nombre-del-modulo [--key=xxxx]
+```bash
+gula <comando> [opciones]
 ```
 
-**list**: Lista los módulos disponibles para el proyecto actual.
+## Comandos disponibles
 
-```
-gula list [--key=xxxx]
-```
+| Comando | Descripcion |
+|---------|-------------|
+| `list` | Lista modulos disponibles para el proyecto actual |
+| `install` | Instala uno o varios modulos en el proyecto |
+| `create` | Crea un nuevo proyecto con arquitectura predefinida |
+| `template` | Genera templates con arquitecturas predefinidas |
+| `branches` | Lista ramas disponibles en repositorios |
+| `status` | Muestra el estado del proyecto y modulos instalados |
+| `validate` | Valida archivos configuration.gula del proyecto |
+| `install-hook` | Instala pre-commit hook para validar configuration.gula |
+| `help` | Muestra la ayuda |
 
-## Opciones
+## Opciones globales
 
-**--key=xxxx**: Proporciona una clave de acceso si es necesaria para la instalación del módulo.
+| Opcion | Descripcion |
+|--------|-------------|
+| `--key=XXXX` | Clave de acceso para repositorios privados |
+| `--branch=YYYY` | Rama especifica del repositorio |
+| `--tag=ZZZZ` | Tag especifico del repositorio |
+| `--type=ZZZZ` | Tipo de template: `clean`, `fastapi` |
+| `--archetype=ZZZZ` | Plataforma: `android`, `ios`, `flutter`, `python` |
+| `--force` | Forzar reinstalacion sin confirmar |
+| `--list` | Lista todos los templates disponibles |
+| `--json` | Salida en formato JSON |
+| `--help`, `-h` | Muestra la ayuda |
 
 ## Ejemplos de uso
 
+### Listar modulos disponibles
 
-Listar los módulos disponibles en un proyecto:
-
-```
-gula list --key=1234abcd
-```
-
-Instalar un módulo en un proyecto Android o iOS:
-
-```
-gula install authentication --key=1234abcd
+```bash
+gula list --key=mi_clave
+gula list --key=mi_clave --branch=development
 ```
 
-## Mantenimiento
+### Instalar modulos
 
-El script incluye funciones para limpiar los directorios temporales utilizados durante el proceso de instalación. Si es necesario, se puede interrumpir el proceso con Ctrl + C, y el script ejecutará automáticamente la limpieza mediante la función cleanup.
+```bash
+# Instalar un modulo
+gula install authentication --key=mi_clave
+
+# Instalar con rama especifica
+gula install network --key=mi_clave --branch=feature-branch
+
+# Instalar con tag especifico
+gula install network --key=mi_clave --tag=v1.0.0
+
+# Forzar reinstalacion
+gula install authentication --key=mi_clave --force
+
+# Instalar multiples modulos (batch)
+gula install login,wallet,payments --key=mi_clave
+```
+
+### Crear nuevos proyectos
+
+```bash
+gula create android --key=mi_clave
+gula create ios --key=mi_clave
+gula create flutter --key=mi_clave
+gula create python --key=mi_clave
+```
+
+### Generar templates
+
+```bash
+# Ver templates disponibles
+gula template --list
+
+# Generar un template
+gula template user
+gula template product --type=clean
+
+# Generar multiples templates
+gula template user,product,order
+```
+
+### Listar ramas disponibles
+
+```bash
+# Auto-detecta el tipo de proyecto
+gula branches --key=mi_clave
+
+# Para consultar arquetipos especificos
+gula branches --key=mi_clave --archetype=flutter
+```
+
+### Ver estado del proyecto
+
+```bash
+gula status
+```
+
+### Validar configuracion
+
+```bash
+# Validar todos los configuration.gula
+gula validate
+
+# Validar solo archivos en staging (pre-commit)
+gula validate --staged
+
+# Instalar hook de pre-commit
+gula install-hook
+```
+
+## Plataformas soportadas
+
+| Plataforma | Descripcion |
+|------------|-------------|
+| Android | Proyectos nativos Android con Clean Architecture |
+| iOS | Proyectos nativos iOS con Clean Architecture |
+| Flutter | Aplicaciones multiplataforma Flutter |
+| Python | APIs backend con FastAPI o Django |
+
+## Arquitecturas disponibles
+
+- **Android & iOS**: Clean Architecture (Repository, UseCase, ViewModel)
+- **Flutter**: Clean Architecture (BLoC, Repository, UseCase)
+- **Python**: Arquitectura Hexagonal (Adaptadores y Puertos)
+
+## Notas
+
+- `template`: No requiere `--key` (usa templates locales)
+- `install/list`: Requiere `--key` para acceder a repositorios privados
+- `create`: Requiere `--key` para descargar arquetipos
+- Los comandos `list/install` detectan automaticamente el tipo de proyecto
+- Todas las operaciones se registran en `.gula.log` (formato JSON)
+- Use `gula status` para ver el historial de operaciones
 
 ## Contribuir
 
-Si deseas contribuir a este proyecto, no dudes en hacer un fork del repositorio, realizar tus modificaciones y enviar un pull request.
+Si deseas contribuir a este proyecto, haz un fork del repositorio, realiza tus modificaciones y envia un pull request.
 
 ## Licencia
 
-Este script es propiedad de Rudo Apps y está bajo los términos que se describen en el archivo de licencia adjunto (si corresponde).
-
-Este README proporciona una guía completa sobre cómo utilizar tu script, desde los requisitos previos hasta ejemplos de uso práctico.
+Este proyecto es propiedad de Rudo Apps y esta bajo licencia MIT.
