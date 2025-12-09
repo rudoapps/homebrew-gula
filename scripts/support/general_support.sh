@@ -624,7 +624,7 @@ copy_file() {
     mkdir -p "$path_without_folder"
   fi
   
-  echo -e "${YELLOW}📋 Copiando desde ${origin} a ${path_without_folder}${NC}"	
+  echo -e "${YELLOW}📋 Copiando desde ${origin} a ${path_without_folder}${NC}"
   cp -R "${origin}" "${path_without_folder}"
   if [ $? -eq 0 ]; then
     echo -e "✅ Copiado desde ${origin} a ${path_without_folder} correctamente"
@@ -637,5 +637,226 @@ copy_file() {
     ls -la "$path_without_folder" 2>/dev/null || echo "  - No se puede listar el destino"
     log_operation "install" "unknown" "${MODULE_NAME:-unknown}" "${BRANCH:-main}" "error" "Fallo al copiar archivo: $origin -> $path_without_folder"
     return 1
-  fi 
-}	
+  fi
+}
+
+# ============================================================================
+# FUNCIÓN: copy_files_integrated
+# ============================================================================
+# Copia un módulo integrándolo en la estructura de capas existente del proyecto.
+# En lugar de copiar el módulo como una carpeta separada, distribuye cada capa
+# (data, domain, presentation, di) en su correspondiente ubicación del proyecto.
+#
+# Parámetros:
+#   $1 - Ruta del módulo origen (ej: /tmp/gula-xxx/authentication)
+#   $2 - Ruta base del proyecto destino (ej: app/src/main/java/com/example/app)
+#   $3 - Nombre del módulo (ej: authentication)
+#   $4 - Plataforma (android, ios, flutter)
+#
+# Estructura esperada del módulo:
+#   Android: src/main/java/<package>/{data,domain,presentation,di}
+#   Flutter: lib/modules/<module>/{data,domain,presentation}
+#   iOS: Modules/<module>/{Data,Domain,Presentation}
+#
+# Resultado:
+#   Los archivos se copian a:
+#   - data/* -> <destino>/data/<module_name>/
+#   - domain/* -> <destino>/domain/<module_name>/
+#   - presentation/* -> <destino>/presentation/<module_name>/
+#   - di/* -> <destino>/di/<module_name>/
+# ============================================================================
+copy_files_integrated() {
+  local module_origin=$1
+  local project_base_path=$2
+  local module_name=$3
+  local platform=$4
+
+  echo -e "${BOLD}───────────────────────────────────────────────${NC}"
+  echo -e "${BOLD}🔀 MODO INTEGRACIÓN: Distribuyendo capas del módulo${NC}"
+  echo -e "${BOLD}───────────────────────────────────────────────${NC}"
+  echo -e "📦 Módulo: ${YELLOW}$module_name${NC}"
+  echo -e "📁 Destino base: ${YELLOW}$project_base_path${NC}"
+  echo ""
+
+  # Definir las capas según la plataforma
+  local layers=()
+  local source_base_path=""
+
+  case "$platform" in
+    "android")
+      # En Android, las capas están en src/main/java/<package>/
+      # Necesitamos encontrar el path dentro del módulo
+      source_base_path=$(find "$module_origin/src/main/java" -mindepth 1 -maxdepth 3 -type d -name "$module_name" 2>/dev/null | head -1)
+      if [ -z "$source_base_path" ]; then
+        # Fallback: buscar cualquier directorio con estructura de capas
+        source_base_path=$(find "$module_origin/src/main/java" -mindepth 1 -maxdepth 4 -type d \( -name "data" -o -name "domain" \) -exec dirname {} \; 2>/dev/null | sort -u | head -1)
+      fi
+      layers=("data" "domain" "presentation" "di")
+      ;;
+    "flutter")
+      source_base_path="$module_origin"
+      layers=("data" "domain" "presentation")
+      ;;
+    "ios")
+      source_base_path="$module_origin"
+      # iOS usa nombres capitalizados
+      layers=("Data" "Domain" "Presentation")
+      ;;
+    *)
+      echo -e "${RED}❌ Plataforma no soportada para modo integración: $platform${NC}"
+      return 1
+      ;;
+  esac
+
+  if [ -z "$source_base_path" ] || [ ! -d "$source_base_path" ]; then
+    echo -e "${RED}❌ No se encontró la estructura de capas en el módulo${NC}"
+    echo -e "${YELLOW}📝 Buscando en: $module_origin${NC}"
+    find "$module_origin" -type d -maxdepth 5 2>/dev/null | head -20
+    return 1
+  fi
+
+  echo -e "📂 Ruta base del módulo encontrada: ${GREEN}$source_base_path${NC}"
+  echo ""
+
+  local layers_copied=0
+  local layers_skipped=0
+
+  for layer in "${layers[@]}"; do
+    local source_layer="$source_base_path/$layer"
+    local layer_lower=$(echo "$layer" | tr '[:upper:]' '[:lower:]')
+    local dest_layer="$project_base_path/$layer_lower/$module_name"
+
+    echo -e "┌──────────────────────────────────────────"
+    echo -e "│ 📁 Capa: ${BOLD}$layer${NC}"
+
+    if [ -d "$source_layer" ]; then
+      echo -e "│ 📥 Origen: $source_layer"
+      echo -e "│ 📤 Destino: $dest_layer"
+
+      # Crear directorio destino si no existe
+      if [ ! -d "$dest_layer" ]; then
+        mkdir -p "$dest_layer"
+        echo -e "│ 📁 Creado directorio: $dest_layer"
+      fi
+
+      # Copiar contenido de la capa
+      if cp -R "$source_layer/." "$dest_layer/" 2>/dev/null; then
+        echo -e "│ ✅ Capa $layer copiada correctamente"
+        ((layers_copied++))
+      else
+        echo -e "│ ${RED}❌ Error al copiar capa $layer${NC}"
+      fi
+    else
+      echo -e "│ ${YELLOW}⚠️  Capa no encontrada, saltando${NC}"
+      ((layers_skipped++))
+    fi
+    echo -e "└──────────────────────────────────────────"
+    echo ""
+  done
+
+  # Copiar archivos de configuración del módulo (build.gradle, etc.)
+  echo -e "┌──────────────────────────────────────────"
+  echo -e "│ 📄 Archivos de configuración"
+
+  # Para Android, copiar build.gradle.kts si existe
+  if [ "$platform" == "android" ]; then
+    if [ -f "$module_origin/build.gradle.kts" ]; then
+      # En modo integración NO copiamos el build.gradle del módulo
+      # porque ya no es un módulo separado
+      echo -e "│ ${YELLOW}⚠️  build.gradle.kts ignorado (modo integración)${NC}"
+    fi
+    if [ -f "$module_origin/configuration.gula" ]; then
+      echo -e "│ ✅ configuration.gula disponible para dependencias"
+    fi
+  fi
+  echo -e "└──────────────────────────────────────────"
+
+  echo ""
+  echo -e "${GREEN}✅ Integración completada:${NC}"
+  echo -e "   • Capas copiadas: $layers_copied"
+  echo -e "   • Capas omitidas: $layers_skipped"
+  echo ""
+
+  return 0
+}
+
+# ============================================================================
+# FUNCIÓN: detect_project_source_path
+# ============================================================================
+# Detecta la ruta base del código fuente del proyecto según la plataforma.
+#
+# Parámetros:
+#   $1 - Plataforma (android, ios, flutter)
+#
+# Retorna:
+#   Imprime la ruta detectada o cadena vacía si no se encuentra
+# ============================================================================
+detect_project_source_path() {
+  local platform=$1
+  local detected_path=""
+
+  case "$platform" in
+    "android")
+      # Buscar el directorio base del código fuente Android
+      if [ -d "app/src/main/java" ]; then
+        # Encontrar el primer directorio que contenga código
+        detected_path=$(find "app/src/main/java" -mindepth 1 -maxdepth 4 -type d \( -name "data" -o -name "domain" -o -name "presentation" \) -exec dirname {} \; 2>/dev/null | sort -u | head -1)
+        if [ -z "$detected_path" ]; then
+          # Fallback: usar el path más profundo que contenga archivos .kt o .java
+          detected_path=$(find "app/src/main/java" -type f \( -name "*.kt" -o -name "*.java" \) -exec dirname {} \; 2>/dev/null | sort | head -1)
+          detected_path=$(dirname "$detected_path" 2>/dev/null || echo "")
+        fi
+      fi
+      ;;
+    "flutter")
+      if [ -d "lib" ]; then
+        detected_path="lib"
+      fi
+      ;;
+    "ios")
+      # Buscar directorio Gula o el proyecto principal
+      if [ -d "Gula" ]; then
+        detected_path="Gula"
+      else
+        # Buscar cualquier directorio .xcodeproj y usar su padre
+        local xcodeproj=$(find . -maxdepth 2 -name "*.xcodeproj" -type d | head -1)
+        if [ -n "$xcodeproj" ]; then
+          detected_path=$(dirname "$xcodeproj")
+        fi
+      fi
+      ;;
+  esac
+
+  echo "$detected_path"
+}
+
+# ============================================================================
+# FUNCIÓN: prompt_installation_mode
+# ============================================================================
+# Determina el modo de instalación a usar.
+# Por defecto usa modo módulo completo (--module).
+# Solo usa modo integración si se especifica --integrate explícitamente.
+#
+# Parámetros:
+#   $1 - Nombre del módulo
+#
+# Retorna:
+#   0 si modo normal (módulo completo) - POR DEFECTO
+#   1 si modo integración (por capas) - Solo con --integrate
+#
+# Flags relacionados:
+#   --integrate : Selecciona modo integración
+#   --module    : Selecciona modo módulo completo (por defecto, opcional)
+# ============================================================================
+prompt_installation_mode() {
+  local module_name=$1
+
+  # Si se especificó --integrate, usar modo integración
+  if [ "$INTEGRATE_MODE" == "true" ]; then
+    echo -e "${GREEN}✅ Modo integración (--integrate)${NC}"
+    return 1  # Modo integración
+  fi
+
+  # Por defecto: modo módulo completo
+  return 0
+}

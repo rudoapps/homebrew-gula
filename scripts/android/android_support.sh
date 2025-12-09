@@ -51,6 +51,13 @@ android_verify_module() {
 }
 
 android_create_modules_dir() {
+  # En modo integración, no creamos el directorio del módulo
+  # porque los archivos se distribuirán en las capas existentes
+  if [ "$INTEGRATE_MODE" == "true" ]; then
+    echo -e "${YELLOW}ℹ️  Modo integración: el módulo se distribuirá en la estructura existente${NC}"
+    return 0
+  fi
+
   EXISTS_THIS_DIR=${MODULE_NAME}
   if [ ! -d "$EXISTS_THIS_DIR" ]; then
     echo -e "${YELLOW}La carpeta '${MODULE_NAME}' no existe. Creándola...${NC}"
@@ -60,7 +67,7 @@ android_create_modules_dir() {
     else
       echo -e "${RED}Error: No se pudo crear la carpeta '${MODULE_NAME}'.${NC}"
       exit 1
-    fi 
+    fi
   fi
 }
 

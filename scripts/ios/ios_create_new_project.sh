@@ -94,19 +94,46 @@ ios_create_project() {
     # Cloning archetype
     echo -e "Clonando el repositorio del arquetipo de rudo..."
     get_token_for_ios
-    #if [ -z "$archVersion" ]
-    #then
-    #
-    if [ -n "${BRANCH:-}" ]; then
-        echo -e "🌿 Usando rama: $BRANCH"
-        git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"
+
+    # Verificar si la carpeta destino ya existe
+    if [ -d "$projectPath" ]; then
+        echo -e "📁 La carpeta destino ya existe: $projectPath"
+        echo -e "📥 Clonando contenido directamente en la carpeta existente..."
+
+        # Clonar en una carpeta temporal
+        local temp_clone_dir=$(mktemp -d)
+
+        if [ -n "${BRANCH:-}" ]; then
+            echo -e "🌿 Usando rama: $BRANCH"
+            git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$temp_clone_dir/repo"
+        else
+            git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$temp_clone_dir/repo"
+        fi
+        checkResult "Clonando archetype repository"
+
+        # Mover el contenido a la carpeta destino
+        # Usamos rsync para manejar archivos ocultos correctamente
+        if command -v rsync >/dev/null 2>&1; then
+            rsync -a "$temp_clone_dir/repo/" "$projectPath/"
+        else
+            # Fallback: usar cp con archivos ocultos
+            cp -R "$temp_clone_dir/repo/." "$projectPath/"
+        fi
+        checkResult "Moviendo contenido a carpeta destino"
+
+        # Limpiar carpeta temporal
+        rm -rf "$temp_clone_dir"
+        echo -e "✅ Contenido clonado en carpeta existente"
     else
-        git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"
-    fi    
-    #git clone $ARCH_REPO --branch master-arch --depth 1 $projectPath
-    #git clone $ARCH_REPO --branch $archVersion --depth 1 $projectPath
-    #fi
-    checkResult "Clonando archetype repository"
+        # Comportamiento normal: la carpeta no existe, git la crea
+        if [ -n "${BRANCH:-}" ]; then
+            echo -e "🌿 Usando rama: $BRANCH"
+            git clone --branch "$BRANCH" "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"
+        else
+            git clone "https://x-token-auth:$ACCESSTOKEN@bitbucket.org/rudoapps/architecture-ios.git" "$projectPath"
+        fi
+        checkResult "Clonando archetype repository"
+    fi
     echo "┌──────────────────────────────────────────────"
     echo "│"
     echo "│ ✅ Clonado completado"

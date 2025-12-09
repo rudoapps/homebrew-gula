@@ -1,0 +1,626 @@
+#!/bin/bash
+
+# Detectar si se usa --json antes de mostrar cualquier output
+JSON_OUTPUT="false"
+for arg in "$@"; do
+  if [ "$arg" = "--json" ]; then
+    JSON_OUTPUT="true"
+    break
+  fi
+done
+export JSON_OUTPUT
+
+HOMEBREW_PREFIX=$(brew --prefix)
+# Obtener el directorio donde está ubicado este script (para desarrollo local)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+scripts_dir="$SCRIPT_DIR/scripts"
+source "$scripts_dir/global_vars.sh"
+
+# Solo mostrar logo y mensajes si no está en modo JSON
+if [ "$JSON_OUTPUT" != "true" ]; then
+  source "$scripts_dir/support/logo.sh"
+
+  echo ""
+  echo -e "${BOLD}versión: ${VERSION}"
+  echo -e "${BOLD}propiedad: Rudo apps${NC}"
+
+  echo ""
+  echo -e "${BOLD}──────────────────────────────────────────────${NC}"
+  echo -e "${BOLD}Cargando prerequisitos:${NC}"
+  echo ""
+  if [ -z "$HOMEBREW_PREFIX" ]; then
+      echo "No se encontró el prefijo de Homebrew. Verifica si brew está instalado correctamente."
+  else
+      echo "✅ El prefijo de Homebrew es: $HOMEBREW_PREFIX"
+  fi
+
+  echo -e "✅ Ruta de homebrew: $scripts_dir"
+fi
+
+source "$scripts_dir/android/android.sh"
+source "$scripts_dir/android/android_support.sh"
+source "$scripts_dir/android/android_create_new_project.sh"
+source "$scripts_dir/android/android_template.sh"
+source "$scripts_dir/ios/ios.sh"
+source "$scripts_dir/ios/ios_support.sh"
+source "$scripts_dir/ios/ios_template.sh"
+source "$scripts_dir/ios/ios_create_new_project.sh"
+source "$scripts_dir/flutter/flutter.sh"
+source "$scripts_dir/flutter/flutter_support.sh"
+source "$scripts_dir/flutter/flutter_create_new_project.sh"
+source "$scripts_dir/flutter/flutter_template.sh"
+source "$scripts_dir/python/python.sh"
+source "$scripts_dir/python/python_create_project.sh"
+source "$scripts_dir/python/python_template.sh"
+source "$scripts_dir/support/general_support.sh"
+
+# Force reload list_branches to ensure we have the latest version
+unset -f list_branches 2>/dev/null
+source "$scripts_dir/support/general_support.sh"
+source "$scripts_dir/support/git.sh"
+source "$scripts_dir/support/network.sh"
+source "$scripts_dir/support/os.sh"
+source "$scripts_dir/support/validation.sh"
+
+# list_branches function loaded from general_support.sh
+
+if [ "$JSON_OUTPUT" != "true" ]; then
+  echo -e "✅ Imports cargados correctamente"
+  check_version
+  echo "──────────────────────────────────────────────"
+fi
+
+# Inicializar variables
+LIST_TEMPLATES="false"
+TEMPLATE_TYPE=""
+ARCHETYPE_TYPE=""
+FORCE_INSTALL="false"
+BATCH_MODE="false"
+INTEGRATE_MODE="false"
+INSTALL_MODE_SELECTED="false"  # Indica si el usuario ya eligió modo vía flag
+MODULE_NAMES=()
+export FORCE_INSTALL
+export BATCH_MODE
+export INTEGRATE_MODE
+export INSTALL_MODE_SELECTED
+
+function cleanup {
+    echo ""
+    echo -e "${YELLOW}🧹 Ejecutando limpieza...${NC}"
+    remove_temporary_dir
+}
+
+function cleanup_on_exit {
+    # Limpieza sin exit para evitar loop infinito
+    if [ -d "$TEMPORARY_DIR" ]; then
+        rm -rf "$TEMPORARY_DIR"
+    fi
+    
+    # Limpiar directorio temp-gula si existe
+    if [ -d "temp-gula" ]; then
+        echo -e "🗑️ Eliminando directorio temp-gula..."
+        rm -rf "temp-gula"
+    fi
+    
+    # Limpiar cualquier directorio temporal relacionado con arquetipo
+    for temp_dir in temp-archetype architecture-* temp-*; do
+        if [ -d "$temp_dir" ]; then
+            rm -rf "$temp_dir"
+        fi
+    done
+}
+
+# Asociar señales con las funciones de limpieza
+trap cleanup SIGINT SIGTERM
+trap cleanup_on_exit EXIT
+
+install_module() {
+  if check_type_of_project; then
+    type=0
+  else
+    type=$?
+  fi
+
+  if [ "$BATCH_MODE" = "true" ]; then
+    # Modo batch: instalar múltiples módulos
+    case "$type" in
+      0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; install_android_modules_batch ;;
+      1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     install_ios_modules_batch ;;
+      2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  install_flutter_modules_batch ;;
+      3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   install_python_modules_batch ;;
+      *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
+    esac
+  else
+    # Modo individual: instalar un solo módulo
+    case "$type" in
+      0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; install_android_module ;;
+      1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     install_ios_module ;;
+      2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  install_flutter_module ;;
+      3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   install_python_module ;;
+      *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
+    esac
+  fi
+}
+
+show_help() {
+  echo ""
+  echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+  echo -e "${BOLD}                    GULA - AYUDA                 ${NC}"
+  echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+  echo ""
+  echo -e "${BOLD}DESCRIPCIÓN:${NC}"
+  echo "  Herramienta CLI para acelerar el desarrollo con arquetípicos y módulos"
+  echo "  predefinidos. Soporta proyectos Android, iOS, Flutter y Python."
+  echo ""
+  echo -e "${BOLD}USO:${NC}"
+  echo "  gula <comando> [opciones]"
+  echo ""
+  echo -e "${BOLD}COMANDOS PRINCIPALES:${NC}"
+  echo ""
+  echo -e "${BOLD}  list${NC}     Lista módulos disponibles para el proyecto actual"
+  echo -e "${BOLD}  install${NC}  Instala un módulo específico en el proyecto actual"
+  echo -e "${BOLD}  create${NC}   Crea un nuevo proyecto con arquitectura predefinida"
+  echo -e "${BOLD}  template${NC} Genera templates con arquitecturas predefinidas"
+  echo -e "${BOLD}  branches${NC} Lista ramas disponibles en repositorios de módulos o arquetipos"
+  echo -e "${BOLD}  status${NC}   Muestra el estado del proyecto y módulos instalados"
+  echo -e "${BOLD}  validate${NC} Valida archivos configuration.gula del proyecto"
+  echo -e "${BOLD}  install-hook${NC} Instala pre-commit hook para validar configuration.gula"
+  echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
+  echo ""
+  echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
+  echo ""
+  echo -e "${BOLD}  --key=XXXX${NC}      Clave de acceso para repositorios privados (requerida para install/list/create/branches)"
+  echo -e "${BOLD}  --branch=YYYY${NC}    Rama específica del repositorio (opcional para install/list/create)"
+  echo -e "${BOLD}  --type=ZZZZ${NC}     Tipo de template: clean|fastapi (para template)"
+  echo -e "${BOLD}  --archetype=ZZZZ${NC} Plataforma de arquetipos: android|ios|flutter|python (para branches)"
+  echo -e "${BOLD}  --force${NC}         Forzar reinstalación sin confirmar (para install)"
+  echo -e "${BOLD}  --module${NC}        Instalar como módulo completo sin preguntar (modo por defecto)"
+  echo -e "${BOLD}  --integrate${NC}     Integrar en estructura existente sin preguntar (data→data, domain→domain, etc.)"
+  echo -e "${BOLD}  --list${NC}          Lista todos los templates disponibles (para template)"
+  echo -e "${BOLD}  --help, -h${NC}      Muestra esta ayuda"
+  echo ""
+  echo -e "${BOLD}EJEMPLOS DE USO:${NC}"
+  echo ""
+  echo -e "${BOLD}  Listar módulos disponibles:${NC}"
+  echo "  gula list --key=mi_clave_secreta"
+  echo "  gula list --key=mi_clave --branch=development"
+  echo ""
+  echo -e "${BOLD}  Instalar uno o más módulos:${NC}"
+  echo "  gula install authentication --key=mi_clave_secreta"
+  echo "  gula install network --key=mi_clave --branch=feature-branch"
+  echo "  gula install network --key=mi_clave --tag=v1.0.0"
+  echo "  gula install authentication --key=mi_clave --force     # Reinstalar sin confirmar"
+  echo "  gula install authentication --key=mi_clave --module    # Módulo completo (sin preguntar)"
+  echo "  gula install authentication --key=mi_clave --integrate # Integrar en capas (sin preguntar)"
+  echo ""
+  echo -e "${BOLD}  Instalar múltiples módulos (batch):${NC}"
+  echo "  gula install login,wallet,payments --key=mi_clave_secreta"
+  echo "  gula install network,auth,database --key=mi_clave --branch=develop"
+  echo "  gula install user,product,order --key=mi_clave --tag=v2.0.0"
+  echo "  ${YELLOW}# Nota: En modo batch, el repositorio se clona una sola vez${NC}"
+  echo "  ${YELLOW}# Flutter ejecuta pub get y build_runner solo al final${NC}"
+  echo ""
+  echo -e "${BOLD}  Crear nuevos proyectos:${NC}"
+  echo "  gula create android --key=mi_clave_secreta"
+  echo "  gula create flutter --key=mi_clave_secreta"
+  echo "  gula create ios --key=mi_clave_secreta"
+  echo "  gula create python --key=mi_clave_secreta"
+  echo ""
+  echo -e "${BOLD}  Generar templates:${NC}"
+  echo "  gula template user"
+  echo "  gula template product --type=clean"
+  echo "  gula template user,product,order    # Múltiples templates"
+  echo "  gula template --list               # Ver todos los templates disponibles"
+  echo ""
+  echo -e "${BOLD}  Listar ramas disponibles:${NC}"
+  echo "  gula branches --key=mi_clave                    # Auto-detecta el tipo de proyecto"
+  echo "  gula branches --key=mi_clave --archetype=flutter # Para consultar arquetipos"
+  echo ""
+  echo -e "${BOLD}  Ver estado del proyecto:${NC}"
+  echo "  gula status                                     # Muestra módulos instalados y logs"
+  echo ""
+  echo -e "${BOLD}  Validar configuration.gula:${NC}"
+  echo "  gula validate                                   # Valida todos los configuration.gula del proyecto"
+  echo "  gula validate --staged                          # Valida solo los archivos en staging (pre-commit)"
+  echo ""
+  echo -e "${BOLD}  Instalar pre-commit hook:${NC}"
+  echo "  gula install-hook                               # Instala hook para validar en cada commit"
+  echo ""
+  echo -e "${BOLD}TIPOS DE PROYECTO SOPORTADOS:${NC}"
+  echo ""
+  echo -e "${BOLD}  📱 Android${NC}   - Proyectos nativos Android con Clean Architecture"
+  echo -e "${BOLD}  🍎 iOS${NC}       - Proyectos nativos iOS con Clean Architecture"
+  echo -e "${BOLD}  🦋 Flutter${NC}   - Aplicaciones multiplataforma Flutter"
+  echo -e "${BOLD}  🐍 Python${NC}    - APIs backend con FastAPI o Django"
+  echo ""
+  echo -e "${BOLD}ARQUITECTURAS DISPONIBLES:${NC}"
+  echo ""
+  echo -e "${BOLD}  📱 Android & iOS${NC}     - Clean Architecture (Repository, UseCase, ViewModel)"
+  echo -e "${BOLD}  🦋 Flutter${NC}           - Clean Architecture (BLoC, Repository, UseCase)"
+  echo -e "${BOLD}  🐍 Python${NC}            - Arquitectura Hexagonal (Adaptadores y Puertos)"
+  echo ""
+  echo -e "${BOLD}NOTAS:${NC}"
+  echo ""
+  echo "  • ${BOLD}template${NC}: No requiere --key (usa templates locales)"
+  echo "  • ${BOLD}install/list${NC}: Requiere --key para acceder a repositorios privados"
+  echo "  • ${BOLD}create${NC}: Requiere --key para descargar arquetipos"
+  echo "  • ${BOLD}validate${NC}: Valida archivos configuration.gula del proyecto"
+  echo "  • ${BOLD}install-hook${NC}: Instala pre-commit hook para validación automática"
+  echo "  • La opción --branch permite usar ramas específicas en install/list/create"
+  echo "  • La opción --force permite reinstalar módulos sin confirmación"
+  echo "  • Los comandos list/install detectan automáticamente el tipo de proyecto actual"
+  echo "  • El comando create requiere especificar la plataforma (android/ios/flutter/python)"
+  echo "  • Todas las operaciones se registran en el archivo .gula.log (formato JSON)"
+  echo "  • Use 'gula status' para ver el historial de operaciones y módulos instalados"
+  echo ""
+  echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+}
+
+help_modules() {
+  show_help
+}
+
+list_modules() {
+  if check_type_of_project; then
+    type=0
+  else
+    type=$?
+  fi
+
+  case "$type" in
+    0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; list_android ;;
+    1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     list_ios ;;
+    2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  list_flutter ;;
+    3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   list_python ;;
+    *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
+  esac
+}
+
+list_templates() {
+  if [ "$LIST_TEMPLATES" = "true" ]; then
+    echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}           TEMPLATES DISPONIBLES                ${NC}"
+    echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${BOLD}📱 Android:${NC}"
+    echo "  • clean - Clean Architecture (Repository, UseCase, ViewModel)"
+    echo ""
+    echo -e "${BOLD}🍎 iOS:${NC}"
+    echo "  • clean - Clean Architecture (SwiftUI + Repository + UseCase)"
+    echo ""
+    echo -e "${BOLD}🦋 Flutter:${NC}"
+    echo "  • clean - Clean Architecture (BLoC + Repository + UseCase)"
+    echo ""
+    echo -e "${BOLD}🐍 Python:${NC}"
+    echo "  • fastapi - Arquitectura Hexagonal (Adaptadores y Puertos Driven/Driving)"
+    echo ""
+    echo -e "${BOLD}Uso:${NC}"
+    echo "  gula template <nombre> [--type=clean]"
+    echo ""
+    echo -e "${BOLD}Ejemplos:${NC}"
+    echo "  gula template user"
+    echo "  gula template product --type=clean"
+    echo "  gula template user,product,order"
+    echo ""
+    echo -e "${BOLD}═══════════════════════════════════════════════${NC}"
+    exit 0
+  fi
+}
+
+install_single_template() {
+  local template_name=$1
+  
+  if check_type_of_project; then
+    type=0
+  else
+    type=$?
+  fi
+
+  # Guardar MODULE_NAME original y asignar el template actual
+  local original_module_name="$MODULE_NAME"
+  MODULE_NAME="$template_name"
+
+  case "$type" in
+    0) echo -e "${GREEN}Te encuentras en un proyecto Android${NC}"; install_templates_android ;;
+    1) echo -e "${GREEN}Te encuentras en un proyecto IOS${NC}";     install_templates_ios ;;
+    2) echo -e "${GREEN}Te encuentras en un proyecto Flutter${NC}";  install_templates_flutter ;;
+    3) echo -e "${GREEN}Te encuentras en un proyecto Python${NC}";   install_templates_python ;;
+    *) echo -e "${RED}Error: No te encuentras en un proyecto válido.${NC}"; exit 1 ;;
+  esac
+  
+  # Restaurar MODULE_NAME original
+  MODULE_NAME="$original_module_name"
+}
+
+install_template() {
+  # Verificar si MODULE_NAME contiene comas (múltiples templates)
+  if [[ "$MODULE_NAME" == *","* ]]; then
+    echo -e "${BOLD}───────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}🚀 GENERACIÓN BATCH DE TEMPLATES${NC}"
+    echo -e "${BOLD}───────────────────────────────────────────────${NC}"
+    echo ""
+    
+    # Dividir MODULE_NAME por comas
+    IFS=',' read -ra TEMPLATES <<< "$MODULE_NAME"
+    
+    echo -e "${YELLOW}Se generarán ${#TEMPLATES[@]} templates: ${TEMPLATES[*]}${NC}"
+    echo ""
+    
+    for template in "${TEMPLATES[@]}"; do
+      # Limpiar espacios en blanco
+      template=$(echo "$template" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      
+      if [ -n "$template" ]; then
+        echo -e "${BOLD}📝 Generando template: $template${NC}"
+        install_single_template "$template"
+        echo ""
+      fi
+    done
+    
+    echo -e "${GREEN}✅ Todos los templates han sido generados correctamente!${NC}"
+  else
+    # Un solo template
+    install_single_template "$MODULE_NAME"
+  fi
+}
+
+create_project() {
+  echo ""
+  if [[ "$MODULE_NAME" == "ios" ]]; then
+    echo -e "${GREEN}Empezando la instalación del arquetipo para ios${NC}"
+    echo ""
+    ios_create_project
+  elif [[ "$MODULE_NAME" == "android" ]]; then
+    echo -e "${GREEN}Empezando la instalación del arquetipo para android${NC}"
+    echo ""
+    android_create_project
+  elif [[ "$MODULE_NAME" == "flutter" ]]; then
+    echo -e "${GREEN}Empezando la instalación del arquetipo para Flutter${NC}"
+    echo ""
+    flutter_create_project
+  elif [[ "$MODULE_NAME" == "python" ]]; then
+    echo -e "${GREEN}Empezando la instalación del arquetipo para Python${NC}"
+    echo ""
+    python_create_project
+  else 
+    echo -e "${RED}Error: solo esta permitido como opción: ios, android, flutter o python.${NC}"
+    echo ""
+    exit 0
+  fi  
+}
+
+
+# Verificar que se haya pasado un comando válido
+if [ -z "$1" ]; then
+  echo "Uso: $0 {install|list|template|create|branches|status|validate|install-hook|help} [opciones]"
+  echo "Usa '$0 --help' para más información."
+  exit 1
+fi
+
+# Procesar los argumentos
+COMMAND="$1"
+# Manejar --help como primer argumento
+if [[ "$COMMAND" == "--help" || "$COMMAND" == "-h" ]]; then
+  COMMAND="help"
+fi
+
+# Manejar caso especial: gula template --list
+if [[ "$COMMAND" == "template" && "$2" == "--list" ]]; then
+  LIST_TEMPLATES="true"
+  MODULE_NAME=""
+elif [[ "$COMMAND" == "template" && -n "$2" && "$2" != "--list" ]]; then
+  MODULE_NAME="$2"
+fi
+
+# Manejar caso especial: gula validate --staged
+VALIDATE_STAGED="false"
+if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
+  VALIDATE_STAGED="true"
+fi
+
+shift
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --key=*)
+      KEY="${1#*=}"
+      ;;
+    --branch=*)
+      BRANCH="${1#*=}"
+      ;;
+    --type=*)
+      TEMPLATE_TYPE="${1#*=}"
+      ;;
+    --archetype=*)
+      ARCHETYPE_TYPE="${1#*=}"
+      ;;
+    --json)
+      JSON_OUTPUT="true"
+      ;;
+    --force)
+      FORCE_INSTALL="true"
+      export FORCE_INSTALL
+      ;;
+    --integrate)
+      INTEGRATE_MODE="true"
+      INSTALL_MODE_SELECTED="true"
+      export INTEGRATE_MODE
+      export INSTALL_MODE_SELECTED
+      ;;
+    --module)
+      INTEGRATE_MODE="false"
+      INSTALL_MODE_SELECTED="true"
+      export INTEGRATE_MODE
+      export INSTALL_MODE_SELECTED
+      ;;
+    --list)
+      LIST_TEMPLATES="true"
+      ;;
+    --help|-h)
+      COMMAND="help"
+      ;;
+    install)
+      COMMAND="install"
+      if [ -n "${2:-}" ]; then
+        # Detectar si hay múltiples módulos separados por comas
+        if [[ "$2" == *","* ]]; then
+          # Modo batch: convertir string "mod1,mod2,mod3" a array
+          IFS=',' read -ra MODULE_NAMES <<< "$2"
+          BATCH_MODE="true"
+        else
+          # Modo individual
+          MODULE_NAME="$2"
+          BATCH_MODE="false"
+        fi
+        shift
+      fi
+      ;;
+    list)
+      COMMAND="list"
+      ;;
+    branches)
+      COMMAND="branches"
+      ;;
+    status)
+      COMMAND="status"
+      ;;
+    validate)
+      COMMAND="validate"
+      ;;
+    install-hook)
+      COMMAND="install-hook"
+      ;;
+    help)
+      COMMAND="help"
+      ;;
+    create)
+      COMMAND="create"
+      if [ -n "${2:-}" ]; then
+        MODULE_NAME="$2"
+        shift
+      fi
+      ;;
+    template)
+      COMMAND="template"
+      MODULE_NAME="$2"
+      shift
+      ;;
+    *)
+      MODULE_NAME="$1"
+      ;;
+  esac
+  shift
+done  
+
+# Limpiar directorio temporal antes de ejecutar cualquier comando
+cleanup_temp_directory
+
+if [ "$COMMAND" == "install" ]; then
+  if [ -z "$MODULE_NAME" ]; then
+    echo "Uso: $0 install <module_name> [--key=xxxx]"
+    exit 1
+  fi
+  install_module "$MODULE_NAME"
+elif [ "$COMMAND" == "list" ]; then
+  list_modules
+elif [ "$COMMAND" == "help" ]; then
+  show_help
+elif [ "$COMMAND" == "template" ]; then
+  if [ "$LIST_TEMPLATES" == "true" ]; then
+    list_templates
+  elif [ -z "$MODULE_NAME" ]; then
+    echo "Uso: $0 template <module_name> [--type=clean] [--list]"
+    exit 1
+  else
+    install_template "$MODULE_NAME"
+  fi
+elif [ "$COMMAND" == "create" ]; then
+  if [ -z "$MODULE_NAME" ]; then
+    echo "Uso: $0 create <platform {ios}>"
+    exit 1
+  fi
+  create_project "$MODULE_NAME"
+elif [ "$COMMAND" == "branches" ]; then
+  if [ -z "$KEY" ]; then
+    if [ "$JSON_OUTPUT" = "true" ]; then
+      echo "{\"status\":\"error\",\"message\":\"KEY requerida\"}"
+    else
+      echo "Uso: $0 branches --key=xxxx [--archetype=<platform>] [--json]"
+      echo "Plataformas válidas para archetype: android, ios, flutter, python"
+    fi
+    exit 1
+  fi
+
+  # Determinar formato de salida
+  output_format="normal"
+  if [ "$JSON_OUTPUT" = "true" ]; then
+    output_format="json"
+  fi
+
+  if [ -n "$ARCHETYPE_TYPE" ]; then
+    # Consultar ramas de arquetipos
+    get_access_token "$KEY" "$ARCHETYPE_TYPE"
+    list_branches "archetype-$ARCHETYPE_TYPE" "$output_format"
+  else
+    # Detectar automáticamente el tipo de proyecto
+    if check_type_of_project; then
+      type=0
+    else
+      type=$?
+    fi
+
+    case "$type" in
+      0)
+        if [ "$JSON_OUTPUT" != "true" ]; then
+          echo -e "${GREEN}Detectado proyecto Android${NC}"
+        fi
+        get_access_token "$KEY" "android"
+        list_branches "android" "$output_format"
+        ;;
+      1)
+        if [ "$JSON_OUTPUT" != "true" ]; then
+          echo -e "${GREEN}Detectado proyecto iOS${NC}"
+        fi
+        get_access_token "$KEY" "ios"
+        list_branches "ios" "$output_format"
+        ;;
+      2)
+        if [ "$JSON_OUTPUT" != "true" ]; then
+          echo -e "${GREEN}Detectado proyecto Flutter${NC}"
+        fi
+        get_access_token "$KEY" "flutter"
+        list_branches "flutter" "$output_format"
+        ;;
+      3)
+        if [ "$JSON_OUTPUT" != "true" ]; then
+          echo -e "${GREEN}Detectado proyecto Python${NC}"
+        fi
+        get_access_token "$KEY" "back"
+        list_branches "python" "$output_format"
+        ;;
+      *)
+        if [ "$JSON_OUTPUT" = "true" ]; then
+          echo "{\"status\":\"error\",\"message\":\"No se detectó un tipo de proyecto válido\"}"
+        else
+          echo -e "${RED}Error: No se detectó un tipo de proyecto válido.${NC}"
+          echo "Si quieres consultar ramas de arquetipos usa: $0 branches --key=xxxx --archetype=<platform>"
+        fi
+        exit 1
+        ;;
+    esac
+  fi
+elif [ "$COMMAND" == "status" ]; then
+  show_project_status
+elif [ "$COMMAND" == "validate" ]; then
+  if [ "$VALIDATE_STAGED" == "true" ]; then
+    validate_staged_configurations
+  else
+    validate_configuration_files
+  fi
+elif [ "$COMMAND" == "install-hook" ]; then
+  install_validation_hook
+else
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|install-hook|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Usa '$0 --help' para obtener ayuda detallada."
+  exit 1
+fi

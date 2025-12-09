@@ -91,8 +91,20 @@ install_android_modules_batch() {
     fi
 
     # Copiar el módulo al proyecto destino
-    echo -e "${YELLOW}Inicio copiado del módulo ${TEMPORARY_DIR}/${MODULE_NAME} en: ${MODULE_NAME}${NC}"
-    copy_files "${TEMPORARY_DIR}/${MODULE_NAME}" "."
+    if [ "$INTEGRATE_MODE" == "true" ]; then
+      # Modo integración: distribuir capas en la estructura existente
+      echo -e "${YELLOW}🔀 Modo integración: distribuyendo ${MODULE_NAME}${NC}"
+      local project_source_path=$(detect_project_source_path "android")
+      if [ -n "$project_source_path" ]; then
+        copy_files_integrated "${TEMPORARY_DIR}/${MODULE_NAME}" "$project_source_path" "$MODULE_NAME" "android"
+      else
+        echo -e "${RED}❌ No se pudo detectar la estructura del proyecto, usando modo normal${NC}"
+        copy_files "${TEMPORARY_DIR}/${MODULE_NAME}" "."
+      fi
+    else
+      echo -e "${YELLOW}Inicio copiado del módulo ${TEMPORARY_DIR}/${MODULE_NAME} en: ${MODULE_NAME}${NC}"
+      copy_files "${TEMPORARY_DIR}/${MODULE_NAME}" "."
+    fi
     echo -e "${GREEN}✅ Módulo $MODULE_NAME copiado${NC}"
 
     # Instalar dependencias del módulo
@@ -277,8 +289,29 @@ install_android_module() {
   echo -e "${BOLD}-----------------------------------------------${NC}"
   echo -e "${BOLD}STEP6 - Copiar ficheros al proyecto.${NC}"
   echo -e "${BOLD}-----------------------------------------------${NC}"
-  echo -e "${YELLOW}Inicio copiado de del módulo ${TEMPORARY_DIR}/${MODULE_NAME} en: ${MODULE_NAME}${NC}"
-  copy_files "${TEMPORARY_DIR}/${MODULE_NAME}" "."
+
+  # Preguntar al usuario el modo de instalación si no se especificó --integrate
+  prompt_installation_mode "$MODULE_NAME"
+  local install_mode=$?
+
+  if [ "$INTEGRATE_MODE" == "true" ]; then
+    # Modo integración: distribuir capas en la estructura existente
+    echo -e "${YELLOW}🔀 Modo integración activado${NC}"
+    local project_source_path=$(detect_project_source_path "android")
+    if [ -z "$project_source_path" ]; then
+      echo -e "${RED}❌ No se pudo detectar la estructura del proyecto Android${NC}"
+      echo -e "${YELLOW}Asegúrate de estar en un proyecto Android con estructura Clean Architecture${NC}"
+      echo -e "${YELLOW}Se esperan carpetas: app/src/main/java/<package>/{data,domain,presentation}${NC}"
+      remove_temporary_dir
+      exit 1
+    fi
+    echo -e "📂 Ruta detectada del proyecto: ${GREEN}$project_source_path${NC}"
+    copy_files_integrated "${TEMPORARY_DIR}/${MODULE_NAME}" "$project_source_path" "$MODULE_NAME" "android"
+  else
+    # Modo normal: copiar módulo completo
+    echo -e "${YELLOW}Inicio copiado de del módulo ${TEMPORARY_DIR}/${MODULE_NAME} en: ${MODULE_NAME}${NC}"
+    copy_files "${TEMPORARY_DIR}/${MODULE_NAME}" "."
+  fi
 
    # Renombrar los imports en los archivos .java y .kt del módulo copiado
   echo -e "${BOLD}-----------------------------------------------${NC}"
