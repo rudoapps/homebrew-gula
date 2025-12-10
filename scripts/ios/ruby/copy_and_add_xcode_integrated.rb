@@ -130,13 +130,10 @@ def create_groups_for_integrated(xcodeproj_path, app_name, base_destination, lay
   project = Xcodeproj::Project.open(xcodeproj_path)
   root_group = project.main_group.find_subpath(app_name, false) || project.main_group.new_group(app_name, app_name)
 
-  # Crear grupo para la capa (Data, Domain, etc.)
+  # Crear grupo para la capa (Data, Domain, etc.) - sin subcarpeta del módulo
   layer_group = root_group.find_subpath(layer_name, false) || root_group.new_group(layer_name, layer_name)
 
-  # Crear grupo para el módulo dentro de la capa
-  module_group = layer_group.find_subpath(module_name, false) || layer_group.new_group(module_name, module_name)
-
-  destination = "#{base_destination}/#{layer_name}/#{module_name}"
+  destination = "#{base_destination}/#{layer_name}"
 
   return unless Dir.exist?(destination)
 
@@ -146,7 +143,7 @@ def create_groups_for_integrated(xcodeproj_path, app_name, base_destination, lay
 
     relative_path = item.sub("#{destination}/", "")
     path_components = relative_path.split("/")
-    group = module_group
+    group = layer_group
 
     # Crear subgrupos según la estructura de directorios
     path_components[0..-2].each do |component|
@@ -159,7 +156,7 @@ def create_groups_for_integrated(xcodeproj_path, app_name, base_destination, lay
     if !existing_ref
       file_ref = group.new_reference(file_name)
       project.targets.first.add_file_references([file_ref])
-      puts "✅ Referencia añadida: #{file_name} en #{layer_name}/#{module_name}/#{path_components[0..-2].join('/')}"
+      puts "✅ Referencia añadida: #{file_name} en #{layer_name}/#{path_components[0..-2].join('/')}"
     end
   end
 
@@ -192,14 +189,16 @@ def main
   total_files = 0
   layers.each do |layer|
     origin_folder = "#{module_origin}/#{layer}"
-    destination_folder = "#{base_destination}/#{layer}/#{module_name}"
+    # Copiar directamente a la capa sin subcarpeta del módulo
+    # Ej: Data/Datasource/... en lugar de Data/Authentication/Datasource/...
+    destination_folder = "#{base_destination}/#{layer}"
 
     files = copy_folder_integrated(origin_folder, destination_folder, layer)
     total_files += files
 
     # Añadir a Xcode (solo para Xcode 15 o inferior)
     if project_created_with_xcode == 15
-      puts "✅ Integrando #{layer}/#{module_name} en proyecto Xcode..."
+      puts "✅ Integrando #{layer} en proyecto Xcode..."
       create_groups_for_integrated(xcodeproj_path, app_name, base_destination, layer, module_name)
     end
   end
