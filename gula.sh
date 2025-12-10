@@ -121,6 +121,13 @@ install_module() {
     type=$?
   fi
 
+  # Validar que --integrate solo se use con iOS
+  if [ "$INTEGRATE_MODE" == "true" ] && [ "$type" != "1" ]; then
+    echo -e "${RED}Error: La opción --integrate solo está disponible para proyectos iOS.${NC}"
+    echo -e "${YELLOW}Para proyectos Android, Flutter o Python, usa el modo por defecto (--module).${NC}"
+    exit 1
+  fi
+
   if [ "$BATCH_MODE" = "true" ]; then
     # Modo batch: instalar múltiples módulos
     case "$type" in
@@ -175,7 +182,7 @@ show_help() {
   echo -e "${BOLD}  --archetype=ZZZZ${NC} Plataforma de arquetipos: android|ios|flutter|python (para branches)"
   echo -e "${BOLD}  --force${NC}         Forzar reinstalación sin confirmar (para install)"
   echo -e "${BOLD}  --module${NC}        Instalar como módulo completo sin preguntar (modo por defecto)"
-  echo -e "${BOLD}  --integrate${NC}     Integrar en estructura existente sin preguntar (data→data, domain→domain, etc.)"
+  echo -e "${BOLD}  --integrate${NC}     [Solo iOS] Integrar en estructura existente (data→data, domain→domain, etc.)"
   echo -e "${BOLD}  --list${NC}          Lista todos los templates disponibles (para template)"
   echo -e "${BOLD}  --help, -h${NC}      Muestra esta ayuda"
   echo ""
@@ -191,7 +198,7 @@ show_help() {
   echo "  gula install network --key=mi_clave --tag=v1.0.0"
   echo "  gula install authentication --key=mi_clave --force     # Reinstalar sin confirmar"
   echo "  gula install authentication --key=mi_clave --module    # Módulo completo (sin preguntar)"
-  echo "  gula install authentication --key=mi_clave --integrate # Integrar en capas (sin preguntar)"
+  echo "  gula install authentication --key=mi_clave --integrate # [iOS] Integrar en capas"
   echo ""
   echo -e "${BOLD}  Instalar múltiples módulos (batch):${NC}"
   echo "  gula install login,wallet,payments --key=mi_clave_secreta"

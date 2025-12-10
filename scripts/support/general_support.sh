@@ -177,15 +177,40 @@ log_installed_module() {
     source="$BRANCH"
   fi
 
+  # Determinar el modo de instalación
+  local install_mode="module"
+  if [ "$INTEGRATE_MODE" == "true" ]; then
+    install_mode="integrate"
+  fi
+
   if command -v jq >/dev/null 2>&1; then
     local temp_file=$(mktemp)
     jq ".installed_modules[\"$platform:$module_name\"] = {
       \"platform\": \"$platform\",
       \"module\": \"$module_name\",
       \"source\": \"$source\",
+      \"install_mode\": \"$install_mode\",
       \"installed_at\": \"$timestamp\",
       \"gula_version\": \"$VERSION\"
     }" "$GULA_LOG_FILE" > "$temp_file" && mv "$temp_file" "$GULA_LOG_FILE"
+  fi
+}
+
+# Función para obtener el modo de instalación de un módulo
+get_module_install_mode() {
+  local platform=$1
+  local module_name=$2
+
+  if [ ! -f "$GULA_LOG_FILE" ]; then
+    echo "module"
+    return
+  fi
+
+  if command -v jq >/dev/null 2>&1; then
+    local mode=$(jq -r ".installed_modules[\"$platform:$module_name\"].install_mode // \"module\"" "$GULA_LOG_FILE" 2>/dev/null)
+    echo "${mode:-module}"
+  else
+    echo "module"
   fi
 }
 
@@ -289,40 +314,73 @@ handle_module_reinstallation() {
   local platform=$1
   local module_name=$2
   local new_branch=${3:-"main"}
-  
+
+  # Obtener el modo de instalación anterior
+  local previous_mode=$(get_module_install_mode "$platform" "$module_name")
+
+  # Determinar el modo actual solicitado
+  local current_mode="module"
+  if [ "$INTEGRATE_MODE" == "true" ]; then
+    current_mode="integrate"
+  fi
+
   # Si se usa --force, reinstalar automáticamente sin preguntar
   if [ "$FORCE_INSTALL" == "true" ]; then
-    echo -e "${YELLOW}⚠️  Módulo ya instalado, reinstalando con --force${NC}"
-    log_operation "reinstall" "$platform" "$module_name" "$new_branch" "started" "Reinstalación forzada con --force"
+    # Si no se especificó modo explícitamente, usar el modo anterior
+    if [ "$INSTALL_MODE_SELECTED" != "true" ]; then
+      if [ "$previous_mode" == "integrate" ]; then
+        INTEGRATE_MODE="true"
+        export INTEGRATE_MODE
+        echo -e "${YELLOW}⚠️  Módulo ya instalado en modo integrate, reinstalando con mismo modo${NC}"
+      else
+        echo -e "${YELLOW}⚠️  Módulo ya instalado, reinstalando con --force${NC}"
+      fi
+    else
+      # Se especificó modo explícitamente, verificar si es diferente
+      if [ "$previous_mode" != "$current_mode" ]; then
+        echo -e "${YELLOW}⚠️  Cambiando modo de instalación: $previous_mode → $current_mode${NC}"
+      fi
+    fi
+    log_operation "reinstall" "$platform" "$module_name" "$new_branch" "started" "Reinstalación forzada con --force (modo: $current_mode)"
     return 0
   fi
-  
+
   echo ""
   echo -e "${YELLOW}⚠️  MÓDULO YA INSTALADO${NC}"
   echo -e "${BOLD}───────────────────────────────────────────────${NC}"
   echo -e "${BOLD}Módulo:${NC} $module_name"
   echo -e "${BOLD}Plataforma:${NC} $platform"
-  
+  echo -e "${BOLD}Modo instalación anterior:${NC} $previous_mode"
+
   local info=$(get_installed_module_info "$platform" "$module_name")
   if [ -n "$info" ]; then
     echo -e "${BOLD}Estado actual:${NC} $info"
   fi
-  
+
   echo -e "${BOLD}Nueva rama solicitada:${NC} $new_branch"
+  if [ "$INSTALL_MODE_SELECTED" == "true" ]; then
+    echo -e "${BOLD}Nuevo modo solicitado:${NC} $current_mode"
+  fi
   echo ""
-  
+
   echo -e "${BOLD}¿Qué deseas hacer?${NC}"
   echo "  1) Reinstalar (sobrescribir)"
   echo "  2) Cancelar instalación"
   echo ""
   echo -e "${YELLOW}💡 Tip: Usa --force para reinstalar automáticamente sin confirmar${NC}"
   echo ""
-  
+
   while true; do
     read -p "Selecciona una opción (1-2): " choice < /dev/tty
     case $choice in
       1)
         echo -e "${GREEN}🔄 Procediendo con la reinstalación...${NC}"
+        # Si no se especificó modo explícitamente, usar el modo anterior
+        if [ "$INSTALL_MODE_SELECTED" != "true" ] && [ "$previous_mode" == "integrate" ]; then
+          INTEGRATE_MODE="true"
+          export INTEGRATE_MODE
+          echo -e "${GREEN}📦 Manteniendo modo de instalación: integrate${NC}"
+        fi
         log_operation "reinstall" "$platform" "$module_name" "$new_branch" "started" "Sobrescribiendo instalación existente"
         return 0  # Continuar con instalación
         ;;

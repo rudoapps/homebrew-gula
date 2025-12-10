@@ -128,6 +128,10 @@ install_ios_module() {
     	echo -e "${RED}Esta funcionalidad solo puede ser ejecutada en macOS.${NC}"
 		exit 0
 	fi
+
+	# Capitalizar primera letra del nombre del módulo para iOS (antes de verificar instalación)
+	MODULE_NAME="$(echo "${MODULE_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${MODULE_NAME:1}"
+
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 	echo -e "${BOLD}Prerequisitos: Validando.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
@@ -194,7 +198,6 @@ install_ios_module() {
 	echo -e "${BOLD}STEP2 - Copiar ficheros al proyecto.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-  MODULE_NAME="$(echo "${MODULE_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${MODULE_NAME:1}"
 	DIRECTORY_PATH="${MODULES_PATH_IOS}/${MODULE_NAME}"
 	# ruby "${scripts_dir}/ruby/copy_folder.rb" ${TEMPORARY_DIR} ${DIRECTORY_PATH}
 

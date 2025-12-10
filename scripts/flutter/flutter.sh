@@ -95,20 +95,7 @@ install_flutter_modules_batch() {
 			echo -e "${GREEN}✅ Plugin $MODULE_NAME copiado${NC}"
 		elif [ -d "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" ]; then
 			echo -e "${YELLOW}📦 Detectado como módulo (en lib/modules/${MODULE_NAME})${NC}"
-
-			if [ "$INTEGRATE_MODE" == "true" ]; then
-				# Modo integración: distribuir capas en la estructura existente
-				echo -e "${YELLOW}🔀 Modo integración: distribuyendo ${MODULE_NAME}${NC}"
-				local project_source_path=$(detect_project_source_path "flutter")
-				if [ -n "$project_source_path" ]; then
-					copy_files_integrated "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "$project_source_path" "$MODULE_NAME" "flutter"
-				else
-					echo -e "${RED}❌ No se pudo detectar la estructura del proyecto, usando modo normal${NC}"
-					copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
-				fi
-			else
-				copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
-			fi
+			copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
 			flutter_read_configuration "modules/${MODULE_NAME}/"
 			echo -e "${GREEN}✅ Módulo $MODULE_NAME copiado${NC}"
 		else
@@ -284,17 +271,9 @@ install_flutter_module() {
 	echo -e "${BOLD}STEP3 - Copiar ficheros al proyecto.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	# Preguntar al usuario el modo de instalación si no se especificó --integrate
-	prompt_installation_mode "$MODULE_NAME"
-	local install_mode=$?
-
 	# Detectar si el módulo está en plugins o en lib/modules
 	if [ -d "${TEMPORARY_DIR}/plugins/${MODULE_NAME}" ]; then
 		echo -e "${YELLOW}📦 Detectado como plugin (en plugins/${MODULE_NAME})${NC}"
-		# Los plugins no soportan modo integración, siempre se copian completos
-		if [ "$INTEGRATE_MODE" == "true" ]; then
-			echo -e "${YELLOW}⚠️  Los plugins no soportan modo integración, usando modo normal${NC}"
-		fi
 		mkdir -p "plugins"
 		copy_files "${TEMPORARY_DIR}/plugins/${MODULE_NAME}" "plugins/."
 		# Para plugins, pasar path sin lib/ prefix
@@ -303,24 +282,8 @@ install_flutter_module() {
 		fi
 	elif [ -d "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" ]; then
 		echo -e "${YELLOW}📦 Detectado como módulo (en lib/modules/${MODULE_NAME})${NC}"
-
-		if [ "$INTEGRATE_MODE" == "true" ]; then
-			# Modo integración: distribuir capas en la estructura existente
-			echo -e "${YELLOW}🔀 Modo integración activado${NC}"
-			local project_source_path=$(detect_project_source_path "flutter")
-			if [ -z "$project_source_path" ]; then
-				echo -e "${RED}❌ No se pudo detectar la estructura del proyecto Flutter${NC}"
-				echo -e "${YELLOW}Asegúrate de estar en un proyecto Flutter con carpeta lib/${NC}"
-				remove_temporary_dir
-				exit 1
-			fi
-			echo -e "📂 Ruta detectada del proyecto: ${GREEN}$project_source_path${NC}"
-			copy_files_integrated "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "$project_source_path" "$MODULE_NAME" "flutter"
-		else
-			# Modo normal: copiar módulo completo
-			flutter_create_modules_dir
-			copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
-		fi
+		flutter_create_modules_dir
+		copy_files "${TEMPORARY_DIR}/lib/modules/${MODULE_NAME}" "lib/modules/."
 		flutter_read_configuration "modules/${MODULE_NAME}/"
 	else
 		echo -e "${RED}❌ Error: No se encontró ${MODULE_NAME} ni en plugins/ ni en lib/modules/${NC}"
