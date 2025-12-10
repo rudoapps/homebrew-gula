@@ -69,9 +69,13 @@ TEMPLATE_TYPE=""
 ARCHETYPE_TYPE=""
 FORCE_INSTALL="false"
 BATCH_MODE="false"
+INTEGRATE_MODE="false"
+INSTALL_MODE_SELECTED="false"
 MODULE_NAMES=()
 export FORCE_INSTALL
 export BATCH_MODE
+export INTEGRATE_MODE
+export INSTALL_MODE_SELECTED
 
 function cleanup {
     echo ""
@@ -164,6 +168,8 @@ show_help() {
   echo -e "${BOLD}  --type=ZZZZ${NC}     Tipo de template: clean|fastapi (para template)"
   echo -e "${BOLD}  --archetype=ZZZZ${NC} Plataforma de arquetipos: android|ios|flutter|python (para branches)"
   echo -e "${BOLD}  --force${NC}         Forzar reinstalación sin confirmar (para install)"
+  echo -e "${BOLD}  --module${NC}        Instalar como módulo completo sin preguntar (modo por defecto)"
+  echo -e "${BOLD}  --integrate${NC}     Integrar en estructura existente sin preguntar (data→data, domain→domain, etc.)"
   echo -e "${BOLD}  --list${NC}          Lista todos los templates disponibles (para template)"
   echo -e "${BOLD}  --help, -h${NC}      Muestra esta ayuda"
   echo ""
@@ -178,6 +184,8 @@ show_help() {
   echo "  gula install network --key=mi_clave --branch=feature-branch"
   echo "  gula install network --key=mi_clave --tag=v1.0.0"
   echo "  gula install authentication --key=mi_clave --force     # Reinstalar sin confirmar"
+  echo "  gula install authentication --key=mi_clave --module    # Módulo completo (sin preguntar)"
+  echo "  gula install authentication --key=mi_clave --integrate # Integrar en capas (sin preguntar)"
   echo ""
   echo -e "${BOLD}  Instalar múltiples módulos (batch):${NC}"
   echo "  gula install login,wallet,payments --key=mi_clave_secreta"
@@ -429,6 +437,18 @@ while [[ "$#" -gt 0 ]]; do
     --force)
       FORCE_INSTALL="true"
       export FORCE_INSTALL
+      ;;
+    --integrate)
+      INTEGRATE_MODE="true"
+      INSTALL_MODE_SELECTED="true"
+      export INTEGRATE_MODE
+      export INSTALL_MODE_SELECTED
+      ;;
+    --module)
+      INTEGRATE_MODE="false"
+      INSTALL_MODE_SELECTED="true"
+      export INTEGRATE_MODE
+      export INSTALL_MODE_SELECTED
       ;;
     --list)
       LIST_TEMPLATES="true"

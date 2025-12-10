@@ -672,35 +672,28 @@ copy_files_integrated() {
   local platform=$4
 
   echo -e "${BOLD}───────────────────────────────────────────────${NC}"
-  echo -e "${BOLD}🔀 MODO INTEGRACIÓN: Distribuyendo capas del módulo${NC}"
+  echo -e "${BOLD}🔀 MODO INTEGRACIÓN: Distribuyendo carpetas del módulo${NC}"
   echo -e "${BOLD}───────────────────────────────────────────────${NC}"
   echo -e "📦 Módulo: ${YELLOW}$module_name${NC}"
   echo -e "📁 Destino base: ${YELLOW}$project_base_path${NC}"
   echo ""
 
-  # Definir las capas según la plataforma
-  local layers=()
   local source_base_path=""
 
   case "$platform" in
     "android")
-      # En Android, las capas están en src/main/java/<package>/
-      # Necesitamos encontrar el path dentro del módulo
+      # En Android, las carpetas están en src/main/java/<package>/
       source_base_path=$(find "$module_origin/src/main/java" -mindepth 1 -maxdepth 3 -type d -name "$module_name" 2>/dev/null | head -1)
       if [ -z "$source_base_path" ]; then
         # Fallback: buscar cualquier directorio con estructura de capas
         source_base_path=$(find "$module_origin/src/main/java" -mindepth 1 -maxdepth 4 -type d \( -name "data" -o -name "domain" \) -exec dirname {} \; 2>/dev/null | sort -u | head -1)
       fi
-      layers=("data" "domain" "presentation" "di")
       ;;
     "flutter")
       source_base_path="$module_origin"
-      layers=("data" "domain" "presentation")
       ;;
     "ios")
       source_base_path="$module_origin"
-      # iOS usa nombres capitalizados
-      layers=("Data" "Domain" "Presentation")
       ;;
     *)
       echo -e "${RED}❌ Plataforma no soportada para modo integración: $platform${NC}"
@@ -709,7 +702,7 @@ copy_files_integrated() {
   esac
 
   if [ -z "$source_base_path" ] || [ ! -d "$source_base_path" ]; then
-    echo -e "${RED}❌ No se encontró la estructura de capas en el módulo${NC}"
+    echo -e "${RED}❌ No se encontró la estructura del módulo${NC}"
     echo -e "${YELLOW}📝 Buscando en: $module_origin${NC}"
     find "$module_origin" -type d -maxdepth 5 2>/dev/null | head -20
     return 1
@@ -718,38 +711,37 @@ copy_files_integrated() {
   echo -e "📂 Ruta base del módulo encontrada: ${GREEN}$source_base_path${NC}"
   echo ""
 
-  local layers_copied=0
-  local layers_skipped=0
+  local folders_copied=0
+  local folders_skipped=0
 
-  for layer in "${layers[@]}"; do
-    local source_layer="$source_base_path/$layer"
-    local layer_lower=$(echo "$layer" | tr '[:upper:]' '[:lower:]')
-    local dest_layer="$project_base_path/$layer_lower/$module_name"
+  # Obtener todas las carpetas del módulo (solo primer nivel)
+  for folder_path in "$source_base_path"/*/; do
+    # Verificar que es un directorio
+    [ ! -d "$folder_path" ] && continue
+
+    local folder_name=$(basename "$folder_path")
+    local folder_lower=$(echo "$folder_name" | tr '[:upper:]' '[:lower:]')
+    local dest_folder="$project_base_path/$folder_lower/$module_name"
 
     echo -e "┌──────────────────────────────────────────"
-    echo -e "│ 📁 Capa: ${BOLD}$layer${NC}"
+    echo -e "│ 📁 Carpeta: ${BOLD}$folder_name${NC}"
+    echo -e "│ 📥 Origen: $folder_path"
+    echo -e "│ 📤 Destino: $dest_folder"
 
-    if [ -d "$source_layer" ]; then
-      echo -e "│ 📥 Origen: $source_layer"
-      echo -e "│ 📤 Destino: $dest_layer"
-
-      # Crear directorio destino si no existe
-      if [ ! -d "$dest_layer" ]; then
-        mkdir -p "$dest_layer"
-        echo -e "│ 📁 Creado directorio: $dest_layer"
-      fi
-
-      # Copiar contenido de la capa
-      if cp -R "$source_layer/." "$dest_layer/" 2>/dev/null; then
-        echo -e "│ ✅ Capa $layer copiada correctamente"
-        ((layers_copied++))
-      else
-        echo -e "│ ${RED}❌ Error al copiar capa $layer${NC}"
-      fi
-    else
-      echo -e "│ ${YELLOW}⚠️  Capa no encontrada, saltando${NC}"
-      ((layers_skipped++))
+    # Crear directorio destino si no existe
+    if [ ! -d "$dest_folder" ]; then
+      mkdir -p "$dest_folder"
+      echo -e "│ 📁 Creado directorio: $dest_folder"
     fi
+
+    # Copiar contenido de la carpeta
+    if cp -R "$folder_path." "$dest_folder/" 2>/dev/null; then
+      echo -e "│ ✅ Carpeta $folder_name copiada correctamente"
+      ((folders_copied++))
+    else
+      echo -e "│ ${RED}❌ Error al copiar carpeta $folder_name${NC}"
+    fi
+
     echo -e "└──────────────────────────────────────────"
     echo ""
   done
@@ -773,8 +765,7 @@ copy_files_integrated() {
 
   echo ""
   echo -e "${GREEN}✅ Integración completada:${NC}"
-  echo -e "   • Capas copiadas: $layers_copied"
-  echo -e "   • Capas omitidas: $layers_skipped"
+  echo -e "   • Carpetas copiadas: $folders_copied"
   echo ""
 
   return 0
