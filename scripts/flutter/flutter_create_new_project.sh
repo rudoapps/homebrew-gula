@@ -266,7 +266,9 @@ flutter_create_project() {
     # Intentar obtener el username
     if [ -n "$KEY" ]; then
         if command -v get_username_from_api >/dev/null 2>&1; then
-            CREATED_BY_LOG=$(get_username_from_api "$KEY" 2>/dev/null || echo "unknown")
+            CREATED_BY_LOG=$(get_username_from_api "$KEY" 2>/dev/null | tr -d '\n\r' || echo "unknown")
+            # Si está vacío, usar "unknown"
+            [ -z "$CREATED_BY_LOG" ] && CREATED_BY_LOG="unknown"
         fi
     fi
 

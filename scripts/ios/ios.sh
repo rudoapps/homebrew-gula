@@ -95,7 +95,11 @@ install_ios_modules_batch() {
 		MODULE_NAME="$(echo "${MODULE_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${MODULE_NAME:1}"
 
 		# Copiar y añadir a xcode
-		ios_copy_and_add_to_xcode
+		if [ "$INTEGRATE_MODE" == "true" ]; then
+			ios_copy_and_add_to_xcode_integrated
+		else
+			ios_copy_and_add_to_xcode
+		fi
 		echo -e "${GREEN}✅ Módulo $MODULE_NAME copiado y añadido a Xcode${NC}"
 	done
 
@@ -204,7 +208,12 @@ install_ios_module() {
 	echo -e "${BOLD}STEP4 - Copiar y añadir a xcode.${NC}"
 	echo -e "${BOLD}-----------------------------------------------${NC}"
 
-	ios_copy_and_add_to_xcode
+	if [ "$INTEGRATE_MODE" == "true" ]; then
+		echo -e "${YELLOW}🔀 Modo integración activado${NC}"
+		ios_copy_and_add_to_xcode_integrated
+	else
+		ios_copy_and_add_to_xcode
+	fi
 
 	echo -e "${GREEN}-----------------------------------------------${NC}"
   	echo -e "${GREEN}Proceso finalizado.${NC}"

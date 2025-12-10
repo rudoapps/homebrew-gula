@@ -78,7 +78,8 @@ log_project_creation() {
   # Obtener el username desde la API si se proporciona la key
   local created_by="unknown"
   if [ -n "$api_key" ] && [ "$api_key" != "" ]; then
-    created_by=$(get_username_from_api "$api_key" 2>/dev/null || echo "unknown")
+    created_by=$(get_username_from_api "$api_key" 2>/dev/null | tr -d '\n\r' || echo "unknown")
+    [ -z "$created_by" ] && created_by="unknown"
   fi
 
   # Obtener información de git del proyecto clonado
@@ -256,18 +257,19 @@ is_module_installed() {
   local platform=$1
   local module_name=$2
   local key="$platform:$module_name"
-  
+
   if [ ! -f "$GULA_LOG_FILE" ]; then
     return 1  # No instalado (no hay log)
   fi
-  
+
   if command -v jq >/dev/null 2>&1; then
-    local installed=$(jq -r ".installed_modules[\"$key\"] // null" "$GULA_LOG_FILE")
-    if [ "$installed" != "null" ]; then
+    # Usar 2>/dev/null para ignorar errores de jq (JSON malformado)
+    local installed=$(jq -r ".installed_modules[\"$key\"] // null" "$GULA_LOG_FILE" 2>/dev/null)
+    if [ "$installed" != "null" ] && [ -n "$installed" ]; then
       return 0  # Instalado
     fi
   fi
-  
+
   return 1  # No instalado
 }
 
@@ -317,7 +319,7 @@ handle_module_reinstallation() {
   echo ""
   
   while true; do
-    read -p "Selecciona una opción (1-2): " choice
+    read -p "Selecciona una opción (1-2): " choice < /dev/tty
     case $choice in
       1)
         echo -e "${GREEN}🔄 Procediendo con la reinstalación...${NC}"

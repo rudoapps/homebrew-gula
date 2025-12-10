@@ -42,6 +42,16 @@ ios_copy_and_add_to_xcode() {
 	fi
 }
 
+ios_copy_and_add_to_xcode_integrated() {
+	ruby "${scripts_dir}/ios/ruby/copy_and_add_xcode_integrated.rb" "${TEMPORARY_DIR}/${DIRECTORY_PATH}" "${MODULE_NAME}" "${TEMPORARY_DIR}"
+	if [ $? -eq 0 ]; then
+		echo -e "✅ script de ruby (modo integración) ejecutado correctamente"
+	else
+		echo -e "${RED}Error: No se ha podido integrar el módulo ${MODULE_NAME}.${NC}"
+		exit 1
+	fi
+}
+
 ios_install_dependencies() {
 	local dependencies_file=$1
 	json=$(cat $dependencies_file)
