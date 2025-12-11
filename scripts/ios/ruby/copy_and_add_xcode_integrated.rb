@@ -188,18 +188,36 @@ def main
 
   total_files = 0
   layers.each do |layer|
-    origin_folder = "#{module_origin}/#{layer}"
-    # Copiar directamente a la capa sin subcarpeta del módulo
-    # Ej: Data/Datasource/... en lugar de Data/Authentication/Datasource/...
-    destination_folder = "#{base_destination}/#{layer}"
+    if layer == "shared"
+      # Para la carpeta "shared", procesar sus subcarpetas como capas independientes
+      shared_sublayers = Dir.glob("#{module_origin}/shared/*/").map { |d| File.basename(d) }
+      shared_sublayers.each do |sublayer|
+        origin_folder = "#{module_origin}/shared/#{sublayer}"
+        destination_folder = "#{base_destination}/#{sublayer}"
 
-    files = copy_folder_integrated(origin_folder, destination_folder, layer)
-    total_files += files
+        files = copy_folder_integrated(origin_folder, destination_folder, "shared/#{sublayer}")
+        total_files += files
 
-    # Añadir a Xcode (solo para Xcode 15 o inferior)
-    if project_created_with_xcode == 15
-      puts "✅ Integrando #{layer} en proyecto Xcode..."
-      create_groups_for_integrated(xcodeproj_path, app_name, base_destination, layer, module_name)
+        # Añadir a Xcode (solo para Xcode 15 o inferior)
+        if project_created_with_xcode == 15
+          puts "✅ Integrando shared/#{sublayer} en proyecto Xcode..."
+          create_groups_for_integrated(xcodeproj_path, app_name, base_destination, sublayer, module_name)
+        end
+      end
+    else
+      origin_folder = "#{module_origin}/#{layer}"
+      # Copiar directamente a la capa sin subcarpeta del módulo
+      # Ej: Data/Datasource/... en lugar de Data/Authentication/Datasource/...
+      destination_folder = "#{base_destination}/#{layer}"
+
+      files = copy_folder_integrated(origin_folder, destination_folder, layer)
+      total_files += files
+
+      # Añadir a Xcode (solo para Xcode 15 o inferior)
+      if project_created_with_xcode == 15
+        puts "✅ Integrando #{layer} en proyecto Xcode..."
+        create_groups_for_integrated(xcodeproj_path, app_name, base_destination, layer, module_name)
+      end
     end
   end
 

@@ -28,10 +28,18 @@ def read_gula_file_and_install_dependencies(xcodeproj_path, app_name, folder_pat
         puts "📦 #{item}"  
       end
       for item in items_to_copy do
-        copy_all_files("#{temporary_dir}/#{item}", item.sub("Gula", app_name))
+        # Eliminar "Shared/" de la ruta para integrar directamente en las capas
+        copy_all_files("#{temporary_dir}/#{item}", item.sub("Gula/Shared", app_name))
       end
       if xcode_version == 15
-        create_groups(xcodeproj_path, app_name, "#{app_name}/Shared", "Shared")
+        # Crear grupos para cada subcarpeta de Shared integrada
+        items_to_copy.each do |item|
+          layer = item.sub("Gula/Shared/", "").split("/").first
+          destination = "#{app_name}/#{layer}"
+          if Dir.exist?(destination)
+            create_groups(xcodeproj_path, app_name, destination, layer)
+          end
+        end
       end
     end 
 
