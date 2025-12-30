@@ -56,6 +56,7 @@ source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
 source "$scripts_dir/support/validation.sh"
+source "$scripts_dir/agent/agent.sh"
 
 if [ "$JSON_OUTPUT" != "true" ]; then
   echo -e "✅ Imports cargados correctamente"
@@ -158,6 +159,7 @@ show_help() {
   echo -e "${BOLD}  status${NC}   Muestra el estado del proyecto y módulos instalados"
   echo -e "${BOLD}  validate${NC} Valida archivos configuration.gula del proyecto"
   echo -e "${BOLD}  install-hook${NC} Instala pre-commit hook para validar configuration.gula"
+  echo -e "${BOLD}  agent${NC}    Interactua con el agente AI (login, chat, etc.)"
   echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
@@ -502,6 +504,11 @@ while [[ "$#" -gt 0 ]]; do
       MODULE_NAME="$2"
       shift
       ;;
+    agent)
+      COMMAND="agent"
+      AGENT_SUBCOMMAND="${2:-help}"
+      AGENT_ARGS="${@:3}"
+      ;;
     *)
       MODULE_NAME="$1"
       ;;
@@ -616,8 +623,10 @@ elif [ "$COMMAND" == "validate" ]; then
   fi
 elif [ "$COMMAND" == "install-hook" ]; then
   install_validation_hook
+elif [ "$COMMAND" == "agent" ]; then
+  agent_command "$AGENT_SUBCOMMAND" $AGENT_ARGS
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|install-hook|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|install-hook|agent|help} [--key=xxxx] [--branch=yyyy]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi

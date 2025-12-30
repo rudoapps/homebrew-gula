@@ -61,6 +61,7 @@ source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
 source "$scripts_dir/support/validation.sh"
+source "$scripts_dir/agent/agent.sh"
 
 # list_branches function loaded from general_support.sh
 
@@ -172,6 +173,7 @@ show_help() {
   echo -e "${BOLD}  status${NC}   Muestra el estado del proyecto y módulos instalados"
   echo -e "${BOLD}  validate${NC} Valida archivos configuration.gula del proyecto"
   echo -e "${BOLD}  install-hook${NC} Instala pre-commit hook para validar configuration.gula"
+  echo -e "${BOLD}  agent${NC}    Interactua con el agente AI (chat, login, etc.)"
   echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
@@ -232,6 +234,13 @@ show_help() {
   echo ""
   echo -e "${BOLD}  Instalar pre-commit hook:${NC}"
   echo "  gula install-hook                               # Instala hook para validar en cada commit"
+  echo ""
+  echo -e "${BOLD}  Usar el agente AI:${NC}"
+  echo "  gula agent setup                                # Instalar dependencias del agente"
+  echo "  gula agent login                                # Iniciar sesion"
+  echo "  gula agent chat                                 # Modo interactivo"
+  echo "  gula agent chat \"Hola\"                          # Mensaje unico"
+  echo "  gula agent --help                               # Ver ayuda del agente"
   echo ""
   echo -e "${BOLD}TIPOS DE PROYECTO SOPORTADOS:${NC}"
   echo ""
@@ -425,6 +434,19 @@ if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
   VALIDATE_STAGED="true"
 fi
 
+# Manejar caso especial: gula agent <subcommand> [args]
+if [[ "$COMMAND" == "agent" ]]; then
+  AGENT_SUBCOMMAND="${2:---help}"
+  # Normalize --help to help
+  if [[ "$AGENT_SUBCOMMAND" == "--help" || "$AGENT_SUBCOMMAND" == "-h" ]]; then
+    AGENT_SUBCOMMAND="help"
+  fi
+  shift 2 2>/dev/null || shift
+  # Skip the while loop for agent commands - pass remaining args properly quoted
+  agent_command "$AGENT_SUBCOMMAND" "$@"
+  exit $?
+fi
+
 shift
 
 while [[ "$#" -gt 0 ]]; do
@@ -511,6 +533,12 @@ while [[ "$#" -gt 0 ]]; do
       COMMAND="template"
       MODULE_NAME="$2"
       shift
+      ;;
+    agent)
+      COMMAND="agent"
+      AGENT_SUBCOMMAND="${2:-help}"
+      AGENT_ARGS="${@:3}"
+      break  # Stop processing more arguments - agent handles its own
       ;;
     *)
       MODULE_NAME="$1"
@@ -626,8 +654,10 @@ elif [ "$COMMAND" == "validate" ]; then
   fi
 elif [ "$COMMAND" == "install-hook" ]; then
   install_validation_hook
+elif [ "$COMMAND" == "agent" ]; then
+  agent_command "$AGENT_SUBCOMMAND" $AGENT_ARGS
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|install-hook|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|install-hook|agent|help} [--key=xxxx] [--branch=yyyy]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
