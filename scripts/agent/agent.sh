@@ -12,6 +12,56 @@
 #   - agent_chat.sh       : Chat UI (single message, interactive mode)
 
 # ============================================================================
+# DEPENDENCY CHECK
+# ============================================================================
+
+check_dependencies() {
+    local missing=()
+
+    # Python3 is required for JSON parsing, SSE streaming, etc.
+    if ! command -v python3 &> /dev/null; then
+        missing+=("python3")
+    fi
+
+    # curl is required for API calls
+    if ! command -v curl &> /dev/null; then
+        missing+=("curl")
+    fi
+
+    # jq is optional but recommended (fallback to python for JSON)
+    # if ! command -v jq &> /dev/null; then
+    #     missing+=("jq")
+    # fi
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo ""
+        echo -e "\033[1;31m❌ Error: Dependencias faltantes\033[0m"
+        echo ""
+        echo "El agente requiere las siguientes herramientas que no están instaladas:"
+        echo ""
+        for dep in "${missing[@]}"; do
+            echo -e "  • \033[1m$dep\033[0m"
+        done
+        echo ""
+        echo "Instalación:"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "  brew install ${missing[*]}"
+        else
+            echo "  sudo apt install ${missing[*]}  # Debian/Ubuntu"
+            echo "  sudo dnf install ${missing[*]}  # Fedora"
+        fi
+        echo ""
+        return 1
+    fi
+    return 0
+}
+
+# Run dependency check
+if ! check_dependencies; then
+    return 1 2>/dev/null || exit 1
+fi
+
+# ============================================================================
 # MODULE LOADING
 # ============================================================================
 
@@ -23,7 +73,9 @@ source "$AGENT_SCRIPT_DIR/agent_config.sh"      # Configuration (must be first)
 source "$AGENT_SCRIPT_DIR/agent_ui.sh"          # UI utilities
 source "$AGENT_SCRIPT_DIR/agent_local_tools.sh" # Local tool execution
 source "$AGENT_SCRIPT_DIR/agent_auth.sh"        # Authentication
+source "$AGENT_SCRIPT_DIR/agent_rag.sh"         # RAG integration
 source "$AGENT_SCRIPT_DIR/agent_api.sh"         # API communication
+source "$AGENT_SCRIPT_DIR/agent_subagents.sh"   # Subagent management
 source "$AGENT_SCRIPT_DIR/agent_chat.sh"        # Chat UI
 
 # ============================================================================
@@ -71,6 +123,9 @@ show_agent_help() {
     echo ""
     echo -e "  ${BOLD}gula agent context${NC}"
     echo "      Muestra el contexto JSON que se envia al servidor"
+    echo ""
+    echo -e "  ${BOLD}gula agent rag${NC}"
+    echo "      Muestra estado de RAG para el proyecto actual"
     echo ""
     echo -e "  ${BOLD}gula agent conversations${NC}"
     echo "      Lista todas las conversaciones"
@@ -137,6 +192,29 @@ agent_command() {
         context)
             # Mostrar contexto JSON que se enviaria al servidor
             generate_project_context | python3 -m json.tool
+            ;;
+        rag)
+            # Verificar autenticacion antes de consultar RAG
+            init_agent_config
+            if is_agent_authenticated; then
+                if ! ensure_valid_token_with_refresh; then
+                    echo -e "${YELLOW}Tu sesion ha expirado y no se pudo renovar.${NC}"
+                    echo ""
+                    set_agent_config "access_token" "null"
+                    set_agent_config "refresh_token" "null"
+                fi
+            fi
+
+            if ! is_agent_authenticated; then
+                echo -e "${YELLOW}No hay sesion activa. Iniciando login...${NC}"
+                if ! agent_login; then
+                    echo -e "${RED}Login fallido. No se puede consultar RAG.${NC}"
+                    return 1
+                fi
+            fi
+
+            # Mostrar estado de RAG para el proyecto actual
+            show_rag_status
             ;;
         conversations|conv)
             agent_conversations

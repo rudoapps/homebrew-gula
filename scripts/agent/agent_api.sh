@@ -13,6 +13,8 @@ send_chat_hybrid() {
     local conversation_id="$2"
     local tool_results_json="$3"  # JSON array de tool results o vacio
     local max_iterations="${4:-10}"
+    local subagent_id="${5:-}"    # Optional: ID del subagente a usar
+    local images_json="${6:-}"    # Optional: JSON array de imagenes
 
     local api_url=$(get_agent_config "api_url")
     local access_token=$(get_agent_config "access_token")
@@ -20,63 +22,138 @@ send_chat_hybrid() {
 
     # Generar contexto del proyecto solo en el primer mensaje
     local project_context=""
+    local git_remote_url=""
     if [ -z "$conversation_id" ] && [ -z "$tool_results_json" ]; then
         project_context=$(generate_project_context)
+    fi
+
+    # Get git remote URL for RAG context - always send with new prompts (not tool_results)
+    if [ -z "$tool_results_json" ] && [ -n "$prompt" ]; then
+        git_remote_url=$(get_rag_git_url 2>/dev/null || echo "")
     fi
 
     # Guardar datos en archivos temporales para evitar problemas de escape
     local tmp_prompt=$(mktemp)
     local tmp_context=$(mktemp)
     local tmp_results=$(mktemp)
+    local tmp_subagent=$(mktemp)
+    local tmp_git_url=$(mktemp)
+    local tmp_images=$(mktemp)
     echo "$prompt" > "$tmp_prompt"
     echo "$project_context" > "$tmp_context"
     echo "$tool_results_json" > "$tmp_results"
+    echo "$subagent_id" > "$tmp_subagent"
+    echo "$git_remote_url" > "$tmp_git_url"
+    echo "$images_json" > "$tmp_images"
 
     # Construir payload con Python
-    local payload=$(python3 - "$tmp_prompt" "$tmp_context" "$tmp_results" "$conversation_id" "$max_iterations" << 'PYEOF'
+    local payload=$(python3 - "$tmp_prompt" "$tmp_context" "$tmp_results" "$conversation_id" "$max_iterations" "$tmp_subagent" "$tmp_git_url" "$tmp_images" << 'PYEOF'
 import json
 import sys
 
-tmp_prompt = sys.argv[1]
-tmp_context = sys.argv[2]
-tmp_results = sys.argv[3]
-conv_id = sys.argv[4]
-max_iter = int(sys.argv[5])
+try:
+    tmp_prompt = sys.argv[1]
+    tmp_context = sys.argv[2]
+    tmp_results = sys.argv[3]
+    conv_id = sys.argv[4]
+    max_iter_str = sys.argv[5]
+    tmp_subagent = sys.argv[6]
+    tmp_git_url = sys.argv[7]
+    tmp_images = sys.argv[8] if len(sys.argv) > 8 else None
 
-data = {"max_iterations": max_iter}
-
-# Leer prompt
-with open(tmp_prompt) as f:
-    prompt = f.read().strip()
-if prompt:
-    data["prompt"] = prompt
-
-# Agregar conversation_id si existe
-if conv_id:
-    data["conversation_id"] = int(conv_id)
-
-# Leer contexto del proyecto
-with open(tmp_context) as f:
-    project_ctx = f.read().strip()
-if project_ctx:
+    # Parse max_iterations with fallback
     try:
-        data["project_context"] = json.loads(project_ctx)
-    except:
-        pass
+        max_iter = int(max_iter_str) if max_iter_str else 10
+    except ValueError:
+        max_iter = 10
 
-# Leer tool_results
-with open(tmp_results) as f:
-    tool_results = f.read().strip()
-if tool_results:
-    try:
-        data["tool_results"] = json.loads(tool_results)
-    except:
-        pass
+    data = {"max_iterations": max_iter}
 
-print(json.dumps(data))
+    # Leer prompt
+    with open(tmp_prompt) as f:
+        prompt = f.read().strip()
+    if prompt:
+        data["prompt"] = prompt
+
+    # Agregar conversation_id si existe
+    if conv_id:
+        try:
+            data["conversation_id"] = int(conv_id)
+        except ValueError:
+            pass  # Skip invalid conversation_id
+
+    # Leer contexto del proyecto
+    with open(tmp_context) as f:
+        project_ctx = f.read().strip()
+    if project_ctx:
+        try:
+            data["project_context"] = json.loads(project_ctx)
+        except:
+            pass
+
+    # Leer tool_results
+    with open(tmp_results) as f:
+        tool_results = f.read().strip()
+    if tool_results:
+        try:
+            parsed_results = json.loads(tool_results)
+            if parsed_results:  # Only add if not empty
+                data["tool_results"] = parsed_results
+        except json.JSONDecodeError as e:
+            # Log error but continue - this is the critical fix
+            print(f"Warning: Failed to parse tool_results: {e}", file=sys.stderr)
+
+    # Leer subagent_id
+    with open(tmp_subagent) as f:
+        subagent_id = f.read().strip()
+    if subagent_id:
+        data["subagent_id"] = subagent_id
+
+    # Leer git_remote_url para RAG
+    with open(tmp_git_url) as f:
+        git_url = f.read().strip()
+    if git_url:
+        data["git_remote_url"] = git_url
+
+    # Leer imagenes
+    if tmp_images:
+        with open(tmp_images) as f:
+            images_str = f.read().strip()
+        if images_str:
+            try:
+                images = json.loads(images_str)
+                if images and isinstance(images, list) and len(images) > 0:
+                    # Remove source_path (internal only) before sending
+                    for img in images:
+                        img.pop('source_path', None)
+                    data["images"] = images
+            except:
+                pass
+
+    # Ensure we always output valid JSON
+    print(json.dumps(data))
+
+except Exception as e:
+    # Fallback: output minimal valid payload to prevent 422 errors
+    print(f"Error building payload: {e}", file=sys.stderr)
+    fallback = {"max_iterations": 10, "error": str(e)}
+    print(json.dumps(fallback))
 PYEOF
 )
-    rm -f "$tmp_prompt" "$tmp_context" "$tmp_results"
+    rm -f "$tmp_prompt" "$tmp_context" "$tmp_results" "$tmp_subagent" "$tmp_git_url" "$tmp_images"
+
+    # Validate payload is not empty
+    if [ -z "$payload" ]; then
+        echo '{"error": "Failed to build request payload", "response": ""}'
+        return 1
+    fi
+
+    # Validate payload has either prompt or tool_results (required by server)
+    local has_content=$(echo "$payload" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if d.get('prompt') or d.get('tool_results') else 'no')" 2>/dev/null)
+    if [ "$has_content" != "yes" ]; then
+        echo '{"error": "Request must have either prompt or tool_results", "response": ""}'
+        return 1
+    fi
 
     # Guardar payload en archivo temporal
     local tmp_payload=$(mktemp)
@@ -112,6 +189,48 @@ CURSOR_START = "\r"
 
 # Spinner frames
 SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+# ============================================================================
+# Markdown to ANSI converter
+# ============================================================================
+
+import re
+
+def markdown_to_ansi(text):
+    """Convert basic markdown to ANSI terminal codes."""
+
+    # Code blocks (```lang ... ``` or `` ... ``) - handle 2+ backticks
+    def replace_code_block(match):
+        code = match.group(2) or match.group(0)
+        return f"{DIM}{code}{NC}"
+    text = re.sub(r'`{2,}(\w*)\n?(.*?)`{2,}', replace_code_block, text, flags=re.DOTALL)
+
+    # Inline code (`code`) - dim - but not if already processed
+    text = re.sub(r'(?<!`)`([^`\n]+)`(?!`)', f'{DIM}\\1{NC}', text)
+
+    # Headers with ## syntax - bold + color
+    text = re.sub(r'^####\s*(.+)$', f'{BOLD}{BLUE}\\1{NC}', text, flags=re.MULTILINE)
+    text = re.sub(r'^###\s*(.+)$', f'{BOLD}{CYAN}\\1{NC}', text, flags=re.MULTILINE)
+    text = re.sub(r'^##\s*(.+)$', f'{BOLD}{YELLOW}\\1{NC}', text, flags=re.MULTILINE)
+    text = re.sub(r'^#\s*(.+)$', f'{BOLD}{GREEN}\\1{NC}', text, flags=re.MULTILINE)
+
+    # Lines starting with emoji (likely headers) - make bold
+    text = re.sub(r'^([🏦🏗️⚡🔑🔄🛡️🎨🔗🎯✅❌📊📋📁💳💾👤🔐💰📱🧠💾]+ .+)$', f'{BOLD}\\1{NC}', text, flags=re.MULTILINE)
+
+    # Bold (**text** or __text__) - bold
+    text = re.sub(r'\*\*([^*]+)\*\*', f'{BOLD}\\1{NC}', text)
+    text = re.sub(r'__([^_]+)__', f'{BOLD}\\1{NC}', text)
+
+    # Bullet points (- item or • item) - add color to bullet
+    text = re.sub(r'^(\s*)[-•] (.+)$', f'\\1{CYAN}•{NC} \\2', text, flags=re.MULTILINE)
+
+    # Horizontal rules (---) - dim line
+    text = re.sub(r'^-{3,}$', f'{DIM}───────────────────────────────{NC}', text, flags=re.MULTILINE)
+
+    # Tables - just leave as-is but dim the pipes
+    text = re.sub(r'\|', f'{DIM}|{NC}', text)
+
+    return text
 
 # ============================================================================
 # Spinner class
@@ -182,6 +301,9 @@ spinner = Spinner()
 start_time = time.time()
 tools_executed = 0
 
+# Start spinner immediately (before curl connects)
+spinner.start("Conectando con el servidor...")
+
 # Run curl and process stream
 proc = subprocess.Popen(
     ["curl", "-s", "-N", "-X", "POST", endpoint,
@@ -190,11 +312,13 @@ proc = subprocess.Popen(
      "-d", payload],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
-    text=True
+    text=True,
+    bufsize=1  # Line buffered for real-time output
 )
 
 event_type = None
 texts = []
+streaming_text = False  # Track if we're in text streaming mode
 result = {
     "conversation_id": None,
     "total_cost": 0,
@@ -208,8 +332,38 @@ result = {
 }
 
 try:
+    first_line = True
     for line in proc.stdout:
         line = line.strip()
+        if not line:
+            continue
+
+        # Check for HTTP error response (JSON without SSE format)
+        if first_line and not line.startswith("event:") and not line.startswith("data:"):
+            first_line = False
+            # Try to parse as JSON error
+            try:
+                error_data = json.loads(line)
+                error_msg = None
+
+                # Handle array of errors (FastAPI validation errors)
+                if isinstance(error_data, list) and error_data:
+                    error_msg = error_data[0].get("message", str(error_data))
+                # Handle object with detail, error, or message
+                elif isinstance(error_data, dict):
+                    if "detail" in error_data or "error" in error_data or "message" in error_data:
+                        error_msg = error_data.get("detail") or error_data.get("error") or error_data.get("message", "Error del servidor")
+                        # Handle list inside detail
+                        if isinstance(error_msg, list):
+                            error_msg = error_msg[0].get("message", str(error_msg)) if error_msg else "Error del servidor"
+
+                if error_msg:
+                    result["error"] = str(error_msg)
+                    spinner.stop(f"Error: {result['error']}", "error")
+                    break
+            except:
+                pass
+        first_line = False
 
         if line.startswith("event:"):
             event_type = line[7:].strip()
@@ -224,32 +378,86 @@ try:
 
             if event_type == "started":
                 result["conversation_id"] = parsed.get("conversation_id")
+                result["rag_enabled"] = parsed.get("rag_enabled", False)
+                result["model"] = parsed.get("model", {})
+                result["task_type"] = parsed.get("task_type", "")
                 conv_id = parsed.get("conversation_id")
-                spinner.start(f"Conectado a conversacion #{conv_id}")
+                rag_enabled = parsed.get("rag_enabled", False)
+                model_info = parsed.get("model", {})
+                model_name = model_info.get("model", "")
+                rag_indicator = f" {GREEN}[RAG]{NC}" if rag_enabled else ""
+                model_indicator = f" {DIM}({model_name}){NC}" if model_name else ""
+                spinner.start(f"Conversacion #{conv_id}{rag_indicator}{model_indicator}")
 
             elif event_type == "thinking":
-                it = parsed.get("iteration", 1)
-                mx = parsed.get("max_iterations", 10)
-                spinner.update(f"Pensando... {DIM}(iteracion {it}/{mx}){NC}")
+                model_info = parsed.get("model", {})
+                model_name = model_info.get("model", "")
+                if model_name:
+                    spinner.update(f"Pensando... {DIM}({model_name}){NC}")
+                else:
+                    spinner.update("Pensando...")
 
             elif event_type == "text":
                 content = parsed.get("content", "")
+                msg_model = parsed.get("model", "")
                 if content:
+                    # First text chunk - stop spinner and show header with model
+                    if not streaming_text:
+                        spinner.stop()
+                        model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
+                        sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}\n\n  ")
+                        sys.stderr.flush()
+                        streaming_text = True
+                    # Convert markdown to ANSI and add indentation
+                    formatted = markdown_to_ansi(content)
+                    formatted = formatted.replace("\n", "\n  ")
+                    sys.stderr.write(formatted)
+                    sys.stderr.flush()
                     texts.append(content)
-                    spinner.update(f"Generando respuesta...")
 
             elif event_type == "tool_requests":
-                spinner.stop(f"Servidor solicita {len(parsed.get('tool_calls', []))} herramienta(s)", "info")
-                result["tool_requests"] = parsed.get("tool_calls", [])
+                tool_calls = parsed.get("tool_calls", [])
+                result["tool_requests"] = tool_calls
                 result["conversation_id"] = parsed.get("conversation_id")
-                tools_executed = len(result["tool_requests"])
+                tools_executed = len(tool_calls)
+
+                # Capture session info from tool_requests
+                result["session_cost"] = parsed.get("session_cost", 0)
+                result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
+
+                # Just stop spinner - tool execution will show its own output
+                spinner.stop()
 
             elif event_type == "complete":
                 result["conversation_id"] = parsed.get("conversation_id")
                 result["total_cost"] = parsed.get("total_cost", 0)
                 result["total_tokens"] = parsed.get("total_input_tokens", 0) + parsed.get("total_output_tokens", 0)
+                result["session_cost"] = parsed.get("session_cost", 0)
+                result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
                 result["max_iterations_reached"] = parsed.get("max_iterations_reached", False)
-                spinner.stop("Completado", "success")
+                result["truncation_stats"] = parsed.get("truncation_stats", {})
+
+                # Just stop spinner/add newline - summary shown by agent_chat.sh
+                if streaming_text:
+                    sys.stderr.write("\n")
+                    sys.stderr.flush()
+                else:
+                    spinner.stop()
+
+            elif event_type == "rate_limited":
+                result["rate_limited"] = True
+                result["rate_limit_message"] = parsed.get("message", "Rate limit alcanzado")
+                result["conversation_id"] = parsed.get("conversation_id")
+                spinner.stop(f"⚠️ {result['rate_limit_message']}", "info")
+
+            elif event_type == "repaired":
+                # Conversation was repaired due to interrupted session
+                # Show as warning - conversation may continue processing
+                result["repaired"] = True
+                result["repaired_message"] = parsed.get("message", "Conversation repaired")
+                # Show message but restart spinner (more events may come)
+                spinner.stop(f"⚠️ Conversacion recuperada (estaba interrumpida)", "info")
+                spinner.start("Continuando...")
 
             elif event_type == "error":
                 result["error"] = parsed.get("error", "Unknown error")
@@ -268,9 +476,10 @@ proc.wait()
 # Calculate elapsed time
 result["elapsed_time"] = round(time.time() - start_time, 2)
 result["tools_count"] = tools_executed
+result["text_streamed"] = streaming_text  # Flag to indicate text was already shown
 
 # Combine all text responses
-result["response"] = "\n".join(texts) if texts else ""
+result["response"] = "".join(texts) if texts else ""
 
 # Cleanup and output
 import os
@@ -286,12 +495,13 @@ PYEOF
 # Execute tools locally and return results
 execute_tools_locally() {
     local tool_requests="$1"
+    local request_start_time="${2:-$(date +%s)}"  # Start time for total elapsed
 
     # Guardar tool_requests en archivo temporal
     local tmp_requests=$(mktemp)
     echo "$tool_requests" > "$tmp_requests"
 
-    python3 - "$tmp_requests" "$AGENT_SCRIPT_DIR" << 'PYEOF'
+    python3 - "$tmp_requests" "$AGENT_SCRIPT_DIR" "$request_start_time" << 'PYEOF'
 import json
 import subprocess
 import sys
@@ -373,6 +583,7 @@ class ToolSpinner:
 
 tmp_file = sys.argv[1]
 agent_script_dir = sys.argv[2]
+request_start_time = int(sys.argv[3]) if len(sys.argv) > 3 else int(time.time())
 
 with open(tmp_file) as f:
     tool_requests = json.load(f)
@@ -380,9 +591,8 @@ with open(tmp_file) as f:
 results = []
 total_tools = len(tool_requests)
 
-# Header
-sys.stderr.write(f"\n  {BOLD}Ejecutando {total_tools} herramienta(s) localmente{NC}\n")
-sys.stderr.flush()
+# Calculate total elapsed time
+total_elapsed = int(time.time()) - request_start_time
 
 for idx, tc in enumerate(tool_requests, 1):
     tc_id = tc["id"]
@@ -409,13 +619,9 @@ for idx, tc in enumerate(tool_requests, 1):
     else:
         detail = str(tc_input)[:40]
 
-    # Print tool header
-    sys.stderr.write(f"  {icon} {BOLD}{tc_name}{NC} {DIM}{detail}{NC}\n")
-    sys.stderr.flush()
-
-    # Start spinner
+    # Start spinner with tool info
     spinner = ToolSpinner()
-    spinner.start("Ejecutando...")
+    spinner.start(f"{icon} {tc_name} {DIM}{detail}{NC}")
 
     # Write input to temp file
     import tempfile
@@ -451,15 +657,15 @@ for idx, tc in enumerate(tool_requests, 1):
         output = output[:10000] + "\n... [truncado]"
 
     # Format preview
-    preview = output[:60].replace("\n", " ").strip()
-    if len(output) > 60:
+    preview = output[:50].replace("\n", " ").strip()
+    if len(output) > 50:
         preview += "..."
 
-    # Print result
+    # Print compact result: icon tool detail → result
     if success:
-        sys.stderr.write(f"    {GREEN}✓{NC} {DIM}{preview}{NC} {DIM}({elapsed:.1f}s){NC}\n")
+        sys.stderr.write(f"  {GREEN}✓{NC} {icon} {tc_name} {DIM}{detail}{NC} → {DIM}{preview}{NC}\n")
     else:
-        sys.stderr.write(f"    {RED}✗{NC} {preview} {DIM}({elapsed:.1f}s){NC}\n")
+        sys.stderr.write(f"  {RED}✗{NC} {icon} {tc_name} {DIM}{detail}{NC} → {preview}\n")
     sys.stderr.flush()
 
     results.append({
@@ -467,10 +673,6 @@ for idx, tc in enumerate(tool_requests, 1):
         "tool_name": tc_name,
         "result": output
     })
-
-# Summary line
-sys.stderr.write(f"\n")
-sys.stderr.flush()
 
 print(json.dumps(results))
 PYEOF
@@ -487,11 +689,32 @@ run_hybrid_chat() {
     local prompt="$1"
     local conversation_id="$2"
     local max_iterations="${3:-10}"
+    local subagent_id="${4:-}"    # Optional: ID del subagente a usar
 
     local current_conv_id="$conversation_id"
     local tool_results=""
     local iteration=0
-    local max_tool_iterations=20  # Limite de seguridad
+    local max_tool_iterations=30  # Limite de seguridad (se pregunta antes de salir)
+    local start_time=$(date +%s)  # Track total elapsed time
+
+    # Accumulate session costs across all HTTP calls
+    local accumulated_session_tokens=0
+    local accumulated_session_cost=0
+
+    # Detect and encode images from the prompt
+    local images_json=""
+    local cleaned_prompt="$prompt"
+    if [ -n "$prompt" ]; then
+        images_json=$(detect_and_encode_images "$prompt")
+        if [ -n "$images_json" ] && [ "$images_json" != "[]" ]; then
+            # Remove image paths from prompt text
+            cleaned_prompt=$(remove_image_paths_from_text "$prompt")
+            local num_images=$(echo "$images_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+            if [ "$num_images" -gt 0 ]; then
+                echo -e "  ${GREEN}📎${NC} ${num_images} imagen(es) detectada(s)" >&2
+            fi
+        fi
+    fi
 
     while [ $iteration -lt $max_tool_iterations ]; do
         iteration=$((iteration + 1))
@@ -499,20 +722,22 @@ run_hybrid_chat() {
         # Llamar al servidor
         local response
         if [ $iteration -eq 1 ]; then
-            # Primera llamada: enviar prompt
-            response=$(send_chat_hybrid "$prompt" "$current_conv_id" "" "$max_iterations")
+            # Primera llamada: enviar prompt (con subagent_id e imagenes si existen)
+            response=$(send_chat_hybrid "$cleaned_prompt" "$current_conv_id" "" "$max_iterations" "$subagent_id" "$images_json")
         else
-            # Llamadas siguientes: enviar tool_results
-            response=$(send_chat_hybrid "" "$current_conv_id" "$tool_results" "$max_iterations")
+            # Llamadas siguientes: enviar tool_results (sin imagenes, mantener subagent_id)
+            response=$(send_chat_hybrid "" "$current_conv_id" "$tool_results" "$max_iterations" "$subagent_id" "")
         fi
 
         # Verificar error
         local error=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error') or '')" 2>/dev/null)
         if [ -n "$error" ]; then
-            # Check if it's an auth error
-            if [[ "$error" == *"Not authenticated"* ]] || [[ "$error" == *"token"* ]] || \
-               [[ "$error" == *"expired"* ]] || [[ "$error" == *"401"* ]] || \
-               [[ "$error" == *"authentication"* ]] || [[ "$error" == *"unauthorized"* ]]; then
+            # Check if it's an auth error (case insensitive patterns)
+            local error_lower=$(echo "$error" | tr '[:upper:]' '[:lower:]')
+            if [[ "$error_lower" == *"not authenticated"* ]] || [[ "$error_lower" == *"token"* ]] || \
+               [[ "$error_lower" == *"expired"* ]] || [[ "$error_lower" == *"401"* ]] || \
+               [[ "$error_lower" == *"authentication"* ]] || [[ "$error_lower" == *"unauthorized"* ]] || \
+               [[ "$error_lower" == *"not authorized"* ]] || [[ "$error_lower" == *"access denied"* ]]; then
                 echo '{"error": "auth_expired", "message": "Tu sesion ha expirado"}'
                 return 2  # Special return code for auth errors
             fi
@@ -523,21 +748,52 @@ run_hybrid_chat() {
         # Obtener conversation_id
         current_conv_id=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('conversation_id') or '')" 2>/dev/null)
 
+        # Accumulate session costs from this response
+        local this_session_tokens=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_tokens', 0))" 2>/dev/null)
+        local this_session_cost=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_cost', 0))" 2>/dev/null)
+        accumulated_session_tokens=$(python3 -c "print(int($accumulated_session_tokens) + int($this_session_tokens))" 2>/dev/null || echo "$accumulated_session_tokens")
+        accumulated_session_cost=$(python3 -c "print($accumulated_session_cost + $this_session_cost)" 2>/dev/null || echo "$accumulated_session_cost")
+
         # Verificar si hay tool_requests
         local tool_requests=$(echo "$response" | python3 -c "import sys,json; r=json.load(sys.stdin).get('tool_requests'); print(json.dumps(r) if r else '')" 2>/dev/null)
 
         if [ -n "$tool_requests" ] && [ "$tool_requests" != "null" ]; then
-            # Ejecutar tools localmente
-            tool_results=$(execute_tools_locally "$tool_requests")
+            # Ejecutar tools localmente (pass start_time for elapsed calculation)
+            tool_results=$(execute_tools_locally "$tool_requests" "$start_time")
+
+            # Validate tool_results is valid JSON
+            if [ -z "$tool_results" ]; then
+                echo '{"error": "Tool execution returned empty results", "response": ""}'
+                return 1
+            fi
+
+            # Verify it's valid JSON array
+            local is_valid=$(echo "$tool_results" | python3 -c "import sys,json; r=json.load(sys.stdin); print('yes' if isinstance(r, list) and len(r) > 0 else 'no')" 2>/dev/null)
+            if [ "$is_valid" != "yes" ]; then
+                echo "{\"error\": \"Invalid tool results format\", \"response\": \"\", \"debug\": $(echo "$tool_results" | head -c 200 | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')}"
+                return 1
+            fi
+
             # Continuar el loop para enviar resultados
             continue
         fi
 
         # No hay tool_requests, devolver respuesta final
-        echo "$response"
+        # Add total elapsed time and accumulated session costs to response
+        local total_elapsed=$(($(date +%s) - start_time))
+        echo "$response" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+data['total_elapsed'] = $total_elapsed
+data['session_tokens'] = $accumulated_session_tokens
+data['session_cost'] = $accumulated_session_cost
+print(json.dumps(data))
+"
         return 0
     done
 
-    echo '{"error": "Maximo de iteraciones de tools alcanzado"}'
-    return 1
+    # Max tool iterations reached - return special response for CLI to handle
+    local total_elapsed=$(($(date +%s) - start_time))
+    echo "{\"error\": null, \"max_tool_iterations_reached\": true, \"conversation_id\": \"$current_conv_id\", \"total_elapsed\": $total_elapsed, \"session_tokens\": $accumulated_session_tokens, \"session_cost\": $accumulated_session_cost, \"response\": \"\"}"
+    return 0
 }
