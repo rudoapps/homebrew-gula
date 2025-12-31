@@ -167,16 +167,21 @@ agent_chat_single() {
     show_project_info
     echo ""
 
-    local response
+    local response run_status
+    # Temporarily disable errexit to capture non-zero return codes
+    set +e
     response=$(run_hybrid_chat "$prompt" "")
-    local run_status=$?
+    run_status=$?
+    set -e
 
     # Handle auth errors - try refresh first, then prompt for login
     if [ $run_status -eq 2 ]; then
         if handle_auth_error; then
             echo -e "${BOLD}Reintentando...${NC}"
+            set +e
             response=$(run_hybrid_chat "$prompt" "")
             run_status=$?
+            set -e
         else
             return 1
         fi
@@ -400,15 +405,20 @@ agent_chat_interactive() {
             echo ""
 
             # Use hybrid mode - tools execute locally
-            local response
+            local response run_status
+            # Temporarily disable errexit to capture non-zero return codes
+            set +e
             response=$(run_hybrid_chat "$current_prompt" "$conversation_id")
-            local run_status=$?
+            run_status=$?
+            set -e
 
             # Handle auth errors - try refresh first, then prompt for login
             if [ $run_status -eq 2 ]; then
                 if handle_auth_error; then
+                    set +e
                     response=$(run_hybrid_chat "$current_prompt" "$conversation_id")
                     run_status=$?
+                    set -e
                 else
                     break
                 fi

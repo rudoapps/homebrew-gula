@@ -259,7 +259,7 @@ agent_status() {
 
 # Handle auth error during operations - try refresh, then prompt login
 handle_auth_error() {
-    local retry_command="$1"
+    local retry_command="${1:-}"  # Optional, not currently used
 
     echo -e "  ${DIM}Sesion expirada, intentando renovar...${NC}"
     if refresh_agent_token; then
