@@ -425,7 +425,10 @@ try:
                 result["session_cost"] = parsed.get("session_cost", 0)
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
 
-                # Just stop spinner - tool execution will show its own output
+                # Add newline after text if we were streaming, then stop spinner
+                if streaming_text:
+                    sys.stderr.write("\n")
+                    sys.stderr.flush()
                 spinner.stop()
 
             elif event_type == "complete":
