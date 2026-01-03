@@ -196,8 +196,124 @@ SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 import re
 
+def format_markdown_table(table_lines):
+    """Format a markdown table with proper alignment and borders."""
+    if not table_lines:
+        return ""
+
+    # Parse cells from each row
+    rows = []
+    separator_idx = -1
+    for i, line in enumerate(table_lines):
+        # Remove leading/trailing pipes and split
+        cells = [c.strip() for c in line.strip().strip('|').split('|')]
+        # Check if this is a separator row (contains only dashes, colons, spaces)
+        if all(re.match(r'^:?-+:?$', c.strip()) for c in cells if c.strip()):
+            separator_idx = i
+        rows.append(cells)
+
+    if not rows:
+        return ""
+
+    # Calculate column widths (EXCLUDING separator row - it's just dashes)
+    num_cols = max(len(row) for row in rows)
+    col_widths = [0] * num_cols
+    for row_idx, row in enumerate(rows):
+        if row_idx == separator_idx:
+            continue  # Skip separator row for width calculation
+        for i, cell in enumerate(row):
+            if i < num_cols:
+                # Strip ANSI codes for width calculation
+                clean_cell = re.sub(r'\x1b\[[0-9;]*m', '', cell)
+                col_widths[i] = max(col_widths[i], len(clean_cell))
+
+    # Ensure minimum column width
+    col_widths = [max(w, 3) for w in col_widths]
+
+    # Build formatted table
+    result = []
+
+    # Box drawing characters
+    TOP_LEFT = "┌"
+    TOP_RIGHT = "┐"
+    BOT_LEFT = "└"
+    BOT_RIGHT = "┘"
+    HORIZ = "─"
+    VERT = "│"
+    T_DOWN = "┬"
+    T_UP = "┴"
+    T_RIGHT = "├"
+    T_LEFT = "┤"
+    CROSS = "┼"
+
+    # Top border
+    top_border = TOP_LEFT + T_DOWN.join(HORIZ * (w + 2) for w in col_widths) + TOP_RIGHT
+    result.append(f"{DIM}{top_border}{NC}")
+
+    for i, row in enumerate(rows):
+        # Skip separator row (we'll draw our own)
+        if i == separator_idx:
+            # Draw separator line
+            sep = T_RIGHT + CROSS.join(HORIZ * (w + 2) for w in col_widths) + T_LEFT
+            result.append(f"{DIM}{sep}{NC}")
+            continue
+
+        # Pad row to have correct number of columns
+        padded_row = row + [''] * (num_cols - len(row))
+
+        # Build row with cells
+        cells_formatted = []
+        for j in range(num_cols):
+            cell = padded_row[j] if j < len(padded_row) else ''
+            width = col_widths[j]
+            # Calculate padding
+            clean_cell = re.sub(r'\x1b\[[0-9;]*m', '', cell)
+            padding = max(0, width - len(clean_cell))
+            # Header row (first row) - make bold
+            if i == 0:
+                cells_formatted.append(f" {BOLD}{cell}{NC}{' ' * padding} ")
+            else:
+                cells_formatted.append(f" {cell}{' ' * padding} ")
+
+        row_str = f"{DIM}{VERT}{NC}" + f"{DIM}{VERT}{NC}".join(cells_formatted) + f"{DIM}{VERT}{NC}"
+        result.append(row_str)
+
+    # Bottom border
+    bot_border = BOT_LEFT + T_UP.join(HORIZ * (w + 2) for w in col_widths) + BOT_RIGHT
+    result.append(f"{DIM}{bot_border}{NC}")
+
+    return "\n".join(result)
+
+
 def markdown_to_ansi(text):
     """Convert basic markdown to ANSI terminal codes."""
+
+    # First, handle tables (before other processing)
+    lines = text.split('\n')
+    result_lines = []
+    table_buffer = []
+    in_table = False
+
+    for line in lines:
+        # Detect table rows (start with | or contain | surrounded by content)
+        is_table_row = bool(re.match(r'^\s*\|.*\|', line.strip()))
+
+        if is_table_row:
+            in_table = True
+            table_buffer.append(line)
+        else:
+            if in_table and table_buffer:
+                # Process accumulated table
+                result_lines.append(format_markdown_table(table_buffer))
+                table_buffer = []
+                in_table = False
+            result_lines.append(line)
+
+    # Don't forget remaining table at end of text
+    if table_buffer:
+        result_lines.append(format_markdown_table(table_buffer))
+
+    text = '\n'.join(result_lines)
 
     # Code blocks (```lang ... ``` or `` ... ``) - handle 2+ backticks
     def replace_code_block(match):
@@ -226,9 +342,6 @@ def markdown_to_ansi(text):
 
     # Horizontal rules (---) - dim line
     text = re.sub(r'^-{3,}$', f'{DIM}───────────────────────────────{NC}', text, flags=re.MULTILINE)
-
-    # Tables - just leave as-is but dim the pipes
-    text = re.sub(r'\|', f'{DIM}|{NC}', text)
 
     return text
 
@@ -383,9 +496,25 @@ try:
                 result["task_type"] = parsed.get("task_type", "")
                 conv_id = parsed.get("conversation_id")
                 rag_enabled = parsed.get("rag_enabled", False)
+                rag_info = parsed.get("rag", {})
                 model_info = parsed.get("model", {})
                 model_name = model_info.get("model", "")
-                rag_indicator = f" {GREEN}[RAG]{NC}" if rag_enabled else ""
+
+                # Build RAG indicator based on scope
+                if rag_enabled and rag_info:
+                    rag_scope = rag_info.get("scope", "current")
+                    rag_chunks = rag_info.get("chunks", 0)
+                    rag_projects = rag_info.get("projects", "")
+                    if rag_scope == "related":
+                        # Multi-project RAG - show with special indicator
+                        rag_indicator = f" {CYAN}[RAG:{rag_chunks} multi-proyecto]{NC}"
+                    else:
+                        rag_indicator = f" {GREEN}[RAG:{rag_chunks}]{NC}"
+                elif rag_enabled:
+                    rag_indicator = f" {GREEN}[RAG]{NC}"
+                else:
+                    rag_indicator = ""
+
                 model_indicator = f" {DIM}({model_name}){NC}" if model_name else ""
                 spinner.start(f"Conversacion #{conv_id}{rag_indicator}{model_indicator}")
 
