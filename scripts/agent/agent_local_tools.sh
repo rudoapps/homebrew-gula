@@ -135,6 +135,15 @@ generate_project_context() {
     local git_status=$(git status --short 2>/dev/null | head -20 || echo "")
     local dependencies=$(get_dependencies_summary "$project_type")
 
+    # Read project rules file if exists (.claude-project, CLAUDE.md, or .agent-rules)
+    local project_rules=""
+    for rules_file in ".claude-project" "CLAUDE.md" ".agent-rules"; do
+        if [ -f "$rules_file" ]; then
+            project_rules=$(cat "$rules_file" 2>/dev/null | head -200)
+            break
+        fi
+    done
+
     python3 << PYEOF
 import json
 
@@ -146,7 +155,8 @@ context = {
     "git_branch": "$git_branch",
     "git_status": """$git_status""".strip(),
     "key_files": $key_files,
-    "dependencies": """$dependencies""".strip()
+    "dependencies": """$dependencies""".strip(),
+    "project_rules": """$project_rules""".strip()
 }
 
 print(json.dumps(context))
@@ -300,6 +310,79 @@ else:
     # Usar la ruta resuelta
     local resolved_path="${path_check#OK:}"
 
+    # =========================================================================
+    # ARCHIVOS SENSIBLES QUE REQUIEREN APROBACIÓN
+    # =========================================================================
+    local needs_approval=false
+    local risk_reason=""
+    local filename=$(basename "$path")
+
+    # Patrones de archivos sensibles
+    local sensitive_patterns=(
+        ".env|Archivo de variables de entorno"
+        ".env.local|Archivo de variables de entorno local"
+        ".env.production|Archivo de variables de producción"
+        "credentials|Archivo de credenciales"
+        "secrets|Archivo de secretos"
+        ".ssh|Configuración SSH"
+        ".aws|Configuración AWS"
+        ".gitignore|Configuración de Git ignore"
+        ".gitattributes|Atributos de Git"
+        "package.json|Configuración de Node.js"
+        "Podfile|Dependencias de iOS"
+        "Gemfile|Dependencias de Ruby"
+        "requirements.txt|Dependencias de Python"
+        "pyproject.toml|Configuración de Python"
+        "Dockerfile|Configuración de Docker"
+        "docker-compose|Configuración de Docker Compose"
+        ".yml|Archivo YAML de configuración"
+        ".yaml|Archivo YAML de configuración"
+        "config.|Archivo de configuración"
+        "settings.|Archivo de configuración"
+    )
+
+    for entry in "${sensitive_patterns[@]}"; do
+        local pattern="${entry%%|*}"
+        local reason="${entry#*|}"
+        if [[ "$path" == *"$pattern"* ]] || [[ "$filename" == *"$pattern"* ]]; then
+            needs_approval=true
+            risk_reason="$reason"
+            break
+        fi
+    done
+
+    # Verificar si el archivo ya existe (sobrescritura)
+    if [ -f "$resolved_path" ]; then
+        if [ "$needs_approval" = false ]; then
+            needs_approval=true
+            risk_reason="Sobrescribir archivo existente"
+        else
+            risk_reason="$risk_reason + Sobrescribir existente"
+        fi
+    fi
+
+    # Si requiere aprobación, preguntar al usuario
+    if [ "$needs_approval" = true ]; then
+        echo "" >&2
+        echo -e "${YELLOW}⚠️  ESCRITURA DE ARCHIVO SENSIBLE${NC}" >&2
+        echo -e "${DIM}────────────────────────────────────────${NC}" >&2
+        echo -e "Razón: ${BOLD}$risk_reason${NC}" >&2
+        echo -e "Archivo: ${RED}$path${NC}" >&2
+        echo -e "Tamaño: ${#content} bytes" >&2
+        echo -e "${DIM}────────────────────────────────────────${NC}" >&2
+        echo "" >&2
+
+        read -p "¿Aprobar escritura? (s/N): " approval >&2
+
+        if [[ ! "$approval" =~ ^[sS]$ ]]; then
+            echo "Escritura rechazada por el usuario"
+            return 1
+        fi
+
+        echo -e "${GREEN}✓ Escritura aprobada${NC}" >&2
+        echo "" >&2
+    fi
+
     # Crear directorio si no existe
     local dir=$(dirname "$resolved_path")
     mkdir -p "$dir"
@@ -319,21 +402,155 @@ tool_run_command() {
         return 1
     fi
 
-    # Lista de comandos peligrosos bloqueados
-    local dangerous_patterns=("rm -rf /" "rm -rf ~" "sudo rm" "mkfs" "> /dev" "dd if=")
-    for pattern in "${dangerous_patterns[@]}"; do
+    # =========================================================================
+    # COMANDOS SIEMPRE BLOQUEADOS (catastróficos, sin posibilidad de aprobar)
+    # =========================================================================
+    local blocked_patterns=(
+        "rm -rf /"
+        "rm -rf ~"
+        "rm -rf \$HOME"
+        "mkfs"
+        "> /dev/sd"
+        "> /dev/nvme"
+        "dd if=/dev/zero"
+        "dd if=/dev/random"
+        ":(){ :|:& };:"  # Fork bomb
+        "chmod -R 777 /"
+        "chown -R"
+        "curl.*|.*sh"
+        "wget.*|.*sh"
+    )
+
+    for pattern in "${blocked_patterns[@]}"; do
         if [[ "$command" == *"$pattern"* ]]; then
-            echo "Error: Comando bloqueado por seguridad"
+            echo "Error: Comando bloqueado permanentemente por seguridad: contiene '$pattern'"
             return 1
         fi
     done
 
-    # Ejecutar con timeout
-    timeout "$MAX_COMMAND_TIMEOUT" bash -c "$command" 2>&1 | head -"$MAX_OUTPUT_LINES"
+    # =========================================================================
+    # COMANDOS QUE REQUIEREN APROBACIÓN DEL USUARIO
+    # =========================================================================
+    local needs_approval=false
+    local risk_reason=""
+
+    # Patrones que requieren aprobación
+    local approval_patterns=(
+        "rm -rf|Eliminar recursivamente archivos"
+        "rm -r|Eliminar recursivamente"
+        "rm \\*|Eliminar con wildcard"
+        "rm -f|Eliminar forzado"
+        "sudo|Ejecutar como superusuario"
+        "kill|Terminar proceso"
+        "killall|Terminar todos los procesos"
+        "pkill|Terminar procesos por nombre"
+        "chmod|Cambiar permisos"
+        "chown|Cambiar propietario"
+        "mv /|Mover desde raíz"
+        "cp -r /|Copiar desde raíz"
+        "> |Sobrescribir archivo"
+        ">>|Añadir a archivo"
+        "curl.*-o|Descargar archivo"
+        "wget|Descargar archivo"
+        "npm install -g|Instalación global npm"
+        "pip install|Instalar paquete Python"
+        "brew install|Instalar con Homebrew"
+        "apt install|Instalar con apt"
+        "apt-get|Gestión de paquetes apt"
+        "systemctl|Control de servicios"
+        "service|Control de servicios"
+        "shutdown|Apagar sistema"
+        "reboot|Reiniciar sistema"
+        "git push|Subir cambios a remoto"
+        "git push -f|Push forzado"
+        "git reset --hard|Reset destructivo"
+        "docker rm|Eliminar contenedor"
+        "docker rmi|Eliminar imagen"
+        "docker system prune|Limpiar Docker"
+    )
+
+    for entry in "${approval_patterns[@]}"; do
+        local pattern="${entry%%|*}"
+        local reason="${entry#*|}"
+        if [[ "$command" =~ $pattern ]]; then
+            needs_approval=true
+            risk_reason="$reason"
+            break
+        fi
+    done
+
+    # Si requiere aprobación, preguntar al usuario
+    if [ "$needs_approval" = true ]; then
+        echo "" >&2
+        echo -e "${YELLOW}⚠️  COMANDO POTENCIALMENTE PELIGROSO${NC}" >&2
+        echo -e "${DIM}────────────────────────────────────────${NC}" >&2
+        echo -e "Razón: ${BOLD}$risk_reason${NC}" >&2
+        echo -e "Comando: ${RED}$command${NC}" >&2
+        echo -e "${DIM}────────────────────────────────────────${NC}" >&2
+        echo "" >&2
+
+        # Preguntar confirmación
+        read -p "¿Aprobar ejecución? (s/N): " approval >&2
+
+        if [[ ! "$approval" =~ ^[sS]$ ]]; then
+            echo "Comando rechazado por el usuario"
+            return 1
+        fi
+
+        echo -e "${GREEN}✓ Comando aprobado${NC}" >&2
+        echo "" >&2
+    fi
+
+    # =========================================================================
+    # EJECUTAR COMANDO CON POSIBILIDAD DE CANCELACIÓN
+    # =========================================================================
+
+    # Mostrar mensaje de cancelación
+    echo -e "${DIM}(Presiona Ctrl+C para cancelar el comando)${NC}" >&2
+
+    # Guardar el handler original de SIGINT
+    local original_trap=$(trap -p SIGINT)
+
+    # Variable para saber si fue cancelado
+    local was_cancelled=false
+
+    # Crear archivo temporal para el output
+    local tmp_output=$(mktemp)
+
+    # Ejecutar en background
+    timeout "$MAX_COMMAND_TIMEOUT" bash -c "$command" > "$tmp_output" 2>&1 &
+    local cmd_pid=$!
+
+    # Handler para Ctrl+C - solo mata el comando, no el agente
+    trap '
+        was_cancelled=true
+        kill $cmd_pid 2>/dev/null
+        wait $cmd_pid 2>/dev/null
+    ' SIGINT
+
+    # Esperar a que termine el comando
+    wait $cmd_pid 2>/dev/null
     local exit_code=$?
 
-    if [ $exit_code -eq 124 ]; then
-        echo -e "\n[Comando timeout despues de ${MAX_COMMAND_TIMEOUT}s]"
+    # Restaurar el handler original
+    eval "$original_trap"
+    trap - SIGINT
+
+    # Leer output
+    local output=$(head -"$MAX_OUTPUT_LINES" "$tmp_output")
+    rm -f "$tmp_output"
+
+    # Mostrar resultado según el caso
+    if [ "$was_cancelled" = true ]; then
+        echo -e "\n${YELLOW}[Comando cancelado por el usuario]${NC}"
+        echo "Comando interrumpido: $command"
+        return 130  # Código estándar para SIGINT
+    elif [ $exit_code -eq 124 ]; then
+        echo "$output"
+        echo -e "\n${YELLOW}[Comando timeout después de ${MAX_COMMAND_TIMEOUT}s]${NC}"
+        echo "Puedes aumentar MAX_COMMAND_TIMEOUT si necesitas más tiempo."
+    else
+        echo "$output"
     fi
 
     return $exit_code
