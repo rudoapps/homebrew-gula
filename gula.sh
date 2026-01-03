@@ -165,6 +165,9 @@ show_help() {
   echo ""
   echo -e "${BOLD}COMANDOS PRINCIPALES:${NC}"
   echo ""
+  echo -e "${BOLD}  chat${NC}     Inicia conversacion con el agente AI"
+  echo -e "${BOLD}  login${NC}    Inicia sesion en el agente AI"
+  echo -e "${BOLD}  setup${NC}    Instala dependencias del agente AI"
   echo -e "${BOLD}  list${NC}     Lista módulos disponibles para el proyecto actual"
   echo -e "${BOLD}  install${NC}  Instala un módulo específico en el proyecto actual"
   echo -e "${BOLD}  create${NC}   Crea un nuevo proyecto con arquitectura predefinida"
@@ -173,7 +176,6 @@ show_help() {
   echo -e "${BOLD}  status${NC}   Muestra el estado del proyecto y módulos instalados"
   echo -e "${BOLD}  validate${NC} Valida archivos configuration.gula del proyecto"
   echo -e "${BOLD}  install-hook${NC} Instala pre-commit hook para validar configuration.gula"
-  echo -e "${BOLD}  agent${NC}    Interactua con el agente AI (chat, login, etc.)"
   echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
@@ -236,11 +238,11 @@ show_help() {
   echo "  gula install-hook                               # Instala hook para validar en cada commit"
   echo ""
   echo -e "${BOLD}  Usar el agente AI:${NC}"
-  echo "  gula agent setup                                # Instalar dependencias del agente"
-  echo "  gula agent login                                # Iniciar sesion"
-  echo "  gula agent chat                                 # Modo interactivo"
-  echo "  gula agent chat \"Hola\"                          # Mensaje unico"
-  echo "  gula agent --help                               # Ver ayuda del agente"
+  echo "  gula setup                                      # Instalar dependencias del agente"
+  echo "  gula login                                      # Iniciar sesion"
+  echo "  gula chat                                       # Modo interactivo"
+  echo "  gula chat \"Hola\"                                # Mensaje unico"
+  echo "  gula chat --continue                            # Continuar ultima conversacion"
   echo ""
   echo -e "${BOLD}TIPOS DE PROYECTO SOPORTADOS:${NC}"
   echo ""
@@ -408,7 +410,7 @@ create_project() {
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
-  echo "Uso: $0 {install|list|template|create|branches|status|validate|install-hook|help} [opciones]"
+  echo "Uso: $0 {chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para más información."
   exit 1
 fi
@@ -434,7 +436,19 @@ if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
   VALIDATE_STAGED="true"
 fi
 
-# Manejar caso especial: gula agent <subcommand> [args]
+# Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
+if [[ "$COMMAND" == "chat" || "$COMMAND" == "login" || "$COMMAND" == "setup" || "$COMMAND" == "logout" || "$COMMAND" == "whoami" ]]; then
+  # Check if --help is requested
+  if [[ "${2:-}" == "--help" || "${2:-}" == "-h" ]]; then
+    agent_command "help"
+    exit $?
+  fi
+  shift  # Remove the command from args
+  agent_command "$COMMAND" "$@"
+  exit $?
+fi
+
+# Mantener compatibilidad con: gula agent <subcommand> [args]
 if [[ "$COMMAND" == "agent" ]]; then
   AGENT_SUBCOMMAND="${2:---help}"
   # Normalize --help to help
@@ -657,7 +671,7 @@ elif [ "$COMMAND" == "install-hook" ]; then
 elif [ "$COMMAND" == "agent" ]; then
   agent_command "$AGENT_SUBCOMMAND" $AGENT_ARGS
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|install-hook|agent|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Comando no reconocido. Uso: $0 {chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
