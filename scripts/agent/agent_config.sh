@@ -11,7 +11,7 @@ AGENT_CONFIG_DIR="$HOME/.config/gula-agent"
 AGENT_CONFIG_FILE="$AGENT_CONFIG_DIR/config.json"
 AGENT_CONVERSATIONS_FILE="$AGENT_CONFIG_DIR/conversations.json"
 AGENT_SETUP_DONE_FILE="$AGENT_CONFIG_DIR/.setup_done"
-AGENT_API_URL="${AGENT_API_URL:-http://localhost:8002/api/v1}"
+AGENT_API_URL="${AGENT_API_URL:-https://agent.rudo.es/api/v1}"
 
 # Required and optional dependencies
 AGENT_REQUIRED_DEPS=("python3" "curl")
