@@ -11,7 +11,9 @@ done
 export JSON_OUTPUT
 
 HOMEBREW_PREFIX=$(brew --prefix)
-scripts_dir="$HOMEBREW_PREFIX/share/support/scripts/scripts"
+# Obtener el directorio donde está ubicado este script (para desarrollo local)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+scripts_dir="$SCRIPT_DIR/scripts"
 source "$scripts_dir/global_vars.sh"
 
 # Solo mostrar logo y mensajes si no está en modo JSON
@@ -50,6 +52,9 @@ source "$scripts_dir/flutter/flutter_template.sh"
 source "$scripts_dir/python/python.sh"
 source "$scripts_dir/python/python_create_project.sh"
 source "$scripts_dir/python/python_template.sh"
+source "$scripts_dir/support/general_support.sh"
+
+# Force reload list_branches to ensure we have the latest version
 unset -f list_branches 2>/dev/null
 source "$scripts_dir/support/general_support.sh"
 source "$scripts_dir/support/git.sh"
@@ -57,6 +62,8 @@ source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
 source "$scripts_dir/support/validation.sh"
 source "$scripts_dir/agent/agent.sh"
+
+# list_branches function loaded from general_support.sh
 
 if [ "$JSON_OUTPUT" != "true" ]; then
   echo -e "✅ Imports cargados correctamente"
@@ -71,7 +78,7 @@ ARCHETYPE_TYPE=""
 FORCE_INSTALL="false"
 BATCH_MODE="false"
 INTEGRATE_MODE="false"
-INSTALL_MODE_SELECTED="false"
+INSTALL_MODE_SELECTED="false"  # Indica si el usuario ya eligió modo vía flag
 MODULE_NAMES=()
 export FORCE_INSTALL
 export BATCH_MODE
@@ -115,6 +122,13 @@ install_module() {
     type=$?
   fi
 
+  # Validar que --integrate solo se use con iOS
+  if [ "$INTEGRATE_MODE" == "true" ] && [ "$type" != "1" ]; then
+    echo -e "${RED}Error: La opción --integrate solo está disponible para proyectos iOS.${NC}"
+    echo -e "${YELLOW}Para proyectos Android, Flutter o Python, usa el modo por defecto (--module).${NC}"
+    exit 1
+  fi
+
   if [ "$BATCH_MODE" = "true" ]; then
     # Modo batch: instalar múltiples módulos
     case "$type" in
@@ -151,6 +165,9 @@ show_help() {
   echo ""
   echo -e "${BOLD}COMANDOS PRINCIPALES:${NC}"
   echo ""
+  echo -e "${BOLD}  chat${NC}     Inicia conversacion con el agente AI"
+  echo -e "${BOLD}  login${NC}    Inicia sesion en el agente AI"
+  echo -e "${BOLD}  setup${NC}    Instala dependencias del agente AI"
   echo -e "${BOLD}  list${NC}     Lista módulos disponibles para el proyecto actual"
   echo -e "${BOLD}  install${NC}  Instala un módulo específico en el proyecto actual"
   echo -e "${BOLD}  create${NC}   Crea un nuevo proyecto con arquitectura predefinida"
@@ -159,19 +176,17 @@ show_help() {
   echo -e "${BOLD}  status${NC}   Muestra el estado del proyecto y módulos instalados"
   echo -e "${BOLD}  validate${NC} Valida archivos configuration.gula del proyecto"
   echo -e "${BOLD}  install-hook${NC} Instala pre-commit hook para validar configuration.gula"
-  echo -e "${BOLD}  agent${NC}    Interactua con el agente AI (login, chat, etc.)"
   echo -e "${BOLD}  help${NC}     Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}OPCIONES GLOBALES:${NC}"
   echo ""
   echo -e "${BOLD}  --key=XXXX${NC}      Clave de acceso para repositorios privados (requerida para install/list/create/branches)"
   echo -e "${BOLD}  --branch=YYYY${NC}    Rama específica del repositorio (opcional para install/list/create)"
-  echo -e "${BOLD}  --tag=ZZZZ${NC}      Tag específico del repositorio (opcional para install/list/create)"
   echo -e "${BOLD}  --type=ZZZZ${NC}     Tipo de template: clean|fastapi (para template)"
   echo -e "${BOLD}  --archetype=ZZZZ${NC} Plataforma de arquetipos: android|ios|flutter|python (para branches)"
   echo -e "${BOLD}  --force${NC}         Forzar reinstalación sin confirmar (para install)"
   echo -e "${BOLD}  --module${NC}        Instalar como módulo completo sin preguntar (modo por defecto)"
-  echo -e "${BOLD}  --integrate${NC}     Integrar en estructura existente sin preguntar (data→data, domain→domain, etc.)"
+  echo -e "${BOLD}  --integrate${NC}     [Solo iOS] Integrar en estructura existente (data→data, domain→domain, etc.)"
   echo -e "${BOLD}  --list${NC}          Lista todos los templates disponibles (para template)"
   echo -e "${BOLD}  --help, -h${NC}      Muestra esta ayuda"
   echo ""
@@ -187,7 +202,7 @@ show_help() {
   echo "  gula install network --key=mi_clave --tag=v1.0.0"
   echo "  gula install authentication --key=mi_clave --force     # Reinstalar sin confirmar"
   echo "  gula install authentication --key=mi_clave --module    # Módulo completo (sin preguntar)"
-  echo "  gula install authentication --key=mi_clave --integrate # Integrar en capas (sin preguntar)"
+  echo "  gula install authentication --key=mi_clave --integrate # [iOS] Integrar en capas"
   echo ""
   echo -e "${BOLD}  Instalar múltiples módulos (batch):${NC}"
   echo "  gula install login,wallet,payments --key=mi_clave_secreta"
@@ -221,6 +236,13 @@ show_help() {
   echo ""
   echo -e "${BOLD}  Instalar pre-commit hook:${NC}"
   echo "  gula install-hook                               # Instala hook para validar en cada commit"
+  echo ""
+  echo -e "${BOLD}  Usar el agente AI:${NC}"
+  echo "  gula setup                                      # Instalar dependencias del agente"
+  echo "  gula login                                      # Iniciar sesion"
+  echo "  gula chat                                       # Modo interactivo"
+  echo "  gula chat \"Hola\"                                # Mensaje unico"
+  echo "  gula chat --continue                            # Continuar ultima conversacion"
   echo ""
   echo -e "${BOLD}TIPOS DE PROYECTO SOPORTADOS:${NC}"
   echo ""
@@ -388,7 +410,7 @@ create_project() {
 
 # Verificar que se haya pasado un comando válido
 if [ -z "$1" ]; then
-  echo "Uso: $0 {install|list|template|create|branches|status|validate|install-hook|help} [opciones]"
+  echo "Uso: $0 {chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para más información."
   exit 1
 fi
@@ -414,6 +436,31 @@ if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
   VALIDATE_STAGED="true"
 fi
 
+# Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
+if [[ "$COMMAND" == "chat" || "$COMMAND" == "login" || "$COMMAND" == "setup" || "$COMMAND" == "logout" || "$COMMAND" == "whoami" ]]; then
+  # Check if --help is requested
+  if [[ "${2:-}" == "--help" || "${2:-}" == "-h" ]]; then
+    agent_command "help"
+    exit $?
+  fi
+  shift  # Remove the command from args
+  agent_command "$COMMAND" "$@"
+  exit $?
+fi
+
+# Mantener compatibilidad con: gula agent <subcommand> [args]
+if [[ "$COMMAND" == "agent" ]]; then
+  AGENT_SUBCOMMAND="${2:---help}"
+  # Normalize --help to help
+  if [[ "$AGENT_SUBCOMMAND" == "--help" || "$AGENT_SUBCOMMAND" == "-h" ]]; then
+    AGENT_SUBCOMMAND="help"
+  fi
+  shift 2 2>/dev/null || shift
+  # Skip the while loop for agent commands - pass remaining args properly quoted
+  agent_command "$AGENT_SUBCOMMAND" "$@"
+  exit $?
+fi
+
 shift
 
 while [[ "$#" -gt 0 ]]; do
@@ -423,9 +470,6 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --branch=*)
       BRANCH="${1#*=}"
-      ;;
-    --tag=*)
-      TAG="${1#*=}"
       ;;
     --type=*)
       TEMPLATE_TYPE="${1#*=}"
@@ -508,6 +552,7 @@ while [[ "$#" -gt 0 ]]; do
       COMMAND="agent"
       AGENT_SUBCOMMAND="${2:-help}"
       AGENT_ARGS="${@:3}"
+      break  # Stop processing more arguments - agent handles its own
       ;;
     *)
       MODULE_NAME="$1"
@@ -626,7 +671,7 @@ elif [ "$COMMAND" == "install-hook" ]; then
 elif [ "$COMMAND" == "agent" ]; then
   agent_command "$AGENT_SUBCOMMAND" $AGENT_ARGS
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|install-hook|agent|help} [--key=xxxx] [--branch=yyyy]"
+  echo "Comando no reconocido. Uso: $0 {chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
