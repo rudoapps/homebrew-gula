@@ -372,10 +372,12 @@ else:
         echo -e "${DIM}────────────────────────────────────────${NC}" >&2
         echo "" >&2
 
-        echo -n "¿Aprobar escritura? (s/N): " >&2
-        read approval < /dev/tty
+        # Usar gum para selector interactivo
+        local approval
+        approval=$(gum choose --cursor="→ " --cursor.foreground="212" \
+            "Aprobar" "Rechazar" < /dev/tty 2>/dev/tty)
 
-        if [[ ! "$approval" =~ ^[sS]$ ]]; then
+        if [[ "$approval" != "Aprobar" ]]; then
             echo "Escritura rechazada por el usuario"
             return 1
         fi
@@ -510,12 +512,12 @@ tool_run_command() {
             echo -e "${DIM}────────────────────────────────────────${NC}" >&2
             echo "" >&2
 
-            # Preguntar confirmación con opción "siempre"
-            echo -e "Opciones: ${GREEN}s${NC}=sí, ${RED}N${NC}=no, ${YELLOW}siempre${NC}=añadir a whitelist" >&2
-            echo -n "¿Aprobar ejecución? [s/N/siempre]: " >&2
-            read approval < /dev/tty
+            # Usar gum para selector interactivo
+            local approval
+            approval=$(gum choose --cursor="→ " --cursor.foreground="212" \
+                "Aprobar" "Siempre (añadir a whitelist)" "Rechazar" < /dev/tty 2>/dev/tty)
 
-            if [[ "$approval" == "siempre" ]]; then
+            if [[ "$approval" == "Siempre (añadir a whitelist)" ]]; then
                 # Añadir patrón a whitelist
                 mkdir -p "$(dirname "$whitelist_file")"
                 # Escapar caracteres especiales para regex
@@ -523,7 +525,7 @@ tool_run_command() {
                 echo "^${safe_pattern}$" >> "$whitelist_file"
                 echo -e "${GREEN}✓ Comando añadido a whitelist${NC}" >&2
                 echo -e "${DIM}  Archivo: $whitelist_file${NC}" >&2
-            elif [[ ! "$approval" =~ ^[sS]$ ]]; then
+            elif [[ "$approval" != "Aprobar" ]]; then
                 echo "Comando rechazado por el usuario"
                 return 1
             fi

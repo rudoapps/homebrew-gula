@@ -6,6 +6,7 @@ class Gula < Formula
   license "MIT"
 
   depends_on "jq"
+  depends_on "gum"
 
   def install
     # Instalar script principal
