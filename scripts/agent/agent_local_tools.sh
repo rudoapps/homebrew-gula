@@ -364,25 +364,29 @@ else:
     # Si requiere aprobación, preguntar al usuario
     if [ "$needs_approval" = true ]; then
         echo "" >&2
-        echo -e "${YELLOW}⚠️  ESCRITURA DE ARCHIVO SENSIBLE${NC}" >&2
-        echo -e "${DIM}────────────────────────────────────────${NC}" >&2
-        echo -e "Razón: ${BOLD}$risk_reason${NC}" >&2
-        echo -e "Archivo: ${RED}$path${NC}" >&2
-        echo -e "Tamaño: ${#content} bytes" >&2
-        echo -e "${DIM}────────────────────────────────────────${NC}" >&2
+        echo -e "${DIM}┌─${NC} ${CYAN}Confirmar escritura${NC} ${DIM}───────────────────────────┐${NC}" >&2
+        echo -e "${DIM}│${NC}" >&2
+        echo -e "${DIM}│${NC}  ${BOLD}$path${NC}" >&2
+        echo -e "${DIM}│${NC}  ${DIM}$risk_reason · ${#content} bytes${NC}" >&2
+        echo -e "${DIM}│${NC}" >&2
+        echo -e "${DIM}└────────────────────────────────────────────────┘${NC}" >&2
         echo "" >&2
 
-        # Usar gum para selector interactivo
+        # Selector interactivo con gum
         local approval
-        approval=$(gum choose --cursor="→ " --cursor.foreground="212" \
-            "Aprobar" "Rechazar" < /dev/tty 2>/dev/tty)
+        approval=$(gum choose \
+            --cursor="› " \
+            --cursor.foreground="$GUM_ACCENT" \
+            --selected.foreground="$GUM_SUCCESS" \
+            --item.foreground="$GUM_SUBTLE" \
+            "Permitir" "Cancelar" < /dev/tty 2>/dev/tty)
 
-        if [[ "$approval" != "Aprobar" ]]; then
-            echo "Escritura rechazada por el usuario"
+        if [[ "$approval" != "Permitir" ]]; then
+            echo -e "${DIM}Escritura cancelada${NC}" >&2
             return 1
         fi
 
-        echo -e "${GREEN}✓ Escritura aprobada${NC}" >&2
+        echo -e "${GREEN}✓${NC} ${DIM}Escritura permitida${NC}" >&2
         echo "" >&2
     fi
 
@@ -502,35 +506,38 @@ tool_run_command() {
     # Si requiere aprobación, verificar whitelist o preguntar al usuario
     if [ "$needs_approval" = true ]; then
         if [ "$is_whitelisted" = true ]; then
-            echo -e "${DIM}[Auto-aprobado: comando en whitelist]${NC}" >&2
+            echo -e "${DIM}› auto-aprobado (whitelist)${NC}" >&2
         else
             echo "" >&2
-            echo -e "${YELLOW}⚠️  COMANDO POTENCIALMENTE PELIGROSO${NC}" >&2
-            echo -e "${DIM}────────────────────────────────────────${NC}" >&2
-            echo -e "Razón: ${BOLD}$risk_reason${NC}" >&2
-            echo -e "Comando: ${RED}$command${NC}" >&2
-            echo -e "${DIM}────────────────────────────────────────${NC}" >&2
+            echo -e "${DIM}┌─${NC} ${CYAN}Confirmar ejecución${NC} ${DIM}───────────────────────────┐${NC}" >&2
+            echo -e "${DIM}│${NC}" >&2
+            echo -e "${DIM}│${NC}  ${MAGENTA}\$${NC} ${BOLD}$command${NC}" >&2
+            echo -e "${DIM}│${NC}  ${DIM}$risk_reason${NC}" >&2
+            echo -e "${DIM}│${NC}" >&2
+            echo -e "${DIM}└────────────────────────────────────────────────┘${NC}" >&2
             echo "" >&2
 
-            # Usar gum para selector interactivo
+            # Selector interactivo con gum
             local approval
-            approval=$(gum choose --cursor="→ " --cursor.foreground="212" \
-                "Aprobar" "Siempre (añadir a whitelist)" "Rechazar" < /dev/tty 2>/dev/tty)
+            approval=$(gum choose \
+                --cursor="› " \
+                --cursor.foreground="$GUM_ACCENT" \
+                --selected.foreground="$GUM_SUCCESS" \
+                --item.foreground="$GUM_SUBTLE" \
+                "Ejecutar" "Ejecutar siempre" "Cancelar" < /dev/tty 2>/dev/tty)
 
-            if [[ "$approval" == "Siempre (añadir a whitelist)" ]]; then
+            if [[ "$approval" == "Ejecutar siempre" ]]; then
                 # Añadir patrón a whitelist
                 mkdir -p "$(dirname "$whitelist_file")"
-                # Escapar caracteres especiales para regex
                 local safe_pattern=$(echo "$command" | sed 's/[.[\*^$()+?{|]/\\&/g')
                 echo "^${safe_pattern}$" >> "$whitelist_file"
-                echo -e "${GREEN}✓ Comando añadido a whitelist${NC}" >&2
-                echo -e "${DIM}  Archivo: $whitelist_file${NC}" >&2
-            elif [[ "$approval" != "Aprobar" ]]; then
-                echo "Comando rechazado por el usuario"
+                echo -e "${GREEN}✓${NC} ${DIM}Añadido a whitelist${NC}" >&2
+            elif [[ "$approval" != "Ejecutar" ]]; then
+                echo -e "${DIM}Ejecución cancelada${NC}" >&2
                 return 1
             fi
 
-            echo -e "${GREEN}✓ Comando aprobado${NC}" >&2
+            echo -e "${GREEN}✓${NC} ${DIM}Ejecutando...${NC}" >&2
             echo "" >&2
         fi
     fi
@@ -539,8 +546,8 @@ tool_run_command() {
     # EJECUTAR COMANDO CON POSIBILIDAD DE CANCELACIÓN
     # =========================================================================
 
-    # Mostrar mensaje de cancelación
-    echo -e "${DIM}(Presiona Ctrl+C para cancelar el comando)${NC}" >&2
+    # Mostrar hint de cancelación
+    echo -e "${DIM}Ctrl+C para cancelar${NC}" >&2
 
     # Guardar el handler original de SIGINT
     local original_trap=$(trap -p SIGINT)
@@ -576,13 +583,11 @@ tool_run_command() {
 
     # Mostrar resultado según el caso
     if [ "$was_cancelled" = true ]; then
-        echo -e "\n${YELLOW}[Comando cancelado por el usuario]${NC}"
-        echo "Comando interrumpido: $command"
+        echo -e "\n${DIM}Comando cancelado${NC}"
         return 130  # Código estándar para SIGINT
     elif [ $exit_code -eq 124 ]; then
         echo "$output"
-        echo -e "\n${YELLOW}[Comando timeout después de ${MAX_COMMAND_TIMEOUT}s]${NC}"
-        echo "Puedes aumentar MAX_COMMAND_TIMEOUT si necesitas más tiempo."
+        echo -e "\n${YELLOW}Timeout (${MAX_COMMAND_TIMEOUT}s)${NC}"
     else
         echo "$output"
     fi
