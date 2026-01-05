@@ -10,10 +10,28 @@ for arg in "$@"; do
 done
 export JSON_OUTPUT
 
-HOMEBREW_PREFIX=$(brew --prefix)
-# Obtener el directorio donde está ubicado este script (para desarrollo local)
+HOMEBREW_PREFIX=$(brew --prefix 2>/dev/null || echo "/usr/local")
+
+# Detectar si estamos en Homebrew o desarrollo local
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-scripts_dir="$SCRIPT_DIR/scripts"
+
+# Buscar scripts en orden de prioridad
+if [ -d "$SCRIPT_DIR/scripts" ]; then
+    # Desarrollo local - scripts junto al ejecutable
+    scripts_dir="$SCRIPT_DIR/scripts"
+elif [ -d "$HOMEBREW_PREFIX/opt/gula/scripts" ]; then
+    # Instalación Homebrew (via opt symlink)
+    scripts_dir="$HOMEBREW_PREFIX/opt/gula/scripts"
+else
+    echo "Error: No se encontró el directorio de scripts"
+    echo "Buscado en:"
+    echo "  - $SCRIPT_DIR/scripts (desarrollo)"
+    echo "  - $HOMEBREW_PREFIX/opt/gula/scripts (homebrew)"
+    echo ""
+    echo "Si instalaste via Homebrew, intenta: brew reinstall gula"
+    exit 1
+fi
+
 source "$scripts_dir/global_vars.sh"
 
 # Solo mostrar logo y mensajes si no está en modo JSON

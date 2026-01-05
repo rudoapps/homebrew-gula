@@ -763,14 +763,18 @@ for idx, tc in enumerate(tool_requests, 1):
 
     try:
         cmd = f'source "{agent_script_dir}/agent_local_tools.sh" && execute_tool_locally "{tc_name}" "$(cat {input_file})"'
+        # Stop spinner BEFORE running command that might need user input
+        spinner.stop()
         result = subprocess.run(
             ["bash", "-c", cmd],
-            capture_output=True,
+            stdout=subprocess.PIPE,  # Capture stdout only
+            stderr=None,  # Let stderr pass through (for prompts)
+            stdin=sys.stdin,  # Allow user input
             text=True,
-            timeout=60,
+            timeout=120,  # More time for user interaction
             env={**os.environ, "AGENT_SCRIPT_DIR": agent_script_dir}
         )
-        output = result.stdout or result.stderr or "Sin resultado"
+        output = result.stdout or "Sin resultado"
         success = result.returncode == 0 and not output.startswith("Error:")
     except subprocess.TimeoutExpired:
         output = "Error: Timeout ejecutando tool (60s)"
@@ -781,8 +785,8 @@ for idx, tc in enumerate(tool_requests, 1):
     finally:
         os.unlink(input_file)
 
-    # Stop spinner
-    elapsed = spinner.stop()
+    # Spinner already stopped before command execution
+    elapsed = 0  # Time already calculated in spinner.stop() above
 
     # Truncate long output
     if len(output) > 10000:

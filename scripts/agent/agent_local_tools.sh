@@ -372,7 +372,8 @@ else:
         echo -e "${DIM}────────────────────────────────────────${NC}" >&2
         echo "" >&2
 
-        read -p "¿Aprobar escritura? (s/N): " approval >&2
+        echo -n "¿Aprobar escritura? (s/N): " >&2
+        read approval < /dev/tty
 
         if [[ ! "$approval" =~ ^[sS]$ ]]; then
             echo "Escritura rechazada por el usuario"
@@ -400,6 +401,23 @@ tool_run_command() {
     if [ -z "$command" ]; then
         echo "Error: Se requiere un comando"
         return 1
+    fi
+
+    # =========================================================================
+    # WHITELIST DE COMANDOS PRE-APROBADOS POR EL USUARIO
+    # =========================================================================
+    local whitelist_file="$HOME/.config/gula-agent/allowed_commands.txt"
+    local is_whitelisted=false
+
+    if [ -f "$whitelist_file" ]; then
+        while IFS= read -r pattern || [ -n "$pattern" ]; do
+            # Ignorar líneas vacías y comentarios
+            [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+            if [[ "$command" =~ $pattern ]]; then
+                is_whitelisted=true
+                break
+            fi
+        done < "$whitelist_file"
     fi
 
     # =========================================================================
@@ -479,26 +497,40 @@ tool_run_command() {
         fi
     done
 
-    # Si requiere aprobación, preguntar al usuario
+    # Si requiere aprobación, verificar whitelist o preguntar al usuario
     if [ "$needs_approval" = true ]; then
-        echo "" >&2
-        echo -e "${YELLOW}⚠️  COMANDO POTENCIALMENTE PELIGROSO${NC}" >&2
-        echo -e "${DIM}────────────────────────────────────────${NC}" >&2
-        echo -e "Razón: ${BOLD}$risk_reason${NC}" >&2
-        echo -e "Comando: ${RED}$command${NC}" >&2
-        echo -e "${DIM}────────────────────────────────────────${NC}" >&2
-        echo "" >&2
+        if [ "$is_whitelisted" = true ]; then
+            echo -e "${DIM}[Auto-aprobado: comando en whitelist]${NC}" >&2
+        else
+            echo "" >&2
+            echo -e "${YELLOW}⚠️  COMANDO POTENCIALMENTE PELIGROSO${NC}" >&2
+            echo -e "${DIM}────────────────────────────────────────${NC}" >&2
+            echo -e "Razón: ${BOLD}$risk_reason${NC}" >&2
+            echo -e "Comando: ${RED}$command${NC}" >&2
+            echo -e "${DIM}────────────────────────────────────────${NC}" >&2
+            echo "" >&2
 
-        # Preguntar confirmación
-        read -p "¿Aprobar ejecución? (s/N): " approval >&2
+            # Preguntar confirmación con opción "siempre"
+            echo -e "Opciones: ${GREEN}s${NC}=sí, ${RED}N${NC}=no, ${YELLOW}siempre${NC}=añadir a whitelist" >&2
+            echo -n "¿Aprobar ejecución? [s/N/siempre]: " >&2
+            read approval < /dev/tty
 
-        if [[ ! "$approval" =~ ^[sS]$ ]]; then
-            echo "Comando rechazado por el usuario"
-            return 1
+            if [[ "$approval" == "siempre" ]]; then
+                # Añadir patrón a whitelist
+                mkdir -p "$(dirname "$whitelist_file")"
+                # Escapar caracteres especiales para regex
+                local safe_pattern=$(echo "$command" | sed 's/[.[\*^$()+?{|]/\\&/g')
+                echo "^${safe_pattern}$" >> "$whitelist_file"
+                echo -e "${GREEN}✓ Comando añadido a whitelist${NC}" >&2
+                echo -e "${DIM}  Archivo: $whitelist_file${NC}" >&2
+            elif [[ ! "$approval" =~ ^[sS]$ ]]; then
+                echo "Comando rechazado por el usuario"
+                return 1
+            fi
+
+            echo -e "${GREEN}✓ Comando aprobado${NC}" >&2
+            echo "" >&2
         fi
-
-        echo -e "${GREEN}✓ Comando aprobado${NC}" >&2
-        echo "" >&2
     fi
 
     # =========================================================================

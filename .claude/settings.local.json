@@ -50,7 +50,18 @@
       "Bash(strace:*)",
       "Bash(/Users/fer/gula/gula validate)",
       "Bash(git diff:*)",
-      "Read(//Users/fer/gula-flutter/**)"
+      "Read(//Users/fer/gula-flutter/**)",
+      "Bash(cat:*)",
+      "Bash(/Users/fer/gula/gula.sh android install:*)",
+      "Bash(./gula.sh python:*)",
+      "Bash(./gula.sh:*)",
+      "Bash(gh release edit:*)",
+      "Bash(source /Users/fer/gula/scripts/support/general_support.sh)",
+      "Bash(source:*)",
+      "Bash(detect_project_source_path:*)",
+      "Bash(/Users/fer/gula/gula.sh create:*)",
+      "Bash(/Users/fer/gula/gula.sh install:*)",
+      "Bash(./create_release.sh:*)"
     ],
     "deny": [],
     "ask": []
