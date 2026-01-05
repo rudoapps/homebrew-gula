@@ -394,7 +394,8 @@ else:
 
         # SEGURIDAD: Solo permitir si explícitamente se aprueba
         if [[ "$approval" != "Permitir" ]]; then
-            echo -e "${DIM}Escritura cancelada${NC}" >&2
+            echo -e "${DIM}Escritura rechazada${NC}" >&2
+            echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO permitir esta escritura. No intentes escribir este archivo de nuevo. Pregunta al usuario qué quiere hacer."
             return 1
         fi
 
@@ -553,7 +554,9 @@ tool_run_command() {
 
             # SEGURIDAD: Si approval está vacío o no es válido, SIEMPRE cancelar
             if [[ -z "$approval" ]] || [[ "$approval" == "Cancelar" ]]; then
-                echo -e "${DIM}Ejecución cancelada${NC}" >&2
+                echo -e "${DIM}Comando rechazado${NC}" >&2
+                # Mensaje claro para el agente (stdout)
+                echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO ejecutar este comando. No intentes ejecutarlo de nuevo. Pregunta al usuario qué quiere hacer."
                 return 1
             elif [[ "$approval" == "Ejecutar siempre" ]]; then
                 # Añadir patrón a whitelist
@@ -563,7 +566,8 @@ tool_run_command() {
                 echo -e "${GREEN}✓${NC} ${DIM}Añadido a whitelist${NC}" >&2
             elif [[ "$approval" != "Ejecutar" ]]; then
                 # Cualquier otro valor = cancelar
-                echo -e "${DIM}Ejecución cancelada${NC}" >&2
+                echo -e "${DIM}Comando rechazado${NC}" >&2
+                echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO ejecutar este comando. No intentes ejecutarlo de nuevo. Pregunta al usuario qué quiere hacer."
                 return 1
             fi
 
