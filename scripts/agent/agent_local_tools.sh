@@ -372,34 +372,23 @@ else:
         echo -e "${DIM}└────────────────────────────────────────────────┘${NC}" >&2
         echo "" >&2
 
-        # Selector interactivo - usar gum si hay TTY, sino read simple
+        # Input de tecla simple
         local approval=""
 
-        if [ -t 0 ] || [ -e /dev/tty ]; then
-            # Intentar con gum (timeout de 120s)
-            if command -v gum &> /dev/null; then
-                approval=$(timeout 120 gum choose \
-                    --cursor="› " \
-                    --cursor.foreground="$GUM_ACCENT" \
-                    --selected.foreground="$GUM_SUCCESS" \
-                    --item.foreground="$GUM_SUBTLE" \
-                    "Permitir" "Cancelar" < /dev/tty 2>/dev/tty) || approval=""
-            fi
+        echo -e "  ${GREEN}[p]${NC} Permitir   ${RED}[c]${NC} Cancelar" >&2
+        echo "" >&2
+        echo -n "  › " >&2
 
-            # Fallback a read simple si gum falla
-            if [ -z "$approval" ]; then
-                echo -e "${CYAN}[p]${NC}ermitir / ${CYAN}[c]${NC}ancelar: " >&2
-                local key
-                read -n 1 key < /dev/tty 2>/dev/null || key="c"
-                echo "" >&2
-                case "$key" in
-                    p|P) approval="Permitir" ;;
-                    *) approval="Cancelar" ;;
-                esac
-            fi
+        local key
+        if read -n 1 key < /dev/tty 2>/dev/null; then
+            echo "" >&2
+            case "$key" in
+                p|P) approval="Permitir" ;;
+                *) approval="Cancelar" ;;
+            esac
         else
-            # Sin TTY - cancelar por seguridad
-            echo -e "${RED}Error: No hay terminal interactiva disponible${NC}" >&2
+            echo "" >&2
+            echo -e "${RED}Error: No se pudo leer input${NC}" >&2
             approval="Cancelar"
         fi
 
@@ -540,35 +529,25 @@ tool_run_command() {
             echo -e "${DIM}└────────────────────────────────────────────────┘${NC}" >&2
             echo "" >&2
 
-            # Selector interactivo - usar gum si hay TTY, sino read simple
+            # Input de tecla simple (gum no funciona bien con subprocess)
             local approval=""
 
-            if [ -t 0 ] || [ -e /dev/tty ]; then
-                # Intentar con gum (timeout de 120s para evitar bloqueos)
-                if command -v gum &> /dev/null; then
-                    approval=$(timeout 120 gum choose \
-                        --cursor="› " \
-                        --cursor.foreground="$GUM_ACCENT" \
-                        --selected.foreground="$GUM_SUCCESS" \
-                        --item.foreground="$GUM_SUBTLE" \
-                        "Ejecutar" "Ejecutar siempre" "Cancelar" < /dev/tty 2>/dev/tty) || approval=""
-                fi
+            echo -e "  ${GREEN}[e]${NC} Ejecutar   ${YELLOW}[s]${NC} Siempre   ${RED}[c]${NC} Cancelar" >&2
+            echo "" >&2
+            echo -n "  › " >&2
 
-                # Fallback a read simple si gum falla
-                if [ -z "$approval" ]; then
-                    echo -e "${CYAN}[e]${NC}jecutar / ${CYAN}[s]${NC}iempre / ${CYAN}[c]${NC}ancelar: " >&2
-                    local key
-                    read -n 1 key < /dev/tty 2>/dev/null || key="c"
-                    echo "" >&2
-                    case "$key" in
-                        e|E) approval="Ejecutar" ;;
-                        s|S) approval="Ejecutar siempre" ;;
-                        *) approval="Cancelar" ;;
-                    esac
-                fi
+            local key
+            if read -n 1 key < /dev/tty 2>/dev/null; then
+                echo "" >&2
+                case "$key" in
+                    e|E) approval="Ejecutar" ;;
+                    s|S) approval="Ejecutar siempre" ;;
+                    *) approval="Cancelar" ;;
+                esac
             else
-                # Sin TTY - cancelar por seguridad
-                echo -e "${RED}Error: No hay terminal interactiva disponible${NC}" >&2
+                # Si falla la lectura, cancelar por seguridad
+                echo "" >&2
+                echo -e "${RED}Error: No se pudo leer input${NC}" >&2
                 approval="Cancelar"
             fi
 
