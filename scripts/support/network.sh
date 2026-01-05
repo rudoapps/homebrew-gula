@@ -177,6 +177,28 @@ get_allowed_modules() {
   fi
 }
 
+# Compara dos versiones semánticas. Retorna:
+# 0 = iguales, 1 = v1 > v2, 2 = v1 < v2
+version_compare() {
+  local v1="$1" v2="$2"
+
+  # Eliminar prefijo 'v' si existe
+  v1="${v1#v}"
+  v2="${v2#v}"
+
+  if [ "$v1" == "$v2" ]; then
+    return 0
+  fi
+
+  # Comparar usando sort -V
+  local smaller=$(printf '%s\n%s' "$v1" "$v2" | sort -V | head -n1)
+  if [ "$smaller" == "$v1" ]; then
+    return 2  # v1 < v2
+  else
+    return 1  # v1 > v2
+  fi
+}
+
 check_version() {
   local cache_file="/tmp/gula_version_cache"
   local cache_duration=3600  # 1 hora en segundos
@@ -211,14 +233,22 @@ check_version() {
     fi
   fi
 
-  # Comparar versiones
-  if [ "$latest_tag" == "$VERSION" ]; then
+  # Comparar versiones numéricamente
+  version_compare "$VERSION" "$latest_tag"
+  local cmp_result=$?
+
+  if [ $cmp_result -eq 0 ]; then
+    # Versiones iguales
     if [ "$using_cache" = true ]; then
       echo -e "✅ Versión $VERSION (última verificada)"
     else
       echo -e "✅ Versión $VERSION (actualizada)"
     fi
+  elif [ $cmp_result -eq 1 ]; then
+    # Versión local es más nueva (desarrollo)
+    echo -e "✅ Versión $VERSION (desarrollo)"
   else
+    # Versión remota es más nueva
     echo -e "${YELLOW}📦 Nueva versión disponible: $latest_tag (actual: $VERSION)${NC}"
     echo -e "${YELLOW}   Actualiza con: ${BOLD}brew upgrade gula${NC}"
   fi
