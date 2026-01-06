@@ -195,6 +195,26 @@ SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 # ============================================================================
 
 import re
+import unicodedata
+
+def display_width(text):
+    """Calculate the display width of a string, accounting for Unicode."""
+    # Strip ANSI codes first
+    clean = re.sub(r'\x1b\[[0-9;]*m', '', text)
+    width = 0
+    for char in clean:
+        # East Asian Width: F, W are double width
+        ea = unicodedata.east_asian_width(char)
+        if ea in ('F', 'W'):
+            width += 2
+        # Emoji typically take 2 columns (check for variation selectors too)
+        elif unicodedata.category(char) == 'So':  # Symbol, Other (includes most emoji)
+            width += 2
+        elif char in '⭐☆✅❌✓✗📊📋📁💳💾👤🔐💰📱🧠🏦🏗️⚡🔑🔄🛡️🎨🔗🎯':
+            width += 2
+        else:
+            width += 1
+    return width
 
 def format_markdown_table(table_lines):
     """Format a markdown table with proper alignment and borders."""
@@ -223,9 +243,8 @@ def format_markdown_table(table_lines):
             continue  # Skip separator row for width calculation
         for i, cell in enumerate(row):
             if i < num_cols:
-                # Strip ANSI codes for width calculation
-                clean_cell = re.sub(r'\x1b\[[0-9;]*m', '', cell)
-                col_widths[i] = max(col_widths[i], len(clean_cell))
+                # Use display_width for proper Unicode handling
+                col_widths[i] = max(col_widths[i], display_width(cell))
 
     # Ensure minimum column width
     col_widths = [max(w, 3) for w in col_widths]
@@ -266,9 +285,8 @@ def format_markdown_table(table_lines):
         for j in range(num_cols):
             cell = padded_row[j] if j < len(padded_row) else ''
             width = col_widths[j]
-            # Calculate padding
-            clean_cell = re.sub(r'\x1b\[[0-9;]*m', '', cell)
-            padding = max(0, width - len(clean_cell))
+            # Calculate padding using display_width for proper Unicode
+            padding = max(0, width - display_width(cell))
             # Header row (first row) - make bold
             if i == 0:
                 cells_formatted.append(f" {BOLD}{cell}{NC}{' ' * padding} ")
