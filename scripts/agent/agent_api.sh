@@ -201,19 +201,35 @@ def display_width(text):
     """Calculate the display width of a string, accounting for Unicode."""
     # Strip ANSI codes first
     clean = re.sub(r'\x1b\[[0-9;]*m', '', text)
+    # Normalize to NFC to combine accented characters
+    clean = unicodedata.normalize('NFC', clean)
     width = 0
-    for char in clean:
+    i = 0
+    while i < len(clean):
+        char = clean[i]
+        # Skip zero-width characters and combining marks
+        cat = unicodedata.category(char)
+        if cat.startswith('M') or cat == 'Cf':  # Mark or Format
+            i += 1
+            continue
+        # Check for emoji sequences (char + variation selector + optional ZWJ sequences)
+        if i + 1 < len(clean) and clean[i + 1] in '\ufe0e\ufe0f':  # Variation selectors
+            width += 2
+            i += 2
+            # Skip ZWJ sequences
+            while i + 1 < len(clean) and clean[i] == '\u200d':
+                i += 2
+            continue
         # East Asian Width: F, W are double width
         ea = unicodedata.east_asian_width(char)
         if ea in ('F', 'W'):
             width += 2
-        # Emoji typically take 2 columns (check for variation selectors too)
-        elif unicodedata.category(char) == 'So':  # Symbol, Other (includes most emoji)
-            width += 2
-        elif char in '⭐☆✅❌✓✗📊📋📁💳💾👤🔐💰📱🧠🏦🏗️⚡🔑🔄🛡️🎨🔗🎯':
+        # Emoji and symbols typically take 2 columns
+        elif cat == 'So':  # Symbol, Other (includes most emoji)
             width += 2
         else:
             width += 1
+        i += 1
     return width
 
 def format_markdown_table(table_lines):
