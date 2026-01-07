@@ -233,18 +233,18 @@ check_version() {
     fi
   fi
 
-  # Comparar versiones numéricamente
-  version_compare "$VERSION" "$latest_tag"
-  local cmp_result=$?
+  # Comparar versiones (capturar resultado para evitar exit con set -e)
+  local cmp_result
+  cmp_result=$(version_compare "$VERSION" "$latest_tag"; echo $?)
 
-  if [ $cmp_result -eq 0 ]; then
+  if [ "$cmp_result" -eq 0 ]; then
     # Versiones iguales
     if [ "$using_cache" = true ]; then
       echo -e "✅ Versión $VERSION (última verificada)"
     else
       echo -e "✅ Versión $VERSION (actualizada)"
     fi
-  elif [ $cmp_result -eq 1 ]; then
+  elif [ "$cmp_result" -eq 1 ]; then
     # Versión local es más nueva (desarrollo)
     echo -e "✅ Versión $VERSION (desarrollo)"
   else
