@@ -407,9 +407,51 @@ else:
     local dir=$(dirname "$resolved_path")
     mkdir -p "$dir"
 
+    # Capturar contenido anterior para mostrar diff
+    local old_content=""
+    local is_new_file=true
+    if [ -f "$resolved_path" ]; then
+        old_content=$(cat "$resolved_path")
+        is_new_file=false
+    fi
+
     # Escribir archivo
     echo "$content" > "$resolved_path"
-    echo "Archivo escrito: $path ($(wc -c < "$resolved_path") bytes)"
+
+    # Mostrar diff si es modificación de archivo existente
+    if [ "$is_new_file" = false ]; then
+        echo "" >&2
+        echo -e "${CYAN}╭─ Diff: ${BOLD}$path${NC}" >&2
+        echo -e "${CYAN}│${NC}" >&2
+
+        # Crear archivos temporales para diff
+        local tmp_old=$(mktemp)
+        local tmp_new=$(mktemp)
+        echo "$old_content" > "$tmp_old"
+        echo "$content" > "$tmp_new"
+
+        # Generar diff con colores
+        diff -u "$tmp_old" "$tmp_new" 2>/dev/null | tail -n +4 | while IFS= read -r line; do
+            if [[ "$line" == +* ]]; then
+                echo -e "${CYAN}│${NC} ${GREEN}$line${NC}" >&2
+            elif [[ "$line" == -* ]]; then
+                echo -e "${CYAN}│${NC} ${RED}$line${NC}" >&2
+            elif [[ "$line" == @* ]]; then
+                echo -e "${CYAN}│${NC} ${BLUE}$line${NC}" >&2
+            else
+                echo -e "${CYAN}│${NC} $line" >&2
+            fi
+        done
+
+        rm -f "$tmp_old" "$tmp_new"
+
+        echo -e "${CYAN}│${NC}" >&2
+        echo -e "${CYAN}╰────────────────────────────────────────────────${NC}" >&2
+        echo "" >&2
+        echo "Archivo modificado: $path ($(wc -c < "$resolved_path" | tr -d ' ') bytes)"
+    else
+        echo "Archivo creado: $path ($(wc -c < "$resolved_path" | tr -d ' ') bytes)"
+    fi
 }
 
 # Ejecuta un comando en terminal
