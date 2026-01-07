@@ -4,6 +4,173 @@
 # Handles communication with the server (SSE, hybrid chat)
 
 # ============================================================================
+# QUOTA API
+# ============================================================================
+
+# Show inline quota status (compact version for chat start)
+show_quota_inline() {
+    local api_url=$(get_agent_config "api_url")
+    local access_token=$(get_agent_config "access_token")
+    local endpoint="$api_url/agent/quota"
+
+    local response=$(curl -s "$endpoint" \
+        -H "Authorization: Bearer $access_token" \
+        -H "Content-Type: application/json" 2>/dev/null)
+
+    # Check for errors silently
+    local error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+    if [ -n "$error" ] && [ "$error" != "None" ] && [ "$error" != "" ]; then
+        return 0  # Silently ignore errors
+    fi
+
+    # Parse and display compact quota info
+    python3 - <<PYEOF 2>/dev/null
+import json
+import sys
+
+BOLD = "\033[1m"
+DIM = "\033[2m"
+NC = "\033[0m"
+RED = "\033[0;31m"
+GREEN = "\033[0;32m"
+YELLOW = "\033[1;33m"
+CYAN = "\033[0;36m"
+
+response = '''$response'''
+try:
+    data = json.loads(response)
+except:
+    sys.exit(0)
+
+if not data.get("has_quota"):
+    print(f"  {GREEN}∞{NC}  Quota: sin límite (${DIM}\${data.get('current_cost', '0.00')} usado{NC})")
+else:
+    usage_pct = data.get("usage_percent", 0) or 0
+    monthly_limit = data.get("monthly_limit", "?")
+    current_cost = data.get("current_cost", "0.00")
+    is_exceeded = data.get("is_exceeded", False)
+
+    # Compact progress bar (20 chars)
+    bar_width = 20
+    filled = int(min(100, usage_pct) / 100 * bar_width)
+    empty = bar_width - filled
+
+    if is_exceeded:
+        bar_color = RED
+        status_icon = "⛔"
+    elif usage_pct >= 80:
+        bar_color = YELLOW
+        status_icon = "⚠️ "
+    else:
+        bar_color = GREEN
+        status_icon = "💰"
+
+    bar = f"{bar_color}{'█' * filled}{NC}{DIM}{'░' * empty}{NC}"
+    print(f"  {status_icon} Quota: [{bar}] {usage_pct:.0f}% (${DIM}\${current_cost}/\${monthly_limit}{NC})")
+PYEOF
+}
+
+# Fetch and display user's cost quota
+fetch_and_show_quota() {
+    local api_url=$(get_agent_config "api_url")
+    local access_token=$(get_agent_config "access_token")
+    local endpoint="$api_url/agent/quota"
+
+    local response=$(curl -s "$endpoint" \
+        -H "Authorization: Bearer $access_token" \
+        -H "Content-Type: application/json")
+
+    # Check for errors
+    local error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+
+    if [ -n "$error" ] && [ "$error" != "None" ] && [ "$error" != "" ]; then
+        echo -e "${RED}Error: $error${NC}"
+        return 1
+    fi
+
+    # Parse and display quota info
+    python3 - <<PYEOF
+import json
+import sys
+
+BOLD = "\033[1m"
+DIM = "\033[2m"
+NC = "\033[0m"
+RED = "\033[0;31m"
+GREEN = "\033[0;32m"
+YELLOW = "\033[1;33m"
+CYAN = "\033[0;36m"
+
+response = '''$response'''
+try:
+    data = json.loads(response)
+except:
+    print(f"{RED}Error parsing quota response{NC}")
+    sys.exit(1)
+
+print("")
+print(f"{BOLD}╔══════════════════════════════════════════════════════════╗{NC}")
+print(f"{BOLD}║                    QUOTA DE COSTE                        ║{NC}")
+print(f"{BOLD}╚══════════════════════════════════════════════════════════╝{NC}")
+print("")
+
+if not data.get("has_quota"):
+    print(f"  {GREEN}∞{NC}  Sin límite configurado")
+    print(f"     Coste acumulado: {BOLD}\${data.get('current_cost', '0.00')}{NC}")
+else:
+    monthly_limit = data.get("monthly_limit", "?")
+    current_cost = data.get("current_cost", "0.00")
+    remaining = data.get("remaining", "?")
+    usage_pct = data.get("usage_percent", 0) or 0
+    is_enforced = data.get("is_enforced", False)
+    is_exceeded = data.get("is_exceeded", False)
+
+    # Status indicator
+    if is_exceeded:
+        status = f"{RED}⛔ LÍMITE EXCEDIDO{NC}"
+    elif usage_pct >= 80:
+        status = f"{YELLOW}⚠️  Cerca del límite ({usage_pct:.0f}%){NC}"
+    else:
+        status = f"{GREEN}✓{NC}  Dentro del límite"
+
+    print(f"  {status}")
+    print("")
+
+    # Progress bar
+    bar_width = 40
+    filled = int(min(100, usage_pct) / 100 * bar_width)
+    empty = bar_width - filled
+
+    if usage_pct >= 100:
+        bar_color = RED
+    elif usage_pct >= 80:
+        bar_color = YELLOW
+    else:
+        bar_color = GREEN
+
+    bar = f"{bar_color}{'█' * filled}{NC}{DIM}{'░' * empty}{NC}"
+    print(f"  [{bar}] {usage_pct:.1f}%")
+    print("")
+
+    # Details
+    print(f"  {BOLD}Límite mensual:{NC}  \${monthly_limit}")
+    print(f"  {BOLD}Coste actual:{NC}    \${current_cost}")
+    print(f"  {BOLD}Restante:{NC}        \${remaining}")
+    print("")
+
+    # Enforcement status
+    if is_enforced:
+        print(f"  {DIM}Modo:{NC} {RED}Bloqueo activo{NC} (se denegarán requests al exceder)")
+    else:
+        print(f"  {DIM}Modo:{NC} {YELLOW}Solo aviso{NC} (se permite continuar)")
+
+print("")
+print(f"{BOLD}══════════════════════════════════════════════════════════════{NC}")
+print("")
+PYEOF
+}
+
+# ============================================================================
 # HYBRID CHAT API
 # ============================================================================
 
@@ -609,6 +776,24 @@ try:
                     sys.stderr.flush()
                 else:
                     spinner.stop()
+
+            elif event_type == "cost_warning":
+                # User is approaching their cost limit
+                usage_pct = parsed.get("usage_percent", 0)
+                remaining = parsed.get("remaining", "?")
+                monthly_limit = parsed.get("monthly_limit", "?")
+                result["cost_warning"] = True
+                result["cost_usage_percent"] = usage_pct
+                # Show inline warning but continue processing
+                sys.stderr.write(f"\n  {YELLOW}⚠️  Has usado {usage_pct:.0f}% de tu límite mensual (${remaining} restante de ${monthly_limit}){NC}\n")
+                sys.stderr.flush()
+
+            elif event_type == "cost_limit_exceeded":
+                # User has exceeded their cost limit - request blocked
+                result["cost_limit_exceeded"] = True
+                result["cost_current"] = parsed.get("current_cost", "?")
+                result["cost_limit"] = parsed.get("monthly_limit", "?")
+                spinner.stop(f"❌ Límite de coste mensual alcanzado (${result['cost_current']} / ${result['cost_limit']})", "error")
 
             elif event_type == "rate_limited":
                 result["rate_limited"] = True

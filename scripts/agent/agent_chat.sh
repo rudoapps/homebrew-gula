@@ -268,6 +268,9 @@ agent_chat_interactive() {
         esac
     fi
 
+    # Show quota status
+    show_quota_inline
+
     echo ""
     echo -e "  ${DIM}Tip: Puedes incluir rutas de imagenes (~/Desktop/img.png)${NC}"
     echo -e "  ${DIM}     o usar \\ al final de linea para multi-linea${NC}"
@@ -328,7 +331,8 @@ agent_chat_interactive() {
                 echo -e "  ${YELLOW}/exit${NC}, ${YELLOW}/quit${NC}, ${YELLOW}/q${NC}  - Salir del chat"
                 echo -e "  ${YELLOW}/new${NC}               - Iniciar nueva conversacion"
                 echo -e "  ${YELLOW}/resume <id>${NC}       - Retomar conversacion por ID"
-                echo -e "  ${YELLOW}/cost${NC}              - Ver costo acumulado"
+                echo -e "  ${YELLOW}/cost${NC}              - Ver costo acumulado de la sesion"
+                echo -e "  ${YELLOW}/quota${NC}             - Ver limite y uso mensual"
                 echo -e "  ${YELLOW}/clear${NC}             - Limpiar pantalla"
                 echo -e "  ${YELLOW}/help${NC}              - Mostrar esta ayuda"
                 echo ""
@@ -344,6 +348,10 @@ agent_chat_interactive() {
                 echo -e "  - Incluye rutas de imagenes en tu mensaje:"
                 echo -e "    ${DIM}Que ves en ~/Desktop/screenshot.png?${NC}"
                 echo ""
+                continue
+                ;;
+            /quota)
+                fetch_and_show_quota
                 continue
                 ;;
             /resume\ *)
