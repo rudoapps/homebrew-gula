@@ -478,8 +478,6 @@ else:
     # Mostrar diff si es modificación de archivo existente
     if [ "$is_new_file" = false ]; then
         echo "" >&2
-        echo -e "${CYAN}╭─ Diff: ${BOLD}$path${NC}" >&2
-        echo -e "${CYAN}│${NC}" >&2
 
         # Crear archivos temporales para diff
         local tmp_old=$(mktemp)
@@ -487,26 +485,87 @@ else:
         echo "$old_content" > "$tmp_old"
         echo "$content" > "$tmp_new"
 
-        # Generar diff con colores
+        # Contar líneas añadidas/eliminadas
+        local additions=$(diff "$tmp_old" "$tmp_new" 2>/dev/null | grep -c "^>" || echo "0")
+        local deletions=$(diff "$tmp_old" "$tmp_new" 2>/dev/null | grep -c "^<" || echo "0")
+
+        # Header del diff estilo Claude Code
+        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
+        echo -e " ${BOLD}$path${NC}" >&2
+        echo -e " ${GREEN}+${additions}${NC} ${RED}-${deletions}${NC}" >&2
+        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
+
+        # Colores de fondo para diff (ANSI 256)
+        local BG_GREEN='\033[48;5;22m'   # Fondo verde oscuro
+        local BG_RED='\033[48;5;52m'     # Fondo rojo oscuro
+        local BG_BLUE='\033[48;5;17m'    # Fondo azul oscuro
+        local FG_GREEN='\033[38;5;114m'  # Texto verde claro
+        local FG_RED='\033[38;5;203m'    # Texto rojo claro
+        local FG_CYAN='\033[38;5;73m'    # Texto cyan
+
+        # Generar diff con colores mejorados y números de línea
+        local old_line=0
+        local new_line=0
+
         diff -u "$tmp_old" "$tmp_new" 2>/dev/null | tail -n +4 | while IFS= read -r line; do
-            if [[ "$line" == +* ]]; then
-                echo -e "${CYAN}│${NC} ${GREEN}$line${NC}" >&2
+            if [[ "$line" == @@* ]]; then
+                # Extraer números de línea del hunk header
+                local hunk_info=$(echo "$line" | sed -n 's/^@@ -\([0-9]*\).*+\([0-9]*\).*/\1 \2/p')
+                old_line=$(echo "$hunk_info" | cut -d' ' -f1)
+                new_line=$(echo "$hunk_info" | cut -d' ' -f2)
+                # Mostrar separador de hunk
+                echo -e "${DIM}  ···${NC}" >&2
+            elif [[ "$line" == +* ]]; then
+                # Línea añadida - fondo verde
+                local content="${line:1}"
+                printf "${BG_GREEN}${FG_GREEN}%4s ${NC}${BG_GREEN} + %s${NC}\n" "$new_line" "$content" >&2
+                ((new_line++))
             elif [[ "$line" == -* ]]; then
-                echo -e "${CYAN}│${NC} ${RED}$line${NC}" >&2
-            elif [[ "$line" == @* ]]; then
-                echo -e "${CYAN}│${NC} ${BLUE}$line${NC}" >&2
+                # Línea eliminada - fondo rojo
+                local content="${line:1}"
+                printf "${BG_RED}${FG_RED}%4s ${NC}${BG_RED} - %s${NC}\n" "$old_line" "$content" >&2
+                ((old_line++))
             else
-                echo -e "${CYAN}│${NC} $line" >&2
+                # Línea de contexto
+                local content="${line:1}"
+                printf "${DIM}%4s ${NC}   %s\n" "$new_line" "$content" >&2
+                ((old_line++))
+                ((new_line++))
             fi
         done
 
         rm -f "$tmp_old" "$tmp_new"
 
-        echo -e "${CYAN}│${NC}" >&2
-        echo -e "${CYAN}╰────────────────────────────────────────────────${NC}" >&2
+        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
         echo "" >&2
         echo "Archivo modificado: $path ($(wc -c < "$resolved_path" | tr -d ' ') bytes)"
     else
+        # Para archivos nuevos, mostrar preview
+        local line_count=$(echo "$content" | wc -l | tr -d ' ')
+        echo "" >&2
+        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
+        echo -e " ${BOLD}$path${NC} ${DIM}(nuevo)${NC}" >&2
+        echo -e " ${GREEN}+${line_count} líneas${NC}" >&2
+        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
+
+        # Mostrar primeras líneas del archivo nuevo
+        local BG_GREEN='\033[48;5;22m'
+        local FG_GREEN='\033[38;5;114m'
+        local preview_lines=10
+        local current_line=1
+
+        echo "$content" | head -$preview_lines | while IFS= read -r line; do
+            printf "${BG_GREEN}${FG_GREEN}%4s ${NC}${BG_GREEN} + %s${NC}\n" "$current_line" "$line" >&2
+            ((current_line++))
+        done
+
+        if [ "$line_count" -gt "$preview_lines" ]; then
+            local remaining=$((line_count - preview_lines))
+            echo -e "${DIM}  ... +${remaining} líneas más${NC}" >&2
+        fi
+
+        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
+        echo "" >&2
         echo "Archivo creado: $path ($(wc -c < "$resolved_path" | tr -d ' ') bytes)"
     fi
 }
