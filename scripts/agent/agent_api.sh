@@ -750,6 +750,7 @@ proc = subprocess.Popen(
 event_type = None
 texts = []
 streaming_text = False  # Track if we're in text streaming mode
+rag_indicator_for_header = ""  # RAG indicator to show in Agent header
 result = {
     "conversation_id": None,
     "total_cost": 0,
@@ -818,7 +819,8 @@ try:
                 model_info = parsed.get("model", {})
                 model_name = model_info.get("model", "")
 
-                # Build RAG indicator based on scope
+                # Build RAG indicator based on scope (save for later display)
+                rag_indicator_for_header = ""
                 if rag_enabled and rag_info:
                     rag_scope = rag_info.get("scope", "current")
                     rag_chunks = rag_info.get("chunks", 0)
@@ -826,10 +828,13 @@ try:
                     if rag_scope == "related":
                         # Multi-project RAG - show with special indicator
                         rag_indicator = f" {CYAN}[RAG:{rag_chunks} multi-proyecto]{NC}"
+                        rag_indicator_for_header = f" {CYAN}[RAG:{rag_chunks} multi-proyecto]{NC}"
                     else:
                         rag_indicator = f" {GREEN}[RAG:{rag_chunks}]{NC}"
+                        rag_indicator_for_header = f" {GREEN}[RAG:{rag_chunks}]{NC}"
                 elif rag_enabled:
                     rag_indicator = f" {GREEN}[RAG]{NC}"
+                    rag_indicator_for_header = f" {GREEN}[RAG]{NC}"
                 else:
                     rag_indicator = ""
 
@@ -848,11 +853,12 @@ try:
                 content = parsed.get("content", "")
                 msg_model = parsed.get("model", "")
                 if content:
-                    # First text chunk - stop spinner and show header with model
+                    # First text chunk - stop spinner and show header with model + RAG
                     if not streaming_text:
                         spinner.stop()
                         model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
-                        sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}\n\n  ")
+                        # Show RAG indicator in header so it persists (not just in spinner)
+                        sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n  ")
                         sys.stderr.flush()
                         streaming_text = True
 
