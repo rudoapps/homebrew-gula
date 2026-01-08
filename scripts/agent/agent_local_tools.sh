@@ -9,6 +9,22 @@ MAX_OUTPUT_LINES=200         # Maximo lineas de output
 MAX_COMMAND_TIMEOUT=30       # Timeout para comandos en segundos
 MAX_SEARCH_RESULTS=50        # Maximo resultados de busqueda
 
+# Archivos sensibles que NO se pueden leer
+BLOCKED_FILE_EXTENSIONS=".pem .key .p12 .pfx .keystore .jks .secret .credentials"
+BLOCKED_FILE_NAMES=".env .env.local .env.production .env.development id_rsa id_ed25519 id_dsa authorized_keys known_hosts .netrc .npmrc .pypirc"
+
+# Audit log
+AUDIT_LOG_FILE="$HOME/.config/gula-agent/audit.log"
+
+# Función de audit logging
+audit_log() {
+    local action="$1"
+    local details="$2"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    mkdir -p "$(dirname "$AUDIT_LOG_FILE")"
+    echo "[$timestamp] $action: $details" >> "$AUDIT_LOG_FILE"
+}
+
 # ============================================================================
 # GENERACION DE CONTEXTO DEL PROYECTO
 # ============================================================================
@@ -172,32 +188,54 @@ tool_read_file() {
     local input="$1"
     local path=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('path', ''))")
 
-    # Validar que no salga del directorio actual (usando Python para compatibilidad)
+    # Validar que no salga del directorio actual (usando realpath para resolver symlinks)
     local path_check=$(python3 -c "
 import os
 path = '$path'
 cwd = os.getcwd()
-# Resolver ruta absoluta
-abs_path = os.path.abspath(path)
+# Resolver ruta REAL (sigue symlinks) - protección contra symlink attacks
+real_path = os.path.realpath(path)
 # Verificar que esta dentro del directorio actual
-if abs_path.startswith(cwd + os.sep) or abs_path == cwd:
-    print('OK:' + abs_path)
+if real_path.startswith(cwd + os.sep) or real_path == cwd:
+    print('OK:' + real_path)
 else:
-    print('ERROR:Path fuera del proyecto: ' + abs_path)
+    print('ERROR:Path fuera del proyecto (posible symlink): ' + real_path)
 ")
 
     if [[ "$path_check" == ERROR:* ]]; then
+        audit_log "READ_BLOCKED" "Path fuera del proyecto: $path"
         echo "Error: ${path_check#ERROR:}"
         return 1
     fi
 
     # Usar la ruta resuelta
     local resolved_path="${path_check#OK:}"
+    local filename=$(basename "$resolved_path")
+    local extension=".${filename##*.}"
+
+    # Verificar extensiones bloqueadas
+    if [[ "$BLOCKED_FILE_EXTENSIONS" == *"$extension"* ]]; then
+        audit_log "READ_BLOCKED" "Extensión bloqueada: $path ($extension)"
+        echo "Error: No se permite leer archivos con extensión $extension (archivo sensible)"
+        return 1
+    fi
+
+    # Verificar nombres de archivo bloqueados
+    for blocked in $BLOCKED_FILE_NAMES; do
+        if [[ "$filename" == "$blocked" ]]; then
+            audit_log "READ_BLOCKED" "Archivo bloqueado: $path"
+            echo "Error: No se permite leer $filename (archivo sensible de configuración)"
+            return 1
+        fi
+    done
 
     if [ ! -f "$resolved_path" ]; then
         echo "Error: Archivo no encontrado: $path"
         return 1
     fi
+
+    # Audit log de lectura exitosa
+    audit_log "READ" "$path"
 
     # Verificar tamano
     local size=$(stat -f%z "$resolved_path" 2>/dev/null || stat -c%s "$resolved_path" 2>/dev/null)
@@ -216,19 +254,20 @@ tool_list_files() {
     local path=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('path', '.'))")
     local pattern=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('pattern', '*'))")
 
-    # Validar que no salga del directorio actual
+    # Validar que no salga del directorio actual (usando realpath para symlinks)
     local path_check=$(python3 -c "
 import os
 path = '$path'
 cwd = os.getcwd()
-abs_path = os.path.abspath(path)
-if abs_path.startswith(cwd + os.sep) or abs_path == cwd:
-    print('OK:' + abs_path)
+real_path = os.path.realpath(path)
+if real_path.startswith(cwd + os.sep) or real_path == cwd:
+    print('OK:' + real_path)
 else:
-    print('ERROR:Path fuera del proyecto: ' + abs_path)
+    print('ERROR:Path fuera del proyecto (posible symlink): ' + real_path)
 ")
 
     if [[ "$path_check" == ERROR:* ]]; then
+        audit_log "LIST_BLOCKED" "Path fuera del proyecto: $path"
         echo "Error: ${path_check#ERROR:}"
         return 1
     fi
@@ -239,6 +278,8 @@ else:
         echo "Error: Directorio no encontrado: $path"
         return 1
     fi
+
+    audit_log "LIST" "$path (pattern: $pattern)"
 
     find "$resolved_path" -maxdepth 3 -name "$pattern" -type f \
         -not -path "*/\.*" \
@@ -257,6 +298,8 @@ tool_search_code() {
         echo "Error: Se requiere un query de busqueda"
         return 1
     fi
+
+    audit_log "SEARCH" "query='$query' pattern='$file_pattern'"
 
     local grep_opts="-rn --color=never"
 
@@ -288,21 +331,28 @@ tool_write_file() {
         return 1
     fi
 
-    # Validar que no salga del directorio actual (usando Python para compatibilidad)
+    # Validar que no salga del directorio actual (usando realpath para symlinks)
     local path_check=$(python3 -c "
 import os
 path = '$path'
 cwd = os.getcwd()
-# Resolver ruta absoluta
-abs_path = os.path.abspath(path)
-# Verificar que esta dentro del directorio actual
-if abs_path.startswith(cwd + os.sep) or abs_path == cwd:
-    print('OK:' + abs_path)
+# Para archivos nuevos, resolver el directorio padre
+parent = os.path.dirname(path) or '.'
+if os.path.exists(path):
+    real_path = os.path.realpath(path)
 else:
-    print('ERROR:Path fuera del proyecto: ' + abs_path)
+    # Archivo nuevo: verificar que el directorio padre está en el proyecto
+    real_parent = os.path.realpath(parent)
+    real_path = os.path.join(real_parent, os.path.basename(path))
+# Verificar que esta dentro del directorio actual
+if real_path.startswith(cwd + os.sep) or real_path == cwd:
+    print('OK:' + real_path)
+else:
+    print('ERROR:Path fuera del proyecto (posible symlink): ' + real_path)
 ")
 
     if [[ "$path_check" == ERROR:* ]]; then
+        audit_log "WRITE_BLOCKED" "Path fuera del proyecto: $path"
         echo "Error: ${path_check#ERROR:}"
         return 1
     fi
@@ -418,6 +468,13 @@ else:
     # Escribir archivo
     echo "$content" > "$resolved_path"
 
+    # Audit log
+    if [ "$is_new_file" = true ]; then
+        audit_log "WRITE_NEW" "$path (${#content} bytes)"
+    else
+        audit_log "WRITE_MODIFY" "$path (${#content} bytes)"
+    fi
+
     # Mostrar diff si es modificación de archivo existente
     if [ "$is_new_file" = false ]; then
         echo "" >&2
@@ -488,6 +545,7 @@ tool_run_command() {
         "rm -rf /"
         "rm -rf ~"
         "rm -rf \$HOME"
+        "rm -rf /*"
         "mkfs"
         "> /dev/sd"
         "> /dev/nvme"
@@ -495,13 +553,31 @@ tool_run_command() {
         "dd if=/dev/random"
         ":(){ :|:& };:"  # Fork bomb
         "chmod -R 777 /"
-        "chown -R"
+        "chown -R /"
         "curl.*|.*sh"
+        "curl.*|.*bash"
         "wget.*|.*sh"
+        "wget.*|.*bash"
+        "/etc/passwd"
+        "/etc/shadow"
+        "~/.ssh/"
+        "id_rsa"
+        "id_ed25519"
+        "ssh-keygen"
+        "base64 -d.*|.*sh"
+        "eval.*base64"
+        "python.*-c.*import os"
+        "nc -e"           # Netcat reverse shell
+        "ncat -e"
+        "/bin/sh -i"      # Interactive shell
+        "bash -i"
+        "0<&196"          # Bash reverse shell
+        "exec 5<>"        # File descriptor manipulation
     )
 
     for pattern in "${blocked_patterns[@]}"; do
         if [[ "$command" == *"$pattern"* ]]; then
+            audit_log "COMMAND_BLOCKED" "Patrón bloqueado: $pattern en: $command"
             echo "Error: Comando bloqueado permanentemente por seguridad: contiene '$pattern'"
             return 1
         fi
@@ -596,6 +672,7 @@ tool_run_command() {
 
             # SEGURIDAD: Si approval está vacío o no es válido, SIEMPRE cancelar
             if [[ -z "$approval" ]] || [[ "$approval" == "Cancelar" ]]; then
+                audit_log "COMMAND_REJECTED" "Usuario rechazó: $command"
                 echo -e "${DIM}Comando rechazado${NC}" >&2
                 # Mensaje claro para el agente (stdout)
                 echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO ejecutar este comando. No intentes ejecutarlo de nuevo. Pregunta al usuario qué quiere hacer."
@@ -621,6 +698,9 @@ tool_run_command() {
     # =========================================================================
     # EJECUTAR COMANDO CON POSIBILIDAD DE CANCELACIÓN
     # =========================================================================
+
+    # Audit log de ejecución
+    audit_log "COMMAND_EXEC" "$command"
 
     # Mostrar hint de cancelación
     echo -e "${DIM}Ctrl+C para cancelar${NC}" >&2
