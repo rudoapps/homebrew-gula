@@ -17,9 +17,10 @@ get_git_remote_url() {
         return 1
     fi
 
-    # Normalize URL using Python
+    # Normalize URL using Python (must match server's normalize_git_url)
     python3 -c "
 import sys
+import re
 url = '''$url'''.strip()
 
 # Convert SSH to HTTPS
@@ -27,6 +28,9 @@ if url.startswith('git@'):
     # git@bitbucket.org:org/repo.git -> https://bitbucket.org/org/repo
     url = url.replace('git@', 'https://')
     url = url.replace(':', '/', 1)
+
+# Remove username/password from URL (e.g., https://user@host -> https://host)
+url = re.sub(r'https://[^@]+@', 'https://', url)
 
 # Remove .git suffix
 if url.endswith('.git'):
