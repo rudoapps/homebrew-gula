@@ -47,16 +47,17 @@ def read_input():
             readline.parse_and_bind("bind ^U vi-kill-line-prev")  # Ctrl+U: delete to start
         else:
             # GNU readline (Linux, some macOS with homebrew python)
-            readline.parse_and_bind('"\e[1;5D": backward-word')   # Ctrl+Left
-            readline.parse_and_bind('"\e[1;5C": forward-word')    # Ctrl+Right
-            readline.parse_and_bind('"\e[1;3D": backward-word')   # Alt+Left (Mac iTerm)
-            readline.parse_and_bind('"\e[1;3C": forward-word')    # Alt+Right (Mac iTerm)
-            readline.parse_and_bind('"\eb": backward-word')       # Alt+B (emacs style)
-            readline.parse_and_bind('"\ef": forward-word')        # Alt+F (emacs style)
-            readline.parse_and_bind('"\e[H": beginning-of-line')  # Home key
-            readline.parse_and_bind('"\e[F": end-of-line')        # End key
-            readline.parse_and_bind('"\e[1~": beginning-of-line') # Home (alternate)
-            readline.parse_and_bind('"\e[4~": end-of-line')       # End (alternate)
+            # Use raw strings (r"...") to avoid Python escape sequence warnings
+            readline.parse_and_bind(r'"\e[1;5D": backward-word')   # Ctrl+Left
+            readline.parse_and_bind(r'"\e[1;5C": forward-word')    # Ctrl+Right
+            readline.parse_and_bind(r'"\e[1;3D": backward-word')   # Alt+Left (Mac iTerm)
+            readline.parse_and_bind(r'"\e[1;3C": forward-word')    # Alt+Right (Mac iTerm)
+            readline.parse_and_bind(r'"\eb": backward-word')       # Alt+B (emacs style)
+            readline.parse_and_bind(r'"\ef": forward-word')        # Alt+F (emacs style)
+            readline.parse_and_bind(r'"\e[H": beginning-of-line')  # Home key
+            readline.parse_and_bind(r'"\e[F": end-of-line')        # End key
+            readline.parse_and_bind(r'"\e[1~": beginning-of-line') # Home (alternate)
+            readline.parse_and_bind(r'"\e[4~": end-of-line')       # End (alternate)
 
         # History file for chat
         history_file = os.path.expanduser("~/.gula_chat_history")
