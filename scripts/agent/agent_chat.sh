@@ -7,134 +7,80 @@
 # MULTI-LINE INPUT
 # ============================================================================
 
-# Read multi-line input with enhanced keyboard support
-# Uses Python readline for proper keybindings:
-# - Ctrl+A / Home: Go to start of line
-# - Ctrl+E / End: Go to end of line
-# - Ctrl+← / Alt+B: Move word left
-# - Ctrl+→ / Alt+F: Move word right
+# Read multi-line input with readline support for keyboard shortcuts
+# Supports:
+# - Ctrl+A: Go to start of line
+# - Ctrl+E: Go to end of line
 # - Ctrl+W: Delete word backward
 # - Ctrl+K: Delete to end of line
 # - Ctrl+U: Delete to start of line
-# - Up/Down arrows: History navigation
+# - Arrow keys: Move cursor / navigate history
 # - Single line: press Enter to submit
 # - Multi-line: type \ at end of line to continue, or Enter twice to submit
 read_multiline_input() {
-    python3 << 'PYEOF'
-import sys
-import os
+    local lines=()
+    local line=""
+    local is_first_line=true
 
-# Colors
-GREEN = "\033[1;32m"
-DIM = "\033[2m"
-NC = "\033[0m"
+    while true; do
+        # Show prompt with block indicator
+        if [ "$is_first_line" = true ]; then
+            echo -ne "${GREEN}█${NC} " >&2
+        else
+            echo -ne "${DIM}█${NC} " >&2
+        fi
 
-def read_input():
-    """Read input with readline support for keybindings."""
-    try:
-        import readline
+        # Read input with readline support (-e enables readline editing)
+        if ! IFS= read -e -r line; then
+            # EOF - return what we have
+            break
+        fi
 
-        # Detect if using libedit (macOS) or GNU readline
-        is_libedit = 'libedit' in readline.__doc__ if readline.__doc__ else False
+        # Check for backslash continuation
+        if [[ "$line" == *"\\" ]]; then
+            # Remove trailing backslash and continue
+            line="${line%\\}"
+            lines+=("$line")
+            is_first_line=false
+            continue
+        fi
 
-        if is_libedit:
-            # macOS libedit uses different syntax
-            # Note: libedit has limited customization, but these basics work
-            readline.parse_and_bind("bind ^A ed-move-to-beg")     # Ctrl+A: start of line
-            readline.parse_and_bind("bind ^E ed-move-to-end")     # Ctrl+E: end of line
-            readline.parse_and_bind("bind ^W ed-delete-prev-word") # Ctrl+W: delete word back
-            readline.parse_and_bind("bind ^K ed-kill-line")       # Ctrl+K: delete to end
-            readline.parse_and_bind("bind ^U vi-kill-line-prev")  # Ctrl+U: delete to start
-        else:
-            # GNU readline (Linux, some macOS with homebrew python)
-            # Use raw strings (r"...") to avoid Python escape sequence warnings
-            readline.parse_and_bind(r'"\e[1;5D": backward-word')   # Ctrl+Left
-            readline.parse_and_bind(r'"\e[1;5C": forward-word')    # Ctrl+Right
-            readline.parse_and_bind(r'"\e[1;3D": backward-word')   # Alt+Left (Mac iTerm)
-            readline.parse_and_bind(r'"\e[1;3C": forward-word')    # Alt+Right (Mac iTerm)
-            readline.parse_and_bind(r'"\eb": backward-word')       # Alt+B (emacs style)
-            readline.parse_and_bind(r'"\ef": forward-word')        # Alt+F (emacs style)
-            readline.parse_and_bind(r'"\e[H": beginning-of-line')  # Home key
-            readline.parse_and_bind(r'"\e[F": end-of-line')        # End key
-            readline.parse_and_bind(r'"\e[1~": beginning-of-line') # Home (alternate)
-            readline.parse_and_bind(r'"\e[4~": end-of-line')       # End (alternate)
-
-        # History file for chat
-        history_file = os.path.expanduser("~/.gula_chat_history")
-        try:
-            readline.read_history_file(history_file)
-            readline.set_history_length(100)
-        except FileNotFoundError:
-            pass
-
-    except ImportError:
-        pass  # readline not available, use basic input
-
-    lines = []
-    is_first_line = True
-
-    while True:
-        # Show prompt
-        if is_first_line:
-            prompt = f"{GREEN}█{NC} "
-        else:
-            prompt = f"{DIM}█{NC} "
-
-        try:
-            # Print prompt to stderr, read from stdin
-            sys.stderr.write(prompt)
-            sys.stderr.flush()
-
-            try:
-                line = input()
-            except EOFError:
+        # Check for empty line (submit signal in multi-line mode)
+        if [ -z "$line" ]; then
+            if [ ${#lines[@]} -gt 0 ]; then
+                # We have content and got empty line - submit
                 break
+            else
+                # Empty input on first line - return empty
+                echo ""
+                return
+            fi
+        fi
 
-            # Check for backslash continuation
-            if line.endswith("\\"):
-                line = line[:-1]  # Remove backslash
-                lines.append(line)
-                is_first_line = False
-                continue
+        # Add line to buffer
+        lines+=("$line")
 
-            # Check for empty line
-            if not line:
-                if lines:
-                    # We have content and got empty line - submit
-                    break
-                else:
-                    # Empty input on first line - return empty
-                    print("")
-                    return
+        # For single line input (first line, no continuation), submit immediately
+        if [ "$is_first_line" = true ]; then
+            break
+        fi
 
-            # Add line to buffer
-            lines.append(line)
+        is_first_line=false
+    done
 
-            # For single line input (first line, no continuation), submit immediately
-            if is_first_line:
-                break
+    # Join lines with newlines
+    local result=""
+    local first=true
+    for l in "${lines[@]}"; do
+        if [ "$first" = true ]; then
+            result="$l"
+            first=false
+        else
+            result="$result"$'\n'"$l"
+        fi
+    done
 
-            is_first_line = False
-
-        except KeyboardInterrupt:
-            print("")
-            return
-
-    # Save to history
-    result = "\n".join(lines)
-    if result.strip():
-        try:
-            import readline
-            readline.add_history(result.replace("\n", " "))
-            history_file = os.path.expanduser("~/.gula_chat_history")
-            readline.write_history_file(history_file)
-        except:
-            pass
-
-    print(result)
-
-read_input()
-PYEOF
+    echo "$result"
 }
 
 # ============================================================================
@@ -594,7 +540,7 @@ agent_chat_interactive() {
                 echo -ne "${BOLD}Deseas que continue? (s/n/si/continua): ${NC}"
                 read -r continue_answer
 
-                if [[ "$continue_answer" =~ ^[sS]|[sS][iI]|[cC]ontinua$ ]]; then
+                if [[ "$continue_answer" =~ ^([sS]|[sS][iI]|[cC]ontinua)$ ]]; then
                     current_prompt="continua"
                     echo ""
                 else
@@ -613,7 +559,7 @@ agent_chat_interactive() {
                 echo -ne "${BOLD}Deseas que continue? (s/n/si/continua): ${NC}"
                 read -r continue_answer
 
-                if [[ "$continue_answer" =~ ^[sS]|[sS][iI]|[cC]ontinua$ ]]; then
+                if [[ "$continue_answer" =~ ^([sS]|[sS][iI]|[cC]ontinua)$ ]]; then
                     current_prompt="continua con la tarea"
                     continue_iterations=true
                     echo ""
