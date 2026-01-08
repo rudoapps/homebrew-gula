@@ -486,6 +486,118 @@ def format_markdown_table(table_lines):
     return "\n".join(result)
 
 
+def format_unicode_table(table_lines):
+    """Reformat a Unicode box-drawing table with proper column alignment."""
+    if not table_lines:
+        return ""
+
+    # Box drawing characters
+    BOX_CHARS = set('┌┐└┘├┤┬┴┼│─')
+    TOP_LEFT = "┌"
+    TOP_RIGHT = "┐"
+    BOT_LEFT = "└"
+    BOT_RIGHT = "┘"
+    HORIZ = "─"
+    VERT = "│"
+    T_DOWN = "┬"
+    T_UP = "┴"
+    T_RIGHT = "├"
+    T_LEFT = "┤"
+    CROSS = "┼"
+
+    # Parse content rows (lines with │)
+    rows = []
+    row_types = []  # 'header', 'separator', 'data'
+
+    for line in table_lines:
+        stripped = line.strip()
+
+        # Top border (┌───┬───┐)
+        if stripped.startswith(TOP_LEFT):
+            row_types.append('top')
+            rows.append([])
+        # Bottom border (└───┴───┘)
+        elif stripped.startswith(BOT_LEFT):
+            row_types.append('bottom')
+            rows.append([])
+        # Separator (├───┼───┤)
+        elif stripped.startswith(T_RIGHT):
+            row_types.append('separator')
+            rows.append([])
+        # Content row (│ ... │)
+        elif VERT in stripped:
+            # Extract cells between │
+            parts = stripped.split(VERT)
+            # Remove empty first and last (from leading/trailing │)
+            cells = [p.strip() for p in parts[1:-1]] if len(parts) > 2 else [p.strip() for p in parts if p.strip()]
+            rows.append(cells)
+            # First content row is header
+            if not any(t == 'data' for t in row_types):
+                row_types.append('header')
+            else:
+                row_types.append('data')
+        else:
+            # Unknown line, keep as-is
+            row_types.append('unknown')
+            rows.append([stripped])
+
+    if not rows:
+        return "\n".join(table_lines)
+
+    # Calculate max columns and widths
+    num_cols = max((len(r) for r in rows if r), default=0)
+    if num_cols == 0:
+        return "\n".join(table_lines)
+
+    col_widths = [0] * num_cols
+    for row, rtype in zip(rows, row_types):
+        if rtype in ('header', 'data'):
+            for i, cell in enumerate(row):
+                if i < num_cols:
+                    col_widths[i] = max(col_widths[i], display_width(cell))
+
+    # Ensure minimum width
+    col_widths = [max(w, 3) for w in col_widths]
+
+    # Rebuild table
+    result = []
+
+    for row, rtype in zip(rows, row_types):
+        if rtype == 'top':
+            line = TOP_LEFT + T_DOWN.join(HORIZ * (w + 2) for w in col_widths) + TOP_RIGHT
+            result.append(f"{DIM}{line}{NC}")
+        elif rtype == 'bottom':
+            line = BOT_LEFT + T_UP.join(HORIZ * (w + 2) for w in col_widths) + BOT_RIGHT
+            result.append(f"{DIM}{line}{NC}")
+        elif rtype == 'separator':
+            line = T_RIGHT + CROSS.join(HORIZ * (w + 2) for w in col_widths) + T_LEFT
+            result.append(f"{DIM}{line}{NC}")
+        elif rtype == 'header':
+            # Pad cells
+            padded = row + [''] * (num_cols - len(row))
+            cells_fmt = []
+            for j, cell in enumerate(padded):
+                w = col_widths[j] if j < len(col_widths) else 3
+                padding = max(0, w - display_width(cell))
+                cells_fmt.append(f" {BOLD}{cell}{NC}{' ' * padding} ")
+            line = f"{DIM}{VERT}{NC}" + f"{DIM}{VERT}{NC}".join(cells_fmt) + f"{DIM}{VERT}{NC}"
+            result.append(line)
+        elif rtype == 'data':
+            padded = row + [''] * (num_cols - len(row))
+            cells_fmt = []
+            for j, cell in enumerate(padded):
+                w = col_widths[j] if j < len(col_widths) else 3
+                padding = max(0, w - display_width(cell))
+                cells_fmt.append(f" {cell}{' ' * padding} ")
+            line = f"{DIM}{VERT}{NC}" + f"{DIM}{VERT}{NC}".join(cells_fmt) + f"{DIM}{VERT}{NC}"
+            result.append(line)
+        else:
+            # Unknown, keep original
+            result.append(row[0] if row else '')
+
+    return "\n".join(result)
+
+
 def markdown_to_ansi(text):
     """Convert basic markdown to ANSI terminal codes."""
 
@@ -494,25 +606,43 @@ def markdown_to_ansi(text):
     result_lines = []
     table_buffer = []
     in_table = False
+    table_type = None  # 'markdown' or 'unicode'
+
+    # Unicode box drawing chars for detection
+    UNICODE_TABLE_STARTS = ('┌', '├', '└', '│')
 
     for line in lines:
-        # Detect table rows (start with | or contain | surrounded by content)
-        is_table_row = bool(re.match(r'^\s*\|.*\|', line.strip()))
+        stripped = line.strip()
 
-        if is_table_row:
-            in_table = True
+        # Detect markdown table rows (start with | or contain | surrounded by content)
+        is_markdown_table = bool(re.match(r'^\s*\|.*\|', stripped))
+
+        # Detect Unicode box-drawing table rows
+        is_unicode_table = any(stripped.startswith(c) for c in UNICODE_TABLE_STARTS)
+
+        if is_markdown_table or is_unicode_table:
+            if not in_table:
+                in_table = True
+                table_type = 'unicode' if is_unicode_table else 'markdown'
             table_buffer.append(line)
         else:
             if in_table and table_buffer:
                 # Process accumulated table
-                result_lines.append(format_markdown_table(table_buffer))
+                if table_type == 'unicode':
+                    result_lines.append(format_unicode_table(table_buffer))
+                else:
+                    result_lines.append(format_markdown_table(table_buffer))
                 table_buffer = []
                 in_table = False
+                table_type = None
             result_lines.append(line)
 
     # Don't forget remaining table at end of text
     if table_buffer:
-        result_lines.append(format_markdown_table(table_buffer))
+        if table_type == 'unicode':
+            result_lines.append(format_unicode_table(table_buffer))
+        else:
+            result_lines.append(format_markdown_table(table_buffer))
 
     text = '\n'.join(result_lines)
 
