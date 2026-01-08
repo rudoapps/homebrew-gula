@@ -763,6 +763,8 @@ proc = subprocess.Popen(
 event_type = None
 texts = []
 streaming_text = False  # Track if we're in text streaming mode
+line_buffer = ""  # Buffer for incomplete lines during streaming
+table_buffer = []  # Buffer for table lines to format together
 result = {
     "conversation_id": None,
     "total_cost": 0,
@@ -868,11 +870,34 @@ try:
                         sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}\n\n  ")
                         sys.stderr.flush()
                         streaming_text = True
-                    # Convert markdown to ANSI and add indentation
-                    formatted = markdown_to_ansi(content)
-                    formatted = formatted.replace("\n", "\n  ")
-                    sys.stderr.write(formatted)
-                    sys.stderr.flush()
+
+                    # Add to line buffer for table detection
+                    line_buffer += content
+
+                    # Process complete lines
+                    while '\n' in line_buffer:
+                        line, line_buffer = line_buffer.split('\n', 1)
+
+                        # Check if this line is part of a Unicode table
+                        stripped = line.strip()
+                        is_table_line = any(stripped.startswith(c) for c in ('┌', '├', '└', '│'))
+
+                        if is_table_line:
+                            table_buffer.append(line)
+                        else:
+                            # If we have a buffered table, format and output it
+                            if table_buffer:
+                                formatted_table = format_unicode_table(table_buffer)
+                                formatted_table = formatted_table.replace("\n", "\n  ")
+                                sys.stderr.write(formatted_table + "\n  ")
+                                sys.stderr.flush()
+                                table_buffer = []
+
+                            # Output current non-table line
+                            formatted = markdown_to_ansi(line)
+                            sys.stderr.write(formatted + "\n  ")
+                            sys.stderr.flush()
+
                     texts.append(content)
 
             elif event_type == "tool_requests":
@@ -884,6 +909,19 @@ try:
                 # Capture session info from tool_requests
                 result["session_cost"] = parsed.get("session_cost", 0)
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
+
+                # Flush remaining buffers
+                if table_buffer:
+                    formatted_table = format_unicode_table(table_buffer)
+                    formatted_table = formatted_table.replace("\n", "\n  ")
+                    sys.stderr.write(formatted_table + "\n  ")
+                    sys.stderr.flush()
+                    table_buffer = []
+                if line_buffer.strip():
+                    formatted = markdown_to_ansi(line_buffer)
+                    sys.stderr.write(formatted)
+                    sys.stderr.flush()
+                    line_buffer = ""
 
                 # Add newline after text if we were streaming, then stop spinner
                 if streaming_text:
@@ -899,6 +937,17 @@ try:
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
                 result["max_iterations_reached"] = parsed.get("max_iterations_reached", False)
                 result["truncation_stats"] = parsed.get("truncation_stats", {})
+
+                # Flush remaining buffers
+                if table_buffer:
+                    formatted_table = format_unicode_table(table_buffer)
+                    formatted_table = formatted_table.replace("\n", "\n  ")
+                    sys.stderr.write(formatted_table + "\n  ")
+                    sys.stderr.flush()
+                if line_buffer.strip():
+                    formatted = markdown_to_ansi(line_buffer)
+                    sys.stderr.write(formatted)
+                    sys.stderr.flush()
 
                 # Just stop spinner/add newline - summary shown by agent_chat.sh
                 if streaming_text:
