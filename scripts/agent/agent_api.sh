@@ -601,48 +601,35 @@ def format_unicode_table(table_lines):
 def markdown_to_ansi(text):
     """Convert basic markdown to ANSI terminal codes."""
 
-    # First, handle tables (before other processing)
+    # Handle markdown tables (| col | format) but NOT Unicode tables
+    # Unicode tables (┌─┬─┐) pass through as-is since reformatting during
+    # streaming causes issues with chunked data
     lines = text.split('\n')
     result_lines = []
     table_buffer = []
     in_table = False
-    table_type = None  # 'markdown' or 'unicode'
-
-    # Unicode box drawing chars for detection
-    UNICODE_TABLE_STARTS = ('┌', '├', '└', '│')
 
     for line in lines:
         stripped = line.strip()
 
-        # Detect markdown table rows (start with | or contain | surrounded by content)
+        # Detect markdown table rows ONLY (start with | or contain | surrounded by content)
+        # Skip Unicode tables - they pass through unchanged
         is_markdown_table = bool(re.match(r'^\s*\|.*\|', stripped))
 
-        # Detect Unicode box-drawing table rows
-        is_unicode_table = any(stripped.startswith(c) for c in UNICODE_TABLE_STARTS)
-
-        if is_markdown_table or is_unicode_table:
-            if not in_table:
-                in_table = True
-                table_type = 'unicode' if is_unicode_table else 'markdown'
+        if is_markdown_table:
+            in_table = True
             table_buffer.append(line)
         else:
             if in_table and table_buffer:
-                # Process accumulated table
-                if table_type == 'unicode':
-                    result_lines.append(format_unicode_table(table_buffer))
-                else:
-                    result_lines.append(format_markdown_table(table_buffer))
+                # Process accumulated markdown table
+                result_lines.append(format_markdown_table(table_buffer))
                 table_buffer = []
                 in_table = False
-                table_type = None
             result_lines.append(line)
 
     # Don't forget remaining table at end of text
     if table_buffer:
-        if table_type == 'unicode':
-            result_lines.append(format_unicode_table(table_buffer))
-        else:
-            result_lines.append(format_markdown_table(table_buffer))
+        result_lines.append(format_markdown_table(table_buffer))
 
     text = '\n'.join(result_lines)
 
@@ -763,8 +750,6 @@ proc = subprocess.Popen(
 event_type = None
 texts = []
 streaming_text = False  # Track if we're in text streaming mode
-line_buffer = ""  # Buffer for incomplete lines during streaming
-table_buffer = []  # Buffer for table lines to format together
 result = {
     "conversation_id": None,
     "total_cost": 0,
@@ -871,33 +856,12 @@ try:
                         sys.stderr.flush()
                         streaming_text = True
 
-                    # Add to line buffer for table detection
-                    line_buffer += content
-
-                    # Process complete lines
-                    while '\n' in line_buffer:
-                        line, line_buffer = line_buffer.split('\n', 1)
-
-                        # Check if this line is part of a Unicode table
-                        stripped = line.strip()
-                        is_table_line = any(stripped.startswith(c) for c in ('┌', '├', '└', '│'))
-
-                        if is_table_line:
-                            table_buffer.append(line)
-                        else:
-                            # If we have a buffered table, format and output it
-                            if table_buffer:
-                                formatted_table = format_unicode_table(table_buffer)
-                                formatted_table = formatted_table.replace("\n", "\n  ")
-                                sys.stderr.write(formatted_table + "\n  ")
-                                sys.stderr.flush()
-                                table_buffer = []
-
-                            # Output current non-table line
-                            formatted = markdown_to_ansi(line)
-                            sys.stderr.write(formatted + "\n  ")
-                            sys.stderr.flush()
-
+                    # Simple streaming: apply markdown formatting but skip table reformatting
+                    # (table reformatting during streaming causes issues with chunked data)
+                    formatted = markdown_to_ansi(content)
+                    formatted = formatted.replace("\n", "\n  ")
+                    sys.stderr.write(formatted)
+                    sys.stderr.flush()
                     texts.append(content)
 
             elif event_type == "tool_requests":
@@ -909,19 +873,6 @@ try:
                 # Capture session info from tool_requests
                 result["session_cost"] = parsed.get("session_cost", 0)
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
-
-                # Flush remaining buffers
-                if table_buffer:
-                    formatted_table = format_unicode_table(table_buffer)
-                    formatted_table = formatted_table.replace("\n", "\n  ")
-                    sys.stderr.write(formatted_table + "\n  ")
-                    sys.stderr.flush()
-                    table_buffer = []
-                if line_buffer.strip():
-                    formatted = markdown_to_ansi(line_buffer)
-                    sys.stderr.write(formatted)
-                    sys.stderr.flush()
-                    line_buffer = ""
 
                 # Add newline after text if we were streaming, then stop spinner
                 if streaming_text:
@@ -937,17 +888,6 @@ try:
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
                 result["max_iterations_reached"] = parsed.get("max_iterations_reached", False)
                 result["truncation_stats"] = parsed.get("truncation_stats", {})
-
-                # Flush remaining buffers
-                if table_buffer:
-                    formatted_table = format_unicode_table(table_buffer)
-                    formatted_table = formatted_table.replace("\n", "\n  ")
-                    sys.stderr.write(formatted_table + "\n  ")
-                    sys.stderr.flush()
-                if line_buffer.strip():
-                    formatted = markdown_to_ansi(line_buffer)
-                    sys.stderr.write(formatted)
-                    sys.stderr.flush()
 
                 # Just stop spinner/add newline - summary shown by agent_chat.sh
                 if streaming_text:
