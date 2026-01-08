@@ -7,77 +7,133 @@
 # MULTI-LINE INPUT
 # ============================================================================
 
-# Read multi-line input with block style UI
+# Read multi-line input with enhanced keyboard support
+# Uses Python readline for proper keybindings:
+# - Ctrl+A / Home: Go to start of line
+# - Ctrl+E / End: Go to end of line
+# - Ctrl+← / Alt+B: Move word left
+# - Ctrl+→ / Alt+F: Move word right
+# - Ctrl+W: Delete word backward
+# - Ctrl+K: Delete to end of line
+# - Ctrl+U: Delete to start of line
+# - Up/Down arrows: History navigation
 # - Single line: press Enter to submit
-# - Multi-line: paste text, then press Enter twice (empty line) to submit
-# - Or type \ at end of line to continue on next line
+# - Multi-line: type \ at end of line to continue, or Enter twice to submit
 read_multiline_input() {
-    local lines=()
-    local line=""
-    local is_first_line=true
-    local empty_line_count=0
+    python3 << 'PYEOF'
+import sys
+import os
 
-    while true; do
-        # Show prompt with block indicator
-        if [ "$is_first_line" = true ]; then
-            echo -ne "${GREEN}█${NC} " >&2
-        else
-            echo -ne "${DIM}█${NC} " >&2
-        fi
+# Colors
+GREEN = "\033[1;32m"
+DIM = "\033[2m"
+NC = "\033[0m"
 
-        # Read input
-        if ! IFS= read -r line; then
-            # EOF - return what we have
-            break
-        fi
+def read_input():
+    """Read input with readline support for keybindings."""
+    try:
+        import readline
 
-        # Check for backslash continuation
-        if [[ "$line" == *"\\" ]]; then
-            # Remove trailing backslash and continue
-            line="${line%\\}"
-            lines+=("$line")
-            is_first_line=false
-            empty_line_count=0
-            continue
-        fi
+        # Detect if using libedit (macOS) or GNU readline
+        is_libedit = 'libedit' in readline.__doc__ if readline.__doc__ else False
 
-        # Check for empty line (submit signal in multi-line mode)
-        if [ -z "$line" ]; then
-            if [ ${#lines[@]} -gt 0 ]; then
-                # We have content and got empty line - submit
+        if is_libedit:
+            # macOS libedit uses different syntax
+            # Note: libedit has limited customization, but these basics work
+            readline.parse_and_bind("bind ^A ed-move-to-beg")     # Ctrl+A: start of line
+            readline.parse_and_bind("bind ^E ed-move-to-end")     # Ctrl+E: end of line
+            readline.parse_and_bind("bind ^W ed-delete-prev-word") # Ctrl+W: delete word back
+            readline.parse_and_bind("bind ^K ed-kill-line")       # Ctrl+K: delete to end
+            readline.parse_and_bind("bind ^U vi-kill-line-prev")  # Ctrl+U: delete to start
+        else:
+            # GNU readline (Linux, some macOS with homebrew python)
+            readline.parse_and_bind('"\e[1;5D": backward-word')   # Ctrl+Left
+            readline.parse_and_bind('"\e[1;5C": forward-word')    # Ctrl+Right
+            readline.parse_and_bind('"\e[1;3D": backward-word')   # Alt+Left (Mac iTerm)
+            readline.parse_and_bind('"\e[1;3C": forward-word')    # Alt+Right (Mac iTerm)
+            readline.parse_and_bind('"\eb": backward-word')       # Alt+B (emacs style)
+            readline.parse_and_bind('"\ef": forward-word')        # Alt+F (emacs style)
+            readline.parse_and_bind('"\e[H": beginning-of-line')  # Home key
+            readline.parse_and_bind('"\e[F": end-of-line')        # End key
+            readline.parse_and_bind('"\e[1~": beginning-of-line') # Home (alternate)
+            readline.parse_and_bind('"\e[4~": end-of-line')       # End (alternate)
+
+        # History file for chat
+        history_file = os.path.expanduser("~/.gula_chat_history")
+        try:
+            readline.read_history_file(history_file)
+            readline.set_history_length(100)
+        except FileNotFoundError:
+            pass
+
+    except ImportError:
+        pass  # readline not available, use basic input
+
+    lines = []
+    is_first_line = True
+
+    while True:
+        # Show prompt
+        if is_first_line:
+            prompt = f"{GREEN}█{NC} "
+        else:
+            prompt = f"{DIM}█{NC} "
+
+        try:
+            # Print prompt to stderr, read from stdin
+            sys.stderr.write(prompt)
+            sys.stderr.flush()
+
+            try:
+                line = input()
+            except EOFError:
                 break
-            else
-                # Empty input on first line - return empty
-                echo ""
-                return
-            fi
-        fi
 
-        # Add line to buffer
-        lines+=("$line")
+            # Check for backslash continuation
+            if line.endswith("\\"):
+                line = line[:-1]  # Remove backslash
+                lines.append(line)
+                is_first_line = False
+                continue
 
-        # For single line input (first line, no continuation), submit immediately
-        if [ "$is_first_line" = true ]; then
-            break
-        fi
+            # Check for empty line
+            if not line:
+                if lines:
+                    # We have content and got empty line - submit
+                    break
+                else:
+                    # Empty input on first line - return empty
+                    print("")
+                    return
 
-        is_first_line=false
-        empty_line_count=0
-    done
+            # Add line to buffer
+            lines.append(line)
 
-    # Join lines with newlines
-    local result=""
-    local first=true
-    for l in "${lines[@]}"; do
-        if [ "$first" = true ]; then
-            result="$l"
-            first=false
-        else
-            result="$result"$'\n'"$l"
-        fi
-    done
+            # For single line input (first line, no continuation), submit immediately
+            if is_first_line:
+                break
 
-    echo "$result"
+            is_first_line = False
+
+        except KeyboardInterrupt:
+            print("")
+            return
+
+    # Save to history
+    result = "\n".join(lines)
+    if result.strip():
+        try:
+            import readline
+            readline.add_history(result.replace("\n", " "))
+            history_file = os.path.expanduser("~/.gula_chat_history")
+            readline.write_history_file(history_file)
+        except:
+            pass
+
+    print(result)
+
+read_input()
+PYEOF
 }
 
 # ============================================================================
