@@ -242,6 +242,31 @@ try:
     if prompt:
         data["prompt"] = prompt
 
+        # Detect @mentions for cross-project RAG
+        # Maps @xxx to project types: @back/@backend -> backend, @ios -> ios, etc.
+        import re
+        mention_mapping = {
+            '@back': 'backend',
+            '@backend': 'backend',
+            '@server': 'backend',
+            '@api': 'backend',
+            '@ios': 'ios',
+            '@android': 'android',
+            '@front': 'web_frontend',
+            '@frontend': 'web_frontend',
+            '@web': 'web_frontend',
+            '@flutter': 'flutter',
+            '@mobile': 'ios',  # Default mobile to ios, could be smarter
+        }
+        # Find first matching mention
+        prompt_lower = prompt.lower()
+        for mention, project_type in mention_mapping.items():
+            if mention in prompt_lower:
+                data["target_project_type"] = project_type
+                # Remove mention from prompt for cleaner context (optional)
+                # data["prompt"] = re.sub(re.escape(mention), '', prompt, flags=re.IGNORECASE).strip()
+                break
+
     # Agregar conversation_id si existe
     if conv_id:
         try:
