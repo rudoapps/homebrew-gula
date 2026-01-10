@@ -263,6 +263,7 @@ try:
         for mention, project_type in mention_mapping.items():
             if mention in prompt_lower:
                 data["target_project_type"] = project_type
+                print(f"[DEBUG] Detected mention '{mention}' -> target_project_type='{project_type}'", file=sys.stderr)
                 # Remove mention from prompt for cleaner context (optional)
                 # data["prompt"] = re.sub(re.escape(mention), '', prompt, flags=re.IGNORECASE).strip()
                 break
@@ -321,6 +322,10 @@ try:
                     data["images"] = images
             except:
                 pass
+
+    # Debug: show what we're sending
+    if data.get("target_project_type"):
+        print(f"[DEBUG] Sending target_project_type={data['target_project_type']}", file=sys.stderr)
 
     # Ensure we always output valid JSON
     print(json.dumps(data))
