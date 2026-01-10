@@ -338,6 +338,7 @@ agent_chat_interactive() {
                 echo -e "  ${YELLOW}/quota${NC}             - Ver limite y uso mensual"
                 echo -e "  ${YELLOW}/clear${NC}             - Limpiar pantalla"
                 echo -e "  ${YELLOW}/help${NC}              - Mostrar esta ayuda"
+                echo -e "  ${YELLOW}/debug${NC}             - Activar/desactivar modo debug"
                 echo ""
                 echo -e "${BOLD}Subagentes:${NC}"
                 echo -e "  ${YELLOW}/subagents${NC}         - Listar subagentes disponibles"
@@ -355,6 +356,19 @@ agent_chat_interactive() {
                 ;;
             /quota)
                 fetch_and_show_quota
+                continue
+                ;;
+            /debug)
+                local current_debug=$(get_agent_config "debug_mode")
+                if [ "$current_debug" = "true" ]; then
+                    set_agent_config "debug_mode" "false"
+                    echo -e "${YELLOW}Debug mode desactivado${NC}"
+                else
+                    set_agent_config "debug_mode" "true"
+                    echo -e "${GREEN}Debug mode activado${NC}"
+                    echo -e "${DIM}Verás información de diagnóstico en las peticiones${NC}"
+                fi
+                echo ""
                 continue
                 ;;
             /resume\ *)

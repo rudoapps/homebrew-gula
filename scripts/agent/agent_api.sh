@@ -199,6 +199,9 @@ send_chat_hybrid() {
         git_remote_url=$(get_rag_git_url 2>/dev/null || echo "")
     fi
 
+    # Get debug mode setting
+    local debug_mode=$(get_agent_config "debug_mode")
+
     # Guardar datos en archivos temporales para evitar problemas de escape
     local tmp_prompt=$(mktemp)
     local tmp_context=$(mktemp)
@@ -214,7 +217,7 @@ send_chat_hybrid() {
     echo "$images_json" > "$tmp_images"
 
     # Construir payload con Python
-    local payload=$(python3 - "$tmp_prompt" "$tmp_context" "$tmp_results" "$conversation_id" "$max_iterations" "$tmp_subagent" "$tmp_git_url" "$tmp_images" << 'PYEOF'
+    local payload=$(python3 - "$tmp_prompt" "$tmp_context" "$tmp_results" "$conversation_id" "$max_iterations" "$tmp_subagent" "$tmp_git_url" "$tmp_images" "$debug_mode" << 'PYEOF'
 import json
 import sys
 
@@ -227,6 +230,7 @@ try:
     tmp_subagent = sys.argv[6]
     tmp_git_url = sys.argv[7]
     tmp_images = sys.argv[8] if len(sys.argv) > 8 else None
+    debug_mode = sys.argv[9] == "true" if len(sys.argv) > 9 else False
 
     # Parse max_iterations with fallback
     try:
@@ -263,7 +267,8 @@ try:
         for mention, project_type in mention_mapping.items():
             if mention in prompt_lower:
                 data["target_project_type"] = project_type
-                print(f"[DEBUG] Detected mention '{mention}' -> target_project_type='{project_type}'", file=sys.stderr)
+                if debug_mode:
+                    print(f"[DEBUG] Detected mention '{mention}' -> target_project_type='{project_type}'", file=sys.stderr)
                 # Remove mention from prompt for cleaner context (optional)
                 # data["prompt"] = re.sub(re.escape(mention), '', prompt, flags=re.IGNORECASE).strip()
                 break
@@ -324,7 +329,7 @@ try:
                 pass
 
     # Debug: show what we're sending
-    if data.get("target_project_type"):
+    if debug_mode and data.get("target_project_type"):
         print(f"[DEBUG] Sending target_project_type={data['target_project_type']}", file=sys.stderr)
 
     # Ensure we always output valid JSON
