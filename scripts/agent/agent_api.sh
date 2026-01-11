@@ -824,30 +824,24 @@ def render_with_glow(text):
     """Render markdown text using glow if available, otherwise use basic formatting."""
     import shutil
     import subprocess
-    import tempfile
 
     # Check if glow is available
     glow_path = shutil.which('glow')
 
     if glow_path:
         try:
-            # Write text to temp file (glow works better with files than stdin for tables)
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-                f.write(text)
-                temp_path = f.name
-
-            # Run glow with dark style and appropriate width
+            # Use stdin with glow (more reliable than temp files)
+            # Use -p for pager-less output
             result = subprocess.run(
-                [glow_path, '-s', 'dark', '-w', '100', temp_path],
+                [glow_path, '-s', 'dark', '-w', '100', '-'],
+                input=text,
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=5  # 5 second timeout
             )
 
-            # Clean up temp file
-            import os
-            os.unlink(temp_path)
-
-            if result.returncode == 0:
+            # Check if glow produced meaningful output (at least 10% of input length)
+            if result.returncode == 0 and len(result.stdout) > len(text) * 0.1:
                 # Add indentation to glow output
                 formatted = result.stdout
                 formatted = "  " + formatted.replace("\n", "\n  ")
@@ -855,6 +849,8 @@ def render_with_glow(text):
                 sys.stderr.flush()
                 return
 
+        except subprocess.TimeoutExpired:
+            pass  # Fall through to basic formatting
         except Exception as e:
             pass  # Fall through to basic formatting
 
@@ -1098,7 +1094,7 @@ try:
                     model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
                     sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
                     render_with_glow(full_text)
-                    texts = []  # Clear buffer
+                    texts.clear()
 
                 # Add newline after text, then stop spinner
                 if streaming_text:
@@ -1125,6 +1121,7 @@ try:
                     render_with_glow(full_text)
                     sys.stderr.write("\n")
                     sys.stderr.flush()
+                    texts.clear()
                 elif streaming_text:
                     sys.stderr.write("\n")
                     sys.stderr.flush()
