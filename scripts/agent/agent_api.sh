@@ -817,6 +817,54 @@ def markdown_to_ansi(text, use_streaming_formatter=False):
     return text
 
 # ============================================================================
+# Render with glow (or fallback)
+# ============================================================================
+
+def render_with_glow(text):
+    """Render markdown text using glow if available, otherwise use basic formatting."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    # Check if glow is available
+    glow_path = shutil.which('glow')
+
+    if glow_path:
+        try:
+            # Write text to temp file (glow works better with files than stdin for tables)
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+                f.write(text)
+                temp_path = f.name
+
+            # Run glow with dark style and appropriate width
+            result = subprocess.run(
+                [glow_path, '-s', 'dark', '-w', '100', temp_path],
+                capture_output=True,
+                text=True
+            )
+
+            # Clean up temp file
+            import os
+            os.unlink(temp_path)
+
+            if result.returncode == 0:
+                # Add indentation to glow output
+                formatted = result.stdout
+                formatted = "  " + formatted.replace("\n", "\n  ")
+                sys.stderr.write(formatted)
+                sys.stderr.flush()
+                return
+
+        except Exception as e:
+            pass  # Fall through to basic formatting
+
+    # Fallback: use basic markdown_to_ansi formatting
+    formatted = markdown_to_ansi(text)
+    formatted = "  " + formatted.replace("\n", "\n  ")
+    sys.stderr.write(formatted)
+    sys.stderr.flush()
+
+# ============================================================================
 # Spinner class
 # ============================================================================
 
@@ -1023,23 +1071,13 @@ try:
                 content = parsed.get("content", "")
                 msg_model = parsed.get("model", "")
                 if content:
-                    # First text chunk - stop spinner and show header with model + RAG
+                    # First text chunk - update spinner, save model info
                     if not streaming_text:
-                        spinner.stop()
-                        model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
-                        # Show RAG indicator in header so it persists (not just in spinner)
-                        sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n  ")
-                        sys.stderr.flush()
                         streaming_text = True
-                        # Reset streaming formatter for new message
-                        streaming_formatter.__init__()
+                        result["msg_model"] = msg_model
+                        spinner.update(f"Recibiendo respuesta... {DIM}({msg_model}){NC}" if msg_model else "Recibiendo respuesta...")
 
-                    # Apply markdown formatting with streaming table buffer
-                    # Unicode tables are buffered until complete, then reformatted
-                    formatted = markdown_to_ansi(content, use_streaming_formatter=True)
-                    formatted = formatted.replace("\n", "\n  ")
-                    sys.stderr.write(formatted)
-                    sys.stderr.flush()
+                    # Buffer text (don't display yet - will render with glow at the end)
                     texts.append(content)
 
             elif event_type == "tool_requests":
@@ -1052,14 +1090,17 @@ try:
                 result["session_cost"] = parsed.get("session_cost", 0)
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
 
-                # Flush any remaining buffered table content before tool execution
-                remaining = streaming_formatter.flush()
-                if remaining:
-                    remaining = remaining.replace("\n", "\n  ")
-                    sys.stderr.write(remaining)
-                    sys.stderr.flush()
+                # Render buffered text before tool execution
+                if texts:
+                    spinner.stop()
+                    full_text = "".join(texts)
+                    msg_model = result.get("msg_model", "")
+                    model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
+                    sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
+                    render_with_glow(full_text)
+                    texts = []  # Clear buffer
 
-                # Add newline after text if we were streaming, then stop spinner
+                # Add newline after text, then stop spinner
                 if streaming_text:
                     sys.stderr.write("\n")
                     sys.stderr.flush()
@@ -1074,15 +1115,17 @@ try:
                 result["max_iterations_reached"] = parsed.get("max_iterations_reached", False)
                 result["truncation_stats"] = parsed.get("truncation_stats", {})
 
-                # Flush any remaining buffered table content
-                remaining = streaming_formatter.flush()
-                if remaining:
-                    remaining = remaining.replace("\n", "\n  ")
-                    sys.stderr.write(remaining)
+                # Render buffered text with glow
+                if texts:
+                    spinner.stop()
+                    full_text = "".join(texts)
+                    msg_model = result.get("msg_model", "")
+                    model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
+                    sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
+                    render_with_glow(full_text)
+                    sys.stderr.write("\n")
                     sys.stderr.flush()
-
-                # Just stop spinner/add newline - summary shown by agent_chat.sh
-                if streaming_text:
+                elif streaming_text:
                     sys.stderr.write("\n")
                     sys.stderr.flush()
                 else:
