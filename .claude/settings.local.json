@@ -61,7 +61,8 @@
       "Bash(detect_project_source_path:*)",
       "Bash(/Users/fer/gula/gula.sh create:*)",
       "Bash(/Users/fer/gula/gula.sh install:*)",
-      "Bash(./create_release.sh:*)"
+      "Bash(./create_release.sh:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

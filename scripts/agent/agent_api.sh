@@ -526,6 +526,12 @@ def format_unicode_table(table_lines):
     if not table_lines:
         return ""
 
+    # Strip any ANSI codes from input lines
+    def strip_ansi_local(s):
+        return re.sub(r'\x1b\[[0-9;]*m', '', s)
+
+    clean_lines = [strip_ansi_local(line) for line in table_lines]
+
     # Box drawing characters
     BOX_CHARS = set('┌┐└┘├┤┬┴┼│─')
     TOP_LEFT = "┌"
@@ -542,7 +548,7 @@ def format_unicode_table(table_lines):
 
     # First pass: determine expected column count from separator/border rows
     expected_cols = 0
-    for line in table_lines:
+    for line in clean_lines:
         stripped = line.strip()
         if stripped.startswith(TOP_LEFT) or stripped.startswith(T_RIGHT):
             # Count columns from border (number of ┬ or ┼ + 1)
@@ -554,7 +560,7 @@ def format_unicode_table(table_lines):
     rows = []
     row_types = []  # 'header', 'separator', 'data'
 
-    for line in table_lines:
+    for line in clean_lines:
         stripped = line.strip()
 
         # Top border (┌───┬───┐)
@@ -719,15 +725,14 @@ class StreamingTableFormatter:
 # Global streaming table formatter instance
 streaming_formatter = StreamingTableFormatter()
 
+def strip_ansi(text):
+    """Remove ANSI escape codes from text."""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+
 def markdown_to_ansi(text, use_streaming_formatter=False):
     """Convert basic markdown to ANSI terminal codes."""
 
-    # Handle Unicode tables via streaming formatter if enabled (for partial tables across chunks)
-    if use_streaming_formatter:
-        text = streaming_formatter.process_chunk(text)
-
-    # Also handle complete Unicode tables inline (┌...┘)
-    # This catches tables that arrive as a complete chunk
+    # Process Unicode tables (┌...┘) - detect and reformat for alignment
     lines = text.split('\n')
     result_lines = []
     unicode_table_buffer = []
@@ -736,10 +741,12 @@ def markdown_to_ansi(text, use_streaming_formatter=False):
     in_markdown_table = False
 
     for line in lines:
-        stripped = line.strip()
+        # Strip ANSI codes for detection but keep original line for output
+        clean_line = strip_ansi(line)
+        stripped = clean_line.strip()
 
         # Detect Unicode table start (┌)
-        if not in_unicode_table and '┌' in stripped and '─' in stripped:
+        if not in_unicode_table and stripped.startswith('┌') and '─' in stripped:
             in_unicode_table = True
             unicode_table_buffer = [line]
             continue
