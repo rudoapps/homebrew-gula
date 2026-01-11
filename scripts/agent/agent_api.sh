@@ -540,6 +540,16 @@ def format_unicode_table(table_lines):
     T_LEFT = "┤"
     CROSS = "┼"
 
+    # First pass: determine expected column count from separator/border rows
+    expected_cols = 0
+    for line in table_lines:
+        stripped = line.strip()
+        if stripped.startswith(TOP_LEFT) or stripped.startswith(T_RIGHT):
+            # Count columns from border (number of ┬ or ┼ + 1)
+            col_count = stripped.count(T_DOWN) + stripped.count(CROSS) + 1
+            if col_count > expected_cols:
+                expected_cols = col_count
+
     # Parse content rows (lines with │)
     rows = []
     row_types = []  # 'header', 'separator', 'data'
@@ -565,6 +575,14 @@ def format_unicode_table(table_lines):
             parts = stripped.split(VERT)
             # Remove empty first and last (from leading/trailing │)
             cells = [p.strip() for p in parts[1:-1]] if len(parts) > 2 else [p.strip() for p in parts if p.strip()]
+
+            # If we have more cells than expected columns, merge extras into last cell
+            if expected_cols > 0 and len(cells) > expected_cols:
+                merged = cells[:expected_cols-1]
+                # Merge remaining cells into the last one
+                merged.append(' | '.join(cells[expected_cols-1:]))
+                cells = merged
+
             rows.append(cells)
             # First content row is header
             if not any(t == 'data' for t in row_types):
@@ -579,10 +597,27 @@ def format_unicode_table(table_lines):
     if not rows:
         return "\n".join(table_lines)
 
-    # Calculate max columns and widths
-    num_cols = max((len(r) for r in rows if r), default=0)
+    # Calculate max columns and widths (use expected_cols if we have it)
+    num_cols = expected_cols if expected_cols > 0 else max((len(r) for r in rows if r), default=0)
     if num_cols == 0:
         return "\n".join(table_lines)
+
+    # Remove empty trailing columns (LLM sometimes generates extra empty columns)
+    while num_cols > 1:
+        all_empty = True
+        for row, rtype in zip(rows, row_types):
+            if rtype in ('header', 'data') and len(row) >= num_cols:
+                if row[num_cols - 1].strip():
+                    all_empty = False
+                    break
+        if all_empty:
+            num_cols -= 1
+            # Also trim the rows
+            for i, (row, rtype) in enumerate(zip(rows, row_types)):
+                if rtype in ('header', 'data') and len(row) > num_cols:
+                    rows[i] = row[:num_cols]
+        else:
+            break
 
     col_widths = [0] * num_cols
     for row, rtype in zip(rows, row_types):
@@ -935,6 +970,23 @@ try:
                     spinner.update(f"Pensando... {DIM}({model_name}){NC}")
                 else:
                     spinner.update("Pensando...")
+
+            elif event_type == "rag_context":
+                # RAG context event - update indicator for header display
+                rag_chunks = parsed.get("chunks", 0)
+                rag_scope = parsed.get("scope", "current")
+                rag_projects = parsed.get("projects", "")
+                rag_project_type = parsed.get("project_type", "")
+
+                # Build visible RAG indicator
+                if rag_scope == "related":
+                    rag_indicator_for_header = f" {CYAN}[RAG:{rag_chunks} multi-proyecto]{NC}"
+                else:
+                    project_label = f" @{rag_project_type}" if rag_project_type and rag_project_type != "current" else ""
+                    rag_indicator_for_header = f" {GREEN}[RAG:{rag_chunks}{project_label}]{NC}"
+
+                # Update spinner to show RAG is being used
+                spinner.update(f"Procesando con RAG ({rag_chunks} chunks)...")
 
             elif event_type == "text":
                 content = parsed.get("content", "")
