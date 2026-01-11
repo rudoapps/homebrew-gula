@@ -831,7 +831,6 @@ def render_with_glow(text):
     if glow_path:
         try:
             # Use stdin with glow (more reliable than temp files)
-            # Use -p for pager-less output
             result = subprocess.run(
                 [glow_path, '-s', 'dark', '-w', '100', '-'],
                 input=text,
@@ -842,8 +841,16 @@ def render_with_glow(text):
 
             # Check if glow produced meaningful output (at least 10% of input length)
             if result.returncode == 0 and len(result.stdout) > len(text) * 0.1:
-                # Add indentation to glow output
                 formatted = result.stdout
+
+                # Post-process: clean up markdown header symbols that glow leaves visible
+                # Glow shows "## Header" as bold but keeps the ##, we want to remove them
+                # Match ANSI sequences followed by ## or ### etc
+                formatted = re.sub(r'(\x1b\[[^m]*m\s*)#{1,4}\s+', r'\1', formatted)
+                # Also clean plain ## at start of lines
+                formatted = re.sub(r'^(\s*)#{1,4}\s+', r'\1', formatted, flags=re.MULTILINE)
+
+                # Add indentation
                 formatted = "  " + formatted.replace("\n", "\n  ")
                 sys.stderr.write(formatted)
                 sys.stderr.flush()
