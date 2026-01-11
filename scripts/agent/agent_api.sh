@@ -722,36 +722,60 @@ streaming_formatter = StreamingTableFormatter()
 def markdown_to_ansi(text, use_streaming_formatter=False):
     """Convert basic markdown to ANSI terminal codes."""
 
-    # Handle Unicode tables via streaming formatter if enabled
+    # Handle Unicode tables via streaming formatter if enabled (for partial tables across chunks)
     if use_streaming_formatter:
         text = streaming_formatter.process_chunk(text)
 
-    # Handle markdown tables (| col | format)
+    # Also handle complete Unicode tables inline (┌...┘)
+    # This catches tables that arrive as a complete chunk
     lines = text.split('\n')
     result_lines = []
-    table_buffer = []
-    in_table = False
+    unicode_table_buffer = []
+    in_unicode_table = False
+    markdown_table_buffer = []
+    in_markdown_table = False
 
     for line in lines:
         stripped = line.strip()
+
+        # Detect Unicode table start (┌)
+        if not in_unicode_table and '┌' in stripped and '─' in stripped:
+            in_unicode_table = True
+            unicode_table_buffer = [line]
+            continue
+
+        # If we're in a Unicode table
+        if in_unicode_table:
+            unicode_table_buffer.append(line)
+            # Check for table end (└)
+            if stripped.startswith('└') and '┘' in stripped:
+                # Table complete - format and output
+                formatted = format_unicode_table(unicode_table_buffer)
+                result_lines.append(formatted)
+                unicode_table_buffer = []
+                in_unicode_table = False
+            continue
 
         # Detect markdown table rows (start with | or contain | surrounded by content)
         is_markdown_table = bool(re.match(r'^\s*\|.*\|', stripped))
 
         if is_markdown_table:
-            in_table = True
-            table_buffer.append(line)
+            in_markdown_table = True
+            markdown_table_buffer.append(line)
         else:
-            if in_table and table_buffer:
+            if in_markdown_table and markdown_table_buffer:
                 # Process accumulated markdown table
-                result_lines.append(format_markdown_table(table_buffer))
-                table_buffer = []
-                in_table = False
+                result_lines.append(format_markdown_table(markdown_table_buffer))
+                markdown_table_buffer = []
+                in_markdown_table = False
             result_lines.append(line)
 
-    # Don't forget remaining table at end of text
-    if table_buffer:
-        result_lines.append(format_markdown_table(table_buffer))
+    # Don't forget remaining tables at end of text
+    if unicode_table_buffer:
+        # Incomplete Unicode table - output as-is
+        result_lines.extend(unicode_table_buffer)
+    if markdown_table_buffer:
+        result_lines.append(format_markdown_table(markdown_table_buffer))
 
     text = '\n'.join(result_lines)
 
