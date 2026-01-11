@@ -820,49 +820,93 @@ def markdown_to_ansi(text, use_streaming_formatter=False):
 # Render with glow (or fallback)
 # ============================================================================
 
-def render_with_glow(text):
-    """Render markdown text using glow if available, otherwise use basic formatting."""
+def render_table_with_glow(table_text):
+    """Render a markdown table using glow for nice Unicode output."""
     import shutil
     import subprocess
 
-    # Check if glow is available
     glow_path = shutil.which('glow')
+    if not glow_path:
+        return None
 
-    if glow_path:
-        try:
-            # Use stdin with glow (more reliable than temp files)
-            result = subprocess.run(
-                [glow_path, '-s', 'dark', '-w', '100', '-'],
-                input=text,
-                capture_output=True,
-                text=True,
-                timeout=5  # 5 second timeout
-            )
+    try:
+        result = subprocess.run(
+            [glow_path, '-s', 'dark', '-w', '100', '-'],
+            input=table_text,
+            capture_output=True,
+            text=True,
+            timeout=3
+        )
 
-            # Check if glow produced meaningful output (at least 10% of input length)
-            if result.returncode == 0 and len(result.stdout) > len(text) * 0.1:
-                formatted = result.stdout
+        if result.returncode == 0 and len(result.stdout.strip()) > 10:
+            # Return glow output, stripped of extra whitespace
+            return result.stdout.rstrip()
+    except:
+        pass
 
-                # Post-process: clean up markdown header symbols that glow leaves visible
-                # Glow shows "## Header" as bold but keeps the ##, we want to remove them
-                # Match ANSI sequences followed by ## or ### etc
-                formatted = re.sub(r'(\x1b\[[^m]*m\s*)#{1,4}\s+', r'\1', formatted)
-                # Also clean plain ## at start of lines
-                formatted = re.sub(r'^(\s*)#{1,4}\s+', r'\1', formatted, flags=re.MULTILINE)
+    return None
 
-                # Add indentation
-                formatted = "  " + formatted.replace("\n", "\n  ")
-                sys.stderr.write(formatted)
-                sys.stderr.flush()
-                return
 
-        except subprocess.TimeoutExpired:
-            pass  # Fall through to basic formatting
-        except Exception as e:
-            pass  # Fall through to basic formatting
+def render_hybrid(text):
+    """Hybrid rendering: glow for tables, markdown_to_ansi for everything else."""
+    lines = text.split('\n')
+    result_parts = []
+    current_text = []
+    table_buffer = []
+    in_table = False
 
-    # Fallback: use basic markdown_to_ansi formatting
-    formatted = markdown_to_ansi(text)
+    for line in lines:
+        stripped = line.strip()
+
+        # Detect markdown table (lines with | ... |)
+        is_table_line = bool(re.match(r'^\|.*\|$', stripped)) or bool(re.match(r'^\|?[\s:-]+\|[\s:-|]+$', stripped))
+
+        if is_table_line:
+            # Starting or continuing a table
+            if not in_table and current_text:
+                # Flush current text before table
+                result_parts.append(('text', '\n'.join(current_text)))
+                current_text = []
+            in_table = True
+            table_buffer.append(line)
+        else:
+            if in_table:
+                # End of table - render it with glow
+                table_text = '\n'.join(table_buffer)
+                glow_output = render_table_with_glow(table_text)
+                if glow_output:
+                    result_parts.append(('glow_table', glow_output))
+                else:
+                    # Fallback: add table as text
+                    result_parts.append(('text', table_text))
+                table_buffer = []
+                in_table = False
+
+            current_text.append(line)
+
+    # Handle remaining content
+    if in_table and table_buffer:
+        table_text = '\n'.join(table_buffer)
+        glow_output = render_table_with_glow(table_text)
+        if glow_output:
+            result_parts.append(('glow_table', glow_output))
+        else:
+            result_parts.append(('text', table_text))
+
+    if current_text:
+        result_parts.append(('text', '\n'.join(current_text)))
+
+    # Now render each part appropriately
+    final_output = []
+    for part_type, content in result_parts:
+        if part_type == 'glow_table':
+            final_output.append(content)
+        else:
+            # Use markdown_to_ansi for non-table content
+            final_output.append(markdown_to_ansi(content))
+
+    # Combine and add indentation
+    formatted = '\n'.join(final_output)
     formatted = "  " + formatted.replace("\n", "\n  ")
     sys.stderr.write(formatted)
     sys.stderr.flush()
@@ -1100,7 +1144,7 @@ try:
                     msg_model = result.get("msg_model", "")
                     model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
                     sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
-                    render_with_glow(full_text)
+                    render_hybrid(full_text)
                     texts.clear()
 
                 # Add newline after text, then stop spinner
@@ -1125,7 +1169,7 @@ try:
                     msg_model = result.get("msg_model", "")
                     model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
                     sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
-                    render_with_glow(full_text)
+                    render_hybrid(full_text)
                     sys.stderr.write("\n")
                     sys.stderr.flush()
                     texts.clear()
