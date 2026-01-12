@@ -5,7 +5,18 @@ MODULE_NAME=""
 KEY=""
 ACCESSTOKEN=""
 GULA_COMMAND=""
-VERSION="0.0.173"
+
+# Version: read from VERSION file (single source of truth)
+# Search in order: alongside scripts (homebrew), parent dir (development)
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$_script_dir/../VERSION" ]; then
+    VERSION=$(cat "$_script_dir/../VERSION")
+elif [ -f "$_script_dir/VERSION" ]; then
+    VERSION=$(cat "$_script_dir/VERSION")
+else
+    VERSION="dev"
+fi
+unset _script_dir
 
 # Definir colores
 RED='\033[1;31m'

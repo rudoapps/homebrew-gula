@@ -12,6 +12,9 @@ class Gula < Formula
     # Instalar script principal
     bin.install "gula"
 
+    # Instalar VERSION file (single source of truth for version)
+    prefix.install "VERSION"
+
     # Instalar scripts en opt/gula/scripts (donde el script los busca)
     prefix.install "scripts"
   end
