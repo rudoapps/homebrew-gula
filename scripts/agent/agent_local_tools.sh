@@ -495,42 +495,29 @@ else:
         echo -e " ${GREEN}+${additions}${NC} ${RED}-${deletions}${NC}" >&2
         echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
 
-        # Colores de fondo para diff (ANSI 256)
-        local BG_GREEN='\033[48;5;22m'   # Fondo verde oscuro
-        local BG_RED='\033[48;5;52m'     # Fondo rojo oscuro
-        local BG_BLUE='\033[48;5;17m'    # Fondo azul oscuro
-        local FG_GREEN='\033[38;5;114m'  # Texto verde claro
-        local FG_RED='\033[38;5;203m'    # Texto rojo claro
-        local FG_CYAN='\033[38;5;73m'    # Texto cyan
+        # Colores para diff
+        local FG_GREEN='\033[32m'   # Texto verde
+        local FG_RED='\033[31m'     # Texto rojo
+        local BG_GREEN='\033[42;30m'  # Fondo verde, texto negro (para +)
+        local BG_RED='\033[41;30m'    # Fondo rojo, texto negro (para -)
 
-        # Generar diff con colores mejorados y números de línea
-        local old_line=0
-        local new_line=0
-
+        # Generar diff limpio
         diff -u "$tmp_old" "$tmp_new" 2>/dev/null | tail -n +4 | while IFS= read -r line; do
             if [[ "$line" == @@* ]]; then
-                # Extraer números de línea del hunk header
-                local hunk_info=$(echo "$line" | sed -n 's/^@@ -\([0-9]*\).*+\([0-9]*\).*/\1 \2/p')
-                old_line=$(echo "$hunk_info" | cut -d' ' -f1)
-                new_line=$(echo "$hunk_info" | cut -d' ' -f2)
-                # Mostrar separador de hunk
-                echo -e "${DIM}  ···${NC}" >&2
+                # Hunk header - mostrar rango
+                echo -e "${DIM}$line${NC}" >&2
             elif [[ "$line" == +* ]]; then
-                # Línea añadida - fondo verde
+                # Línea añadida
                 local content="${line:1}"
-                printf "${BG_GREEN}${FG_GREEN}%4s ${NC}${BG_GREEN} + %s${NC}\n" "$new_line" "$content" >&2
-                ((new_line++))
+                echo -e "${FG_GREEN}+  ${content}${NC}" >&2
             elif [[ "$line" == -* ]]; then
-                # Línea eliminada - fondo rojo
+                # Línea eliminada
                 local content="${line:1}"
-                printf "${BG_RED}${FG_RED}%4s ${NC}${BG_RED} - %s${NC}\n" "$old_line" "$content" >&2
-                ((old_line++))
+                echo -e "${FG_RED}-  ${content}${NC}" >&2
             else
                 # Línea de contexto
                 local content="${line:1}"
-                printf "${DIM}%4s ${NC}   %s\n" "$new_line" "$content" >&2
-                ((old_line++))
-                ((new_line++))
+                echo -e "${DIM}   ${content}${NC}" >&2
             fi
         done
 

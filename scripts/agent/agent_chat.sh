@@ -241,46 +241,53 @@ agent_chat_interactive() {
     local saved_conv_id=$(get_project_conversation)
 
     echo ""
-    echo -e "${BOLD}╔═══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BOLD}║              GULA AGENT - MODO INTERACTIVO                ║${NC}"
-    echo -e "${BOLD}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}║                         gula chat                             ║${NC}"
+    echo -e "${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 
     if [ -n "$saved_conv_id" ]; then
         conversation_id="$saved_conv_id"
-        echo -e "  ${GREEN}↻${NC} Conversacion anterior recuperada: ${BOLD}#$conversation_id${NC}"
-        echo -e "  ${DIM}Escribe /new para iniciar una nueva.${NC}"
+        echo -e " ↩ #$conversation_id recuperada · ${WHITE}/new${NC} ${DIM}nueva${NC} · ${WHITE}/help${NC} ${DIM}comandos${NC}"
     else
-        echo -e "  Escribe tu mensaje y presiona Enter para enviarlo."
+        echo -e " ${WHITE}/help${NC} ${DIM}comandos${NC}"
     fi
 
-    # Register project for RAG (auto-registers if new, shows status if pending)
+    echo ""
+
+    # Build status bar
+    local status_parts=""
+
+    # RAG status
     local rag_git_url=$(get_rag_git_url 2>/dev/null)
     if [ -n "$rag_git_url" ]; then
         local rag_status=$(check_rag_index 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
         case "$rag_status" in
             "ready")
-                echo -e "  ${GREEN}◉${NC} RAG activo"
+                status_parts="${GREEN}●${NC} RAG"
                 ;;
             "pending")
-                echo -e "  ${YELLOW}○${NC} RAG pendiente de configurar"
+                status_parts="${YELLOW}○${NC} RAG ${DIM}pendiente${NC}"
                 ;;
             "indexing")
-                echo -e "  ${CYAN}◐${NC} RAG indexando..."
+                status_parts="${CYAN}◐${NC} RAG ${DIM}indexando${NC}"
+                ;;
+            *)
+                status_parts="${DIM}○ RAG${NC}"
                 ;;
         esac
+    else
+        status_parts="${DIM}○ RAG${NC}"
     fi
 
-    # Show quota status
-    show_quota_inline
+    # Quota/Presupuesto status
+    local quota_str=$(get_quota_status_inline)
+    if [ -n "$quota_str" ]; then
+        status_parts="$status_parts  │  $quota_str"
+    fi
 
-    echo ""
-    echo -e "  ${DIM}Tip: Puedes incluir rutas de imagenes (~/Desktop/img.png)${NC}"
-    echo -e "  ${DIM}     o usar \\ al final de linea para multi-linea${NC}"
-    echo ""
-    echo -e "  Comandos: ${YELLOW}/help${NC} para ver todos"
-    echo ""
-    echo -e "${BOLD}───────────────────────────────────────────────────────────────${NC}"
+    echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
+    echo -e " $status_parts"
     echo ""
 
     while true; do
@@ -335,7 +342,7 @@ agent_chat_interactive() {
                 echo -e "  ${YELLOW}/new${NC}               - Iniciar nueva conversacion"
                 echo -e "  ${YELLOW}/resume <id>${NC}       - Retomar conversacion por ID"
                 echo -e "  ${YELLOW}/cost${NC}              - Ver costo acumulado de la sesion"
-                echo -e "  ${YELLOW}/quota${NC}             - Ver limite y uso mensual"
+                echo -e "  ${YELLOW}/presupuesto${NC}       - Ver limite y uso mensual"
                 echo -e "  ${YELLOW}/clear${NC}             - Limpiar pantalla"
                 echo -e "  ${YELLOW}/help${NC}              - Mostrar esta ayuda"
                 echo -e "  ${YELLOW}/debug${NC}             - Activar/desactivar modo debug"
@@ -359,7 +366,7 @@ agent_chat_interactive() {
                 echo ""
                 continue
                 ;;
-            /quota)
+            /quota|/presupuesto)
                 fetch_and_show_quota
                 continue
                 ;;

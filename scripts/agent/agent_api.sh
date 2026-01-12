@@ -7,8 +7,8 @@
 # QUOTA API
 # ============================================================================
 
-# Show inline quota status (compact version for chat start)
-show_quota_inline() {
+# Get quota status as formatted string (for status bar)
+get_quota_status_inline() {
     local api_url=$(get_agent_config "api_url")
     local access_token=$(get_agent_config "access_token")
     local endpoint="$api_url/agent/quota"
@@ -23,7 +23,7 @@ show_quota_inline() {
         return 0  # Silently ignore errors
     fi
 
-    # Parse and display compact quota info
+    # Parse and return formatted quota string
     python3 - <<PYEOF 2>/dev/null
 import json
 import sys
@@ -34,7 +34,6 @@ NC = "\033[0m"
 RED = "\033[0;31m"
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
-CYAN = "\033[0;36m"
 
 response = '''$response'''
 try:
@@ -43,31 +42,37 @@ except:
     sys.exit(0)
 
 if not data.get("has_quota"):
-    print(f"  {GREEN}∞{NC}  Quota: sin límite (${DIM}\${data.get('current_cost', '0.00')} usado{NC})")
+    cost = data.get('current_cost', '0.00')
+    print(f"💰 Presupuesto: {GREEN}∞{NC} {DIM}(\${cost} usado){NC}")
 else:
     usage_pct = data.get("usage_percent", 0) or 0
     monthly_limit = data.get("monthly_limit", "?")
     current_cost = data.get("current_cost", "0.00")
     is_exceeded = data.get("is_exceeded", False)
 
-    # Compact progress bar (20 chars)
+    # Progress bar (20 chars)
     bar_width = 20
     filled = int(min(100, usage_pct) / 100 * bar_width)
     empty = bar_width - filled
 
     if is_exceeded:
         bar_color = RED
-        status_icon = "⛔"
     elif usage_pct >= 80:
         bar_color = YELLOW
-        status_icon = "⚠️ "
     else:
         bar_color = GREEN
-        status_icon = "💰"
 
     bar = f"{bar_color}{'█' * filled}{NC}{DIM}{'░' * empty}{NC}"
-    print(f"  {status_icon} Quota: [{bar}] {usage_pct:.0f}% (${DIM}\${current_cost}/\${monthly_limit}{NC})")
+    print(f"💰 Presupuesto: {bar} {usage_pct:.0f}% {DIM}(\${current_cost}/\${monthly_limit}){NC}")
 PYEOF
+}
+
+# Show inline quota status (legacy, calls get_quota_status_inline)
+show_quota_inline() {
+    local status=$(get_quota_status_inline)
+    if [ -n "$status" ]; then
+        echo -e "  $status"
+    fi
 }
 
 # Fetch and display user's cost quota
@@ -110,7 +115,7 @@ except:
 
 print("")
 print(f"{BOLD}╔══════════════════════════════════════════════════════════╗{NC}")
-print(f"{BOLD}║                    QUOTA DE COSTE                        ║{NC}")
+print(f"{BOLD}║                      PRESUPUESTO                         ║{NC}")
 print(f"{BOLD}╚══════════════════════════════════════════════════════════╝{NC}")
 print("")
 
