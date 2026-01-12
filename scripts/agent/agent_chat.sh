@@ -587,7 +587,27 @@ agent_chat_interactive() {
 
             echo -e "${DIM}└──────────────────────────────────────────────────────────────┘${NC}"
             echo ""
-            echo ""
+
+            # Show status bar (RAG + Presupuesto) after each response
+            local status_parts=""
+            local rag_git_url=$(get_rag_git_url 2>/dev/null)
+            if [ -n "$rag_git_url" ]; then
+                local rag_status=$(check_rag_index 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+                case "$rag_status" in
+                    "ready") status_parts="${GREEN}●${NC} RAG" ;;
+                    "pending") status_parts="${YELLOW}○${NC} RAG ${DIM}pendiente${NC}" ;;
+                    "indexing") status_parts="${CYAN}◐${NC} RAG ${DIM}indexando${NC}" ;;
+                    *) status_parts="${DIM}○ RAG${NC}" ;;
+                esac
+            else
+                status_parts="${DIM}○ RAG${NC}"
+            fi
+            local quota_str=$(get_quota_status_inline)
+            if [ -n "$quota_str" ]; then
+                status_parts="$status_parts  │  $quota_str"
+            fi
+            echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
+            echo -e " $status_parts"
             echo ""
 
             # Check if max iterations was reached (server-side)
