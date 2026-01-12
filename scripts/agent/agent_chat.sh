@@ -288,7 +288,7 @@ agent_chat_interactive() {
 
     echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
     echo -e " $status_parts"
-    echo ""
+    echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
 
     while true; do
         # Read multi-line input
@@ -608,7 +608,7 @@ agent_chat_interactive() {
             fi
             echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
             echo -e " $status_parts"
-            echo ""
+            echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
 
             # Check if max iterations was reached (server-side)
             if [ "$max_iter_reached" = "True" ]; then
