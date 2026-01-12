@@ -340,6 +340,11 @@ agent_chat_interactive() {
                 echo -e "  ${YELLOW}/help${NC}              - Mostrar esta ayuda"
                 echo -e "  ${YELLOW}/debug${NC}             - Activar/desactivar modo debug"
                 echo ""
+                echo -e "${BOLD}Modelos:${NC}"
+                echo -e "  ${YELLOW}/models${NC}            - Ver modelos disponibles"
+                echo -e "  ${YELLOW}/model <id>${NC}        - Cambiar modelo (ej: /model sonnet)"
+                echo -e "  ${YELLOW}/model auto${NC}        - Usar routing automatico"
+                echo ""
                 echo -e "${BOLD}Subagentes:${NC}"
                 echo -e "  ${YELLOW}/subagents${NC}         - Listar subagentes disponibles"
                 echo -e "  ${YELLOW}/subagent <id> <msg>${NC} - Invocar un subagente"
@@ -356,6 +361,37 @@ agent_chat_interactive() {
                 ;;
             /quota)
                 fetch_and_show_quota
+                continue
+                ;;
+            /models)
+                show_available_models
+                continue
+                ;;
+            /model)
+                # Show current model
+                local current=$(get_agent_config "preferred_model")
+                if [ -n "$current" ] && [ "$current" != "null" ]; then
+                    echo -e "Modelo actual: ${BOLD}$current${NC}"
+                else
+                    echo -e "Modelo actual: ${DIM}auto (routing automatico)${NC}"
+                fi
+                echo -e "${DIM}Usa /models para ver opciones disponibles${NC}"
+                echo ""
+                continue
+                ;;
+            /model\ *)
+                # Change model
+                local new_model="${user_input#/model }"
+                if [ "$new_model" = "auto" ] || [ "$new_model" = "default" ]; then
+                    set_agent_config "preferred_model" "null"
+                    echo -e "${GREEN}✓${NC} Modelo: ${BOLD}auto${NC} (routing automatico)"
+                    echo -e "${DIM}El sistema elegira el modelo segun el tipo de tarea${NC}"
+                else
+                    set_agent_config "preferred_model" "$new_model"
+                    echo -e "${GREEN}✓${NC} Modelo cambiado a: ${BOLD}$new_model${NC}"
+                    echo -e "${DIM}Todas las siguientes peticiones usaran este modelo${NC}"
+                fi
+                echo ""
                 continue
                 ;;
             /debug)

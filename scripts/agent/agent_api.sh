@@ -171,6 +171,99 @@ PYEOF
 }
 
 # ============================================================================
+# MODELS API
+# ============================================================================
+
+# Fetch available LLM models
+fetch_available_models() {
+    local api_url=$(get_agent_config "api_url")
+    local access_token=$(get_agent_config "access_token")
+    local endpoint="$api_url/agent/models"
+
+    curl -s "$endpoint" \
+        -H "Authorization: Bearer $access_token" \
+        -H "Content-Type: application/json"
+}
+
+# Show available models in a nice format
+show_available_models() {
+    local response=$(fetch_available_models)
+
+    # Check for errors
+    local error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+
+    if [ -n "$error" ] && [ "$error" != "None" ] && [ "$error" != "" ]; then
+        echo -e "${RED}Error: $error${NC}"
+        return 1
+    fi
+
+    # Get current model from config
+    local current_model=$(get_agent_config "preferred_model")
+
+    # Display models
+    python3 - <<PYEOF
+import json
+import sys
+
+BOLD = "\033[1m"
+DIM = "\033[2m"
+NC = "\033[0m"
+GREEN = "\033[0;32m"
+YELLOW = "\033[1;33m"
+CYAN = "\033[0;36m"
+
+response = '''$response'''
+current_model = '''$current_model'''
+
+try:
+    data = json.loads(response)
+except:
+    print(f"{BOLD}Error parsing response{NC}")
+    sys.exit(1)
+
+models = data.get("models", [])
+default_model = data.get("default_model", "")
+
+print("")
+print(f"{BOLD}╔══════════════════════════════════════════════════════════════╗{NC}")
+print(f"{BOLD}║                    MODELOS DISPONIBLES                       ║{NC}")
+print(f"{BOLD}╚══════════════════════════════════════════════════════════════╝{NC}")
+print("")
+
+if not models:
+    print(f"  {DIM}No hay modelos configurados.{NC}")
+else:
+    for m in models:
+        model_id = m.get("id", "")
+        name = m.get("name", "")
+        provider = m.get("provider", "")
+        input_price = m.get("input_price", "0")
+        output_price = m.get("output_price", "0")
+        is_default = m.get("is_default", False)
+
+        # Indicators
+        indicators = []
+        if current_model and current_model == model_id:
+            indicators.append(f"{GREEN}◉ ACTIVO{NC}")
+        elif is_default:
+            indicators.append(f"{CYAN}★ default{NC}")
+
+        indicator_str = " ".join(indicators)
+        if indicator_str:
+            indicator_str = f"  {indicator_str}"
+
+        print(f"  {BOLD}{model_id}{NC}{indicator_str}")
+        print(f"    {DIM}{name} ({provider}){NC}")
+        print(f"    {DIM}Precio: \${input_price}/1M in, \${output_price}/1M out{NC}")
+        print("")
+
+print(f"{DIM}Uso: /model <id> para cambiar de modelo{NC}")
+print(f"{DIM}     /model auto para usar routing automático{NC}")
+print("")
+PYEOF
+}
+
+# ============================================================================
 # HYBRID CHAT API
 # ============================================================================
 
@@ -202,6 +295,9 @@ send_chat_hybrid() {
     # Get debug mode setting
     local debug_mode=$(get_agent_config "debug_mode")
 
+    # Get preferred model (user-selected model override)
+    local preferred_model=$(get_agent_config "preferred_model")
+
     # Guardar datos en archivos temporales para evitar problemas de escape
     local tmp_prompt=$(mktemp)
     local tmp_context=$(mktemp)
@@ -209,15 +305,17 @@ send_chat_hybrid() {
     local tmp_subagent=$(mktemp)
     local tmp_git_url=$(mktemp)
     local tmp_images=$(mktemp)
+    local tmp_model=$(mktemp)
     echo "$prompt" > "$tmp_prompt"
     echo "$project_context" > "$tmp_context"
     echo "$tool_results_json" > "$tmp_results"
     echo "$subagent_id" > "$tmp_subagent"
     echo "$git_remote_url" > "$tmp_git_url"
     echo "$images_json" > "$tmp_images"
+    echo "$preferred_model" > "$tmp_model"
 
     # Construir payload con Python
-    local payload=$(python3 - "$tmp_prompt" "$tmp_context" "$tmp_results" "$conversation_id" "$max_iterations" "$tmp_subagent" "$tmp_git_url" "$tmp_images" "$debug_mode" << 'PYEOF'
+    local payload=$(python3 - "$tmp_prompt" "$tmp_context" "$tmp_results" "$conversation_id" "$max_iterations" "$tmp_subagent" "$tmp_git_url" "$tmp_images" "$debug_mode" "$tmp_model" << 'PYEOF'
 import json
 import sys
 
@@ -231,6 +329,7 @@ try:
     tmp_git_url = sys.argv[7]
     tmp_images = sys.argv[8] if len(sys.argv) > 8 else None
     debug_mode = sys.argv[9] == "true" if len(sys.argv) > 9 else False
+    tmp_model = sys.argv[10] if len(sys.argv) > 10 else None
 
     # Parse max_iterations with fallback
     try:
@@ -328,6 +427,15 @@ try:
             except:
                 pass
 
+    # Leer preferred_model (user-selected model override)
+    if tmp_model:
+        with open(tmp_model) as f:
+            model_id = f.read().strip()
+        if model_id and model_id != "null" and model_id != "auto":
+            data["preferred_model"] = model_id
+            if debug_mode:
+                print(f"[DEBUG] Using preferred_model={model_id}", file=sys.stderr)
+
     # Debug: show what we're sending
     if debug_mode and data.get("target_project_type"):
         print(f"[DEBUG] Sending target_project_type={data['target_project_type']}", file=sys.stderr)
@@ -342,7 +450,7 @@ except Exception as e:
     print(json.dumps(fallback))
 PYEOF
 )
-    rm -f "$tmp_prompt" "$tmp_context" "$tmp_results" "$tmp_subagent" "$tmp_git_url" "$tmp_images"
+    rm -f "$tmp_prompt" "$tmp_context" "$tmp_results" "$tmp_subagent" "$tmp_git_url" "$tmp_images" "$tmp_model"
 
     # Validate payload is not empty
     if [ -z "$payload" ]; then
