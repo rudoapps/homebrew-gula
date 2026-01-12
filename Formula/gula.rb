@@ -1,8 +1,8 @@
 class Gula < Formula
   desc "CLI para desarrollo móvil y agente IA"
   homepage "https://github.com/rudoapps/gula"
-  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/0.0.177.tar.gz"
-  sha256 "d656b484a3623ea0cd056f5ea2d2bc3bb9386fe3530301ef6527df06b9da1e49"
+  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/0.0.178.tar.gz"
+  sha256 "94e6424cbd53e08619e3b35e725e08acae01f7834d24b48bb737ef4a7d767c54"
   license "MIT"
 
   depends_on "jq"
