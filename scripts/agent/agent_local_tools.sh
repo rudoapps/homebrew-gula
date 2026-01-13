@@ -324,7 +324,8 @@ tool_search_code() {
 tool_write_file() {
     local input="$1"
     local path=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('path', ''))")
-    local content=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('content', ''))")
+    # Solo extraer tamaño del contenido (no el contenido completo para evitar problemas con caracteres especiales)
+    local content_size=$(echo "$input" | python3 -c "import sys, json; print(len(json.load(sys.stdin).get('content', '')))")
 
     if [ -z "$path" ]; then
         echo "Error: Se requiere una ruta de archivo"
@@ -417,7 +418,7 @@ else:
         echo -e "${DIM}┌─${NC} ${CYAN}Confirmar escritura${NC} ${DIM}───────────────────────────┐${NC}" >&2
         echo -e "${DIM}│${NC}" >&2
         echo -e "${DIM}│${NC}  ${BOLD}$path${NC}" >&2
-        echo -e "${DIM}│${NC}  ${DIM}$risk_reason · ${#content} bytes${NC}" >&2
+        echo -e "${DIM}│${NC}  ${DIM}$risk_reason · ${content_size} bytes${NC}" >&2
         echo -e "${DIM}│${NC}" >&2
         echo -e "${DIM}└────────────────────────────────────────────────┘${NC}" >&2
         echo "" >&2
@@ -465,14 +466,34 @@ else:
         is_new_file=false
     fi
 
-    # Escribir archivo
-    echo "$content" > "$resolved_path"
+    # Escribir archivo directamente desde Python para preservar contenido exacto
+    # (evita problemas con echo y sustitución de comandos que pierden contenido)
+    local write_result
+    write_result=$(echo "$input" | python3 -c "
+import sys, json, os
+try:
+    data = json.load(sys.stdin)
+    content = data.get('content', '')
+    path = '$resolved_path'
+    with open(path, 'w') as f:
+        f.write(content)
+    print('OK:' + str(len(content)))
+except Exception as e:
+    print('ERROR:' + str(e))
+" 2>&1)
+
+    if [[ "$write_result" == ERROR:* ]]; then
+        echo "Error escribiendo archivo: ${write_result#ERROR:}"
+        return 1
+    fi
+
+    local content_len="${write_result#OK:}"
 
     # Audit log
     if [ "$is_new_file" = true ]; then
-        audit_log "WRITE_NEW" "$path (${#content} bytes)"
+        audit_log "WRITE_NEW" "$path ($content_len bytes)"
     else
-        audit_log "WRITE_MODIFY" "$path (${#content} bytes)"
+        audit_log "WRITE_MODIFY" "$path ($content_len bytes)"
     fi
 
     # Mostrar diff si es modificación de archivo existente
@@ -481,9 +502,8 @@ else:
 
         # Crear archivos temporales para diff
         local tmp_old=$(mktemp)
-        local tmp_new=$(mktemp)
+        local tmp_new="$resolved_path"  # Usar el archivo recién escrito
         echo "$old_content" > "$tmp_old"
-        echo "$content" > "$tmp_new"
 
         # Contar líneas añadidas/eliminadas
         local additions=$(diff "$tmp_old" "$tmp_new" 2>/dev/null | grep -c "^>" || echo "0")
@@ -521,14 +541,14 @@ else:
             fi
         done
 
-        rm -f "$tmp_old" "$tmp_new"
+        rm -f "$tmp_old"  # Solo eliminar tmp_old, tmp_new es el archivo real
 
         echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
         echo "" >&2
-        echo "Archivo modificado: $path ($(wc -c < "$resolved_path" | tr -d ' ') bytes)"
+        echo "Archivo modificado: $path ($content_len bytes)"
     else
-        # Para archivos nuevos, mostrar preview
-        local line_count=$(echo "$content" | wc -l | tr -d ' ')
+        # Para archivos nuevos, mostrar preview (leer del archivo recién creado)
+        local line_count=$(wc -l < "$resolved_path" | tr -d ' ')
         echo "" >&2
         echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
         echo -e " ${BOLD}$path${NC} ${DIM}(nuevo)${NC}" >&2
@@ -541,7 +561,7 @@ else:
         local preview_lines=10
         local current_line=1
 
-        echo "$content" | head -$preview_lines | while IFS= read -r line; do
+        head -$preview_lines "$resolved_path" | while IFS= read -r line; do
             printf "${BG_GREEN}${FG_GREEN}%4s ${NC}${BG_GREEN} + %s${NC}\n" "$current_line" "$line" >&2
             ((current_line++))
         done
@@ -553,7 +573,7 @@ else:
 
         echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
         echo "" >&2
-        echo "Archivo creado: $path ($(wc -c < "$resolved_path" | tr -d ' ') bytes)"
+        echo "Archivo creado: $path ($content_len bytes)"
     fi
 }
 
