@@ -427,7 +427,7 @@ create_project() {
 
 
 # Verificar que se haya pasado un comando válido
-if [ -z "$1" ]; then
+if [ -z "${1:-}" ]; then
   echo "Uso: $0 {chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para más información."
   exit 1
@@ -441,11 +441,11 @@ if [[ "$COMMAND" == "--help" || "$COMMAND" == "-h" ]]; then
 fi
 
 # Manejar caso especial: gula template --list
-if [[ "$COMMAND" == "template" && "$2" == "--list" ]]; then
+if [[ "$COMMAND" == "template" && "${2:-}" == "--list" ]]; then
   LIST_TEMPLATES="true"
   MODULE_NAME=""
-elif [[ "$COMMAND" == "template" && -n "$2" && "$2" != "--list" ]]; then
-  MODULE_NAME="$2"
+elif [[ "$COMMAND" == "template" && -n "${2:-}" && "${2:-}" != "--list" ]]; then
+  MODULE_NAME="${2:-}"
 fi
 
 # Manejar caso especial: gula validate --staged
@@ -563,7 +563,7 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     template)
       COMMAND="template"
-      MODULE_NAME="$2"
+      MODULE_NAME="${2:-}"
       shift
       ;;
     agent)
