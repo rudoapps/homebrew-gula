@@ -248,19 +248,9 @@ check_version() {
     # Versión local es más nueva (desarrollo)
     echo -e "✅ Versión $VERSION (desarrollo)"
   else
-    # Versión remota es más nueva - actualizar automáticamente
+    # Versión remota es más nueva - notificar al usuario
     echo -e "${YELLOW}📦 Nueva versión disponible: $latest_tag (actual: $VERSION)${NC}"
-    echo -e "${CYAN}Actualizando automáticamente...${NC}"
-    echo ""
-
-    if brew update && brew upgrade gula; then
-      echo ""
-      echo -e "${GREEN}✅ Actualizado a $latest_tag${NC}"
-      # Limpiar caché
-      rm -f "$cache_file"
-    else
-      echo -e "${RED}❌ Error al actualizar. Intenta manualmente: brew update && brew upgrade gula${NC}"
-    fi
+    echo -e "${CYAN}Para actualizar: brew update && brew upgrade gula${NC}"
   fi
   echo ""
 }
