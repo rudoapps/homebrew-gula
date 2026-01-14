@@ -321,11 +321,22 @@ tool_search_code() {
 }
 
 # Escribe contenido a un archivo
+# Arg: input_file - path to JSON file containing {path, content}
 tool_write_file() {
-    local input="$1"
-    local path=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('path', ''))")
-    # Solo extraer tamaño del contenido (no el contenido completo para evitar problemas con caracteres especiales)
-    local content_size=$(echo "$input" | python3 -c "import sys, json; print(len(json.load(sys.stdin).get('content', '')))")
+    local input_file="$1"
+
+    # Read path and content_size from input file using Python (avoids bash character issues)
+    local path_and_size
+    path_and_size=$(python3 -c "
+import json
+with open('$input_file', 'r') as f:
+    data = json.load(f)
+print(data.get('path', ''))
+print(len(data.get('content', '')))
+" 2>/dev/null)
+
+    local path=$(echo "$path_and_size" | head -1)
+    local content_size=$(echo "$path_and_size" | tail -1)
 
     if [ -z "$path" ]; then
         echo "Error: Se requiere una ruta de archivo"
@@ -466,13 +477,14 @@ else:
         is_new_file=false
     fi
 
-    # Escribir archivo directamente desde Python para preservar contenido exacto
-    # (evita problemas con echo y sustitución de comandos que pierden contenido)
+    # Escribir archivo directamente desde Python leyendo del archivo de input
+    # (evita problemas con bash que pierden contenido)
     local write_result
-    write_result=$(echo "$input" | python3 -c "
-import sys, json, os
+    write_result=$(python3 -c "
+import json
 try:
-    data = json.load(sys.stdin)
+    with open('$input_file', 'r') as f:
+        data = json.load(f)
     content = data.get('content', '')
     path = '$resolved_path'
     with open(path, 'w') as f:
@@ -847,34 +859,46 @@ tool_git_info() {
 }
 
 # Dispatcher principal de herramientas
+# Args: tool_name, input_file_path (JSON file with tool input)
 execute_tool_locally() {
     local tool_name="$1"
-    local tool_input="$2"
+    local input_file="$2"
 
-    case "$tool_name" in
-        read_file)
-            tool_read_file "$tool_input"
-            ;;
-        list_files)
-            tool_list_files "$tool_input"
-            ;;
-        search_code)
-            tool_search_code "$tool_input"
-            ;;
-        write_file)
-            tool_write_file "$tool_input"
-            ;;
-        run_command)
-            tool_run_command "$tool_input"
-            ;;
-        git_info)
-            tool_git_info "$tool_input"
-            ;;
-        *)
-            echo "Error: Tool desconocido: $tool_name"
-            return 1
-            ;;
-    esac
+    # For write_file, pass file path directly (avoids content mangling)
+    # For other tools, read content from file
+    if [ "$tool_name" = "write_file" ]; then
+        tool_write_file "$input_file"
+    else
+        # Read tool input from file for other tools
+        local tool_input
+        if [ -f "$input_file" ]; then
+            tool_input=$(cat "$input_file")
+        else
+            tool_input="$input_file"  # Fallback: treat as content directly
+        fi
+
+        case "$tool_name" in
+            read_file)
+                tool_read_file "$tool_input"
+                ;;
+            list_files)
+                tool_list_files "$tool_input"
+                ;;
+            search_code)
+                tool_search_code "$tool_input"
+                ;;
+            run_command)
+                tool_run_command "$tool_input"
+                ;;
+            git_info)
+                tool_git_info "$tool_input"
+                ;;
+            *)
+                echo "Error: Tool desconocido: $tool_name"
+                return 1
+                ;;
+        esac
+    fi
 }
 
 # ============================================================================

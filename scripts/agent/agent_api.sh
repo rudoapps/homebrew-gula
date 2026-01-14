@@ -1496,7 +1496,8 @@ for idx, tc in enumerate(tool_requests, 1):
         input_file = tf.name
 
     try:
-        cmd = f'source "{agent_script_dir}/agent_local_tools.sh" && execute_tool_locally "{tc_name}" "$(cat {input_file})"'
+        # Pass file path instead of content to avoid bash command substitution issues
+        cmd = f'source "{agent_script_dir}/agent_local_tools.sh" && execute_tool_locally "{tc_name}" "{input_file}"'
         # Stop spinner BEFORE running command that might need user input
         spinner.stop()
         result = subprocess.run(
