@@ -155,7 +155,7 @@ display_summary() {
 
     # Stats
     [ -n "$tokens" ] && [ "$tokens" != "0" ] && summary_parts="$summary_parts · ${tokens} tokens"
-    [ -n "$cost" ] && summary_parts="$summary_parts · \$$cost"
+    [ -n "$cost" ] && { local cost_fmt=$(printf "%.2f" "$cost" 2>/dev/null || echo "$cost"); summary_parts="$summary_parts · \$$cost_fmt"; }
     [ -n "$elapsed" ] && [ "$elapsed" != "0" ] && summary_parts="$summary_parts · ${elapsed}s"
 
     # Remove leading separator if no tools
@@ -316,7 +316,8 @@ agent_chat_interactive() {
                 if [ -n "$conversation_id" ]; then
                     echo -e "Conversacion ID: ${BOLD}$conversation_id${NC}"
                 fi
-                echo -e "Costo total de la sesion: ${BOLD}\$$total_cost${NC}"
+                local exit_cost_fmt=$(printf "%.2f" "$total_cost" 2>/dev/null || echo "$total_cost")
+                echo -e "Costo total de la sesion: ${BOLD}\$$exit_cost_fmt${NC}"
                 echo -e "${GREEN}Hasta luego!${NC}"
                 echo ""
                 return 0
@@ -329,7 +330,8 @@ agent_chat_interactive() {
                 continue
                 ;;
             /cost)
-                echo -e "Costo acumulado: ${BOLD}\$$total_cost${NC}"
+                local cost_cmd_fmt=$(printf "%.2f" "$total_cost" 2>/dev/null || echo "$total_cost")
+                echo -e "Costo acumulado: ${BOLD}\$$cost_cmd_fmt${NC}"
                 if [ -n "$conversation_id" ]; then
                     echo -e "Conversacion actual: ${BOLD}$conversation_id${NC}"
                 fi
@@ -572,7 +574,7 @@ agent_chat_interactive() {
             # Line 1: Session info (this run)
             local session_line="  ${GREEN}✓${NC} Esta ejecución: "
             if [ -n "$session_tokens" ] && [ "$session_tokens" != "0" ]; then
-                local session_cost_fmt=$(python3 -c "print(f'{float($session_cost):.4f}')" 2>/dev/null || echo "0.0000")
+                local session_cost_fmt=$(python3 -c "print(f'{float($session_cost):.2f}')" 2>/dev/null || echo "0.00")
                 session_line="${session_line}${BOLD}${session_tokens}${NC} tokens  ${BOLD}\$${session_cost_fmt}${NC}"
             else
                 session_line="${session_line}${DIM}sin llamadas LLM${NC}"
@@ -584,7 +586,7 @@ agent_chat_interactive() {
 
             # Line 2: Total conversation info
             if [ -n "$msg_tokens" ] && [ "$msg_tokens" != "0" ]; then
-                local total_cost_fmt=$(python3 -c "print(f'{float($msg_cost):.4f}')" 2>/dev/null || echo "0.0000")
+                local total_cost_fmt=$(python3 -c "print(f'{float($msg_cost):.2f}')" 2>/dev/null || echo "0.00")
                 echo -e "${DIM}│  ${NC}${DIM}Total conversación: ${msg_tokens} tokens  \$${total_cost_fmt}${NC}"
             fi
 

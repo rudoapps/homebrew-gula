@@ -42,12 +42,12 @@ except:
     sys.exit(0)
 
 if not data.get("has_quota"):
-    cost = data.get('current_cost', '0.00')
-    print(f"💰 Presupuesto: {GREEN}∞{NC} {DIM}(\${cost} usado){NC}")
+    cost = float(data.get('current_cost', 0))
+    print(f"💰 Presupuesto: {GREEN}∞{NC} {DIM}(\${cost:.2f} usado){NC}")
 else:
     usage_pct = data.get("usage_percent", 0) or 0
-    monthly_limit = data.get("monthly_limit", "?")
-    current_cost = data.get("current_cost", "0.00")
+    monthly_limit = float(data.get("monthly_limit", 0) or 0)
+    current_cost = float(data.get("current_cost", 0) or 0)
     is_exceeded = data.get("is_exceeded", False)
 
     # Progress bar (20 chars)
@@ -63,7 +63,7 @@ else:
         bar_color = GREEN
 
     bar = f"{bar_color}{'█' * filled}{NC}{DIM}{'░' * empty}{NC}"
-    print(f"💰 Presupuesto: {bar} {usage_pct:.0f}% {DIM}(\${current_cost}/\${monthly_limit}){NC}")
+    print(f"💰 Presupuesto: {bar} {usage_pct:.0f}% {DIM}(\${current_cost:.2f}/\${monthly_limit:.2f}){NC}")
 PYEOF
 }
 
