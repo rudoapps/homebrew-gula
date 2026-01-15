@@ -1527,16 +1527,22 @@ for idx, tc in enumerate(tool_requests, 1):
     if len(output) > 10000:
         output = output[:10000] + "\n... [truncado]"
 
-    # Format preview
-    preview = output[:50].replace("\n", " ").strip()
-    if len(output) > 50:
-        preview += "..."
+    # Format preview - truncate at word boundary
+    preview = output[:80].replace("\n", " ").strip()
+    if len(output) > 80:
+        # Find last space to truncate at word boundary
+        last_space = preview.rfind(" ", 0, 60)
+        if last_space > 30:
+            preview = preview[:last_space] + "..."
+        else:
+            preview = preview[:60] + "..."
 
-    # Print compact result: icon tool detail → result
-    if success:
-        sys.stderr.write(f"  {GREEN}✓{NC} {icon} {tc_name} {DIM}{detail}{NC} → {DIM}{preview}{NC}\n")
-    else:
-        sys.stderr.write(f"  {RED}✗{NC} {icon} {tc_name} {DIM}{detail}{NC} → {preview}\n")
+    # Print result in two lines for better readability
+    status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
+    # Line 1: status + tool name + file/detail
+    sys.stderr.write(f"  {status_icon} {tc_name:<12} {DIM}{detail}{NC}\n")
+    # Line 2: preview indented
+    sys.stderr.write(f"                 {DIM}→ {preview}{NC}\n")
     sys.stderr.flush()
 
     results.append({

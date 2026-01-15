@@ -23,11 +23,11 @@ read_multiline_input() {
     local is_first_line=true
 
     while true; do
-        # Show prompt with block indicator
+        # Show prompt
         if [ "$is_first_line" = true ]; then
-            echo -ne "${GREEN}█${NC} " >&2
+            echo -ne "${CYAN}›${NC} " >&2
         else
-            echo -ne "${DIM}█${NC} " >&2
+            echo -ne "${DIM}  ...${NC} " >&2
         fi
 
         # Read input with readline support (-e enables readline editing)
@@ -90,9 +90,15 @@ read_multiline_input() {
 # Display response with markdown rendering
 display_response() {
     local text_response="$1"
+    local model_name="${2:-}"
 
     echo ""
-    echo -e "${BOLD}${YELLOW}Agent:${NC}"
+    # Response header with model info
+    if [ -n "$model_name" ]; then
+        echo -e "${DIM}╭─${NC} ${BOLD}Agent${NC} ${DIM}($model_name) ────────────────────────────────────────────╮${NC}"
+    else
+        echo -e "${DIM}╭─${NC} ${BOLD}Agent${NC} ${DIM}─────────────────────────────────────────────────────────╮${NC}"
+    fi
     echo ""
 
     # Render markdown with glow if available
@@ -138,24 +144,27 @@ display_summary() {
     local conv_id="$5"
 
     echo ""
-    echo -e "${DIM}───────────────────────────────────────────────────${NC}"
 
-    # Build summary parts
+    # Build summary line with separators
     local summary_parts=""
+
+    # Tools indicator
     if [ "$tools_count" -gt 0 ] 2>/dev/null; then
-        summary_parts="${GREEN}✓${NC} ${tools_count} herramienta(s) ejecutada(s)"
+        summary_parts="${GREEN}✓${NC} ${tools_count} tools"
     fi
 
-    # Stats line
-    local stats=""
-    [ -n "$tokens" ] && [ "$tokens" != "0" ] && stats="${DIM}Tokens:${NC} $tokens"
-    [ -n "$cost" ] && stats="$stats ${DIM}|${NC} ${DIM}Costo:${NC} \$$cost"
-    [ -n "$elapsed" ] && [ "$elapsed" != "0" ] && stats="$stats ${DIM}|${NC} ${BOLD}${elapsed}s total${NC}"
+    # Stats
+    [ -n "$tokens" ] && [ "$tokens" != "0" ] && summary_parts="$summary_parts · ${tokens} tokens"
+    [ -n "$cost" ] && summary_parts="$summary_parts · \$$cost"
+    [ -n "$elapsed" ] && [ "$elapsed" != "0" ] && summary_parts="$summary_parts · ${elapsed}s"
 
-    [ -n "$summary_parts" ] && echo -e "  $summary_parts"
-    echo -e "  $stats"
-    [ -n "$conv_id" ] && echo -e "  ${DIM}Conversacion:${NC} #$conv_id"
-    echo -e "${DIM}───────────────────────────────────────────────────${NC}"
+    # Remove leading separator if no tools
+    summary_parts="${summary_parts# · }"
+
+    # Display in box
+    echo -e "${DIM}┌──────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${DIM}│${NC}  $summary_parts"
+    echo -e "${DIM}└──────────────────────────────────────────────────────────────┘${NC}"
 }
 
 # ============================================================================
@@ -241,16 +250,15 @@ agent_chat_interactive() {
     local saved_conv_id=$(get_project_conversation)
 
     echo ""
-    echo -e "${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BOLD}║                         gula chat                             ║${NC}"
-    echo -e "${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
+    echo -e "${DIM}┌─────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${DIM}│${NC}  ${BOLD}gula chat${NC}                                          ${DIM}v${VERSION}${NC}   ${DIM}│${NC}"
+    echo -e "${DIM}└─────────────────────────────────────────────────────────────────┘${NC}"
 
     if [ -n "$saved_conv_id" ]; then
         conversation_id="$saved_conv_id"
-        echo -e " ↩ #$conversation_id recuperada · ${WHITE}/new${NC} ${DIM}nueva${NC} · ${WHITE}/help${NC} ${DIM}comandos${NC}"
+        echo -e "  ${DIM}↩ #$conversation_id${NC} · ${WHITE}/new${NC} ${DIM}nueva${NC} · ${WHITE}/help${NC} ${DIM}comandos${NC}"
     else
-        echo -e " ${WHITE}/help${NC} ${DIM}comandos${NC}"
+        echo -e "  ${WHITE}/help${NC} ${DIM}comandos${NC}"
     fi
 
     echo ""
