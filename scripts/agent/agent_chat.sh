@@ -251,45 +251,50 @@ agent_chat_interactive() {
 
     echo ""
 
-    # Build compact project context line
+    # Header line: 📁 folder · ↩ #conv · /new nueva · /help comandos
     local project_name=$(basename "$PWD")
-    local project_type=$(detect_project_type)
-    local git_branch=$(git branch --show-current 2>/dev/null || echo "")
+    local header_line="📁 ${BOLD}$project_name${NC}"
+    if [ -n "$saved_conv_id" ]; then
+        conversation_id="$saved_conv_id"
+        header_line="$header_line ${DIM}·${NC} ${DIM}↩${NC} #$conversation_id"
+    fi
+    header_line="$header_line ${DIM}·${NC} ${WHITE}/new${NC} ${DIM}nueva${NC} ${DIM}·${NC} ${WHITE}/help${NC} ${DIM}comandos${NC}"
+    echo -e "$header_line"
 
-    # RAG status indicator
-    local rag_indicator="${DIM}○${NC}"
+    # Build status bar
+    local status_parts=""
+
+    # RAG status
     local rag_git_url=$(get_rag_git_url 2>/dev/null)
     if [ -n "$rag_git_url" ]; then
         local rag_status=$(check_rag_index 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
         case "$rag_status" in
             "ready")
-                rag_indicator="${GREEN}●${NC}"
+                status_parts="${GREEN}●${NC} RAG"
                 ;;
             "pending")
-                rag_indicator="${YELLOW}○${NC}"
+                status_parts="${YELLOW}○${NC} RAG ${DIM}pendiente${NC}"
                 ;;
             "indexing")
-                rag_indicator="${CYAN}◐${NC}"
+                status_parts="${CYAN}◐${NC} RAG ${DIM}indexando${NC}"
+                ;;
+            *)
+                status_parts="${DIM}○ RAG${NC}"
                 ;;
         esac
-    fi
-
-    # Compact project context: 📁 project · type · branch · ● RAG
-    local context_line="📁 ${BOLD}$project_name${NC}"
-    [ -n "$project_type" ] && [ "$project_type" != "unknown" ] && context_line="$context_line ${DIM}·${NC} $project_type"
-    [ -n "$git_branch" ] && context_line="$context_line ${DIM}·${NC} $git_branch"
-    context_line="$context_line ${DIM}·${NC} $rag_indicator"
-
-    echo -e "$context_line"
-
-    # Conversation and help line
-    if [ -n "$saved_conv_id" ]; then
-        conversation_id="$saved_conv_id"
-        echo -e "${DIM}↩ #$conversation_id${NC} · ${WHITE}/new${NC} ${DIM}nueva${NC} · ${WHITE}/help${NC} ${DIM}comandos${NC}"
     else
-        echo -e "${WHITE}/help${NC} ${DIM}comandos${NC}"
+        status_parts="${DIM}○ RAG${NC}"
     fi
-    echo ""
+
+    # Quota/Presupuesto status
+    local quota_str=$(get_quota_status_inline)
+    if [ -n "$quota_str" ]; then
+        status_parts="$status_parts  │  $quota_str"
+    fi
+
+    echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
+    echo -e " $status_parts"
+    echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
 
     while true; do
         # Read multi-line input
