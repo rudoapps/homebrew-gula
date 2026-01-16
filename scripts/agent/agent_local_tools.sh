@@ -9,6 +9,115 @@ MAX_OUTPUT_LINES=200         # Maximo lineas de output
 MAX_COMMAND_TIMEOUT=30       # Timeout para comandos en segundos
 MAX_SEARCH_RESULTS=50        # Maximo resultados de busqueda
 
+# ============================================================================
+# INTERACTIVE SELECTOR (for confirmations)
+# ============================================================================
+
+# Interactive option selector with arrow keys
+# Usage: selected=$(tool_interactive_select "Pregunta?" "Opción 1" "Opción 2")
+tool_interactive_select() {
+    local prompt="$1"
+    shift
+    local options=("$@")
+
+    python3 - "$prompt" "${options[@]}" << 'PYEOF'
+import sys
+import tty
+import termios
+
+BOLD = "\033[1m"
+DIM = "\033[2m"
+NC = "\033[0m"
+CYAN = "\033[0;36m"
+GREEN = "\033[0;32m"
+RED = "\033[0;31m"
+YELLOW = "\033[1;33m"
+
+HIDE_CURSOR = "\033[?25l"
+SHOW_CURSOR = "\033[?25h"
+CLEAR_LINE = "\033[2K"
+MOVE_UP = "\033[A"
+
+def get_key():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        if ch == '\x1b':
+            ch2 = sys.stdin.read(1)
+            if ch2 == '[':
+                ch3 = sys.stdin.read(1)
+                if ch3 == 'A': return 'up'
+                if ch3 == 'B': return 'down'
+            return 'esc'
+        if ch in ('\r', '\n'): return 'enter'
+        if ch == '\x03': return 'ctrl-c'
+        return ch
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+def render(prompt, options, selected_idx, first_render=False):
+    if not first_render:
+        for _ in range(len(options) + 1):
+            sys.stderr.write(f"{MOVE_UP}{CLEAR_LINE}")
+
+    sys.stderr.write(f"  {BOLD}{prompt}{NC}\n")
+
+    for i, opt in enumerate(options):
+        # Color based on option type
+        if i == selected_idx:
+            if "Permitir" in opt:
+                sys.stderr.write(f"    {GREEN}❯ {opt}{NC}\n")
+            elif "Rechazar" in opt or "Cancelar" in opt:
+                sys.stderr.write(f"    {RED}❯ {opt}{NC}\n")
+            else:
+                sys.stderr.write(f"    {CYAN}❯ {opt}{NC}\n")
+        else:
+            sys.stderr.write(f"      {DIM}{opt}{NC}\n")
+
+    sys.stderr.flush()
+
+prompt = sys.argv[1]
+options = sys.argv[2:]
+
+if not options:
+    print("")
+    sys.exit(1)
+
+selected_idx = 0
+
+sys.stderr.write(HIDE_CURSOR)
+sys.stderr.flush()
+
+try:
+    render(prompt, options, selected_idx, first_render=True)
+
+    while True:
+        key = get_key()
+
+        if key == 'up':
+            selected_idx = (selected_idx - 1) % len(options)
+            render(prompt, options, selected_idx)
+        elif key == 'down':
+            selected_idx = (selected_idx + 1) % len(options)
+            render(prompt, options, selected_idx)
+        elif key == 'enter':
+            break
+        elif key in ('esc', 'ctrl-c', 'q'):
+            sys.stderr.write(SHOW_CURSOR)
+            sys.stderr.flush()
+            print("Rechazar")
+            sys.exit(0)
+
+finally:
+    sys.stderr.write(SHOW_CURSOR)
+    sys.stderr.flush()
+
+print(options[selected_idx])
+PYEOF
+}
+
 # Archivos sensibles que NO se pueden leer
 BLOCKED_FILE_EXTENSIONS=".pem .key .p12 .pfx .keystore .jks .secret .credentials"
 BLOCKED_FILE_NAMES=".env .env.local .env.production .env.development id_rsa id_ed25519 id_dsa authorized_keys known_hosts .netrc .npmrc .pypirc"
@@ -434,34 +543,80 @@ else:
         echo -e "${DIM}└────────────────────────────────────────────────┘${NC}" >&2
         echo "" >&2
 
-        # Input de tecla simple
+        # Loop to allow "Ver cambios" and then decide
         local approval=""
+        while true; do
+            # Show selector
+            if [ -f "$resolved_path" ]; then
+                # File exists - show option to see diff
+                approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Ver cambios" "Rechazar" < /dev/tty)
+            else
+                # New file - no diff to show
+                approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Ver contenido" "Rechazar" < /dev/tty)
+            fi
 
-        echo -e "  ${GREEN}[p]${NC} Permitir   ${RED}[c]${NC} Cancelar" >&2
-        echo "" >&2
-        echo -n "  › " >&2
+            if [ "$approval" = "Ver cambios" ] || [ "$approval" = "Ver contenido" ]; then
+                echo "" >&2
+                echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
 
-        local key
-        if read -n 1 key < /dev/tty 2>/dev/null; then
-            echo "" >&2
-            case "$key" in
-                p|P) approval="Permitir" ;;
-                *) approval="Cancelar" ;;
-            esac
-        else
-            echo "" >&2
-            echo -e "${RED}Error: No se pudo leer input${NC}" >&2
-            approval="Cancelar"
-        fi
+                if [ -f "$resolved_path" ]; then
+                    # Show diff for existing file
+                    local tmp_old=$(mktemp)
+                    local tmp_new=$(mktemp)
+                    cat "$resolved_path" > "$tmp_old"
+                    python3 -c "
+import json
+with open('$input_file', 'r') as f:
+    data = json.load(f)
+with open('$tmp_new', 'w') as f:
+    f.write(data.get('content', ''))
+"
+                    # Show colored diff
+                    diff -u "$tmp_old" "$tmp_new" 2>/dev/null | tail -n +4 | head -30 | while IFS= read -r line; do
+                        if [[ "$line" == +* ]]; then
+                            echo -e "  ${GREEN}$line${NC}" >&2
+                        elif [[ "$line" == -* ]]; then
+                            echo -e "  ${RED}$line${NC}" >&2
+                        else
+                            echo -e "  ${DIM}$line${NC}" >&2
+                        fi
+                    done
+                    rm -f "$tmp_old" "$tmp_new"
+                else
+                    # Show content preview for new file
+                    echo -e "  ${BOLD}Contenido nuevo:${NC}" >&2
+                    python3 -c "
+import json
+with open('$input_file', 'r') as f:
+    data = json.load(f)
+content = data.get('content', '')
+lines = content.split('\n')[:20]
+for line in lines:
+    print('  ' + line[:80])
+if len(content.split('\n')) > 20:
+    print('  ...(truncado)')
+" >&2
+                fi
+
+                echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
+                echo "" >&2
+                # Continue loop to ask again
+                continue
+            fi
+
+            # Not "Ver cambios" - exit loop
+            break
+        done
 
         # SEGURIDAD: Solo permitir si explícitamente se aprueba
         if [[ "$approval" != "Permitir" ]]; then
-            echo -e "${DIM}Escritura rechazada${NC}" >&2
+            echo -e "  ${RED}✗${NC} ${DIM}Escritura rechazada${NC}" >&2
+            echo "" >&2
             echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO permitir esta escritura. No intentes escribir este archivo de nuevo. Pregunta al usuario qué quiere hacer."
             return 1
         fi
 
-        echo -e "${GREEN}✓${NC} ${DIM}Escritura permitida${NC}" >&2
+        echo -e "  ${GREEN}✓${NC} ${DIM}Escritura permitida${NC}" >&2
         echo "" >&2
     fi
 
