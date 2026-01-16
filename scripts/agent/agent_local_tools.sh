@@ -22,8 +22,7 @@ tool_interactive_select() {
 
     python3 - "$prompt" "${options[@]}" << 'PYEOF'
 import sys
-import tty
-import termios
+import os
 
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -38,16 +37,54 @@ SHOW_CURSOR = "\033[?25h"
 CLEAR_LINE = "\033[2K"
 MOVE_UP = "\033[A"
 
-def get_key():
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
+prompt = sys.argv[1]
+options = sys.argv[2:]
+
+if not options:
+    print("")
+    sys.exit(1)
+
+# Try to open /dev/tty directly for interactive input
+try:
+    tty_fd = os.open('/dev/tty', os.O_RDWR)
+    tty_file = os.fdopen(tty_fd, 'r+', buffering=1)
+except:
+    # Fallback to simple input if TTY not available
+    sys.stderr.write(f"  {BOLD}{prompt}{NC}\n")
+    for i, opt in enumerate(options):
+        key = chr(ord('a') + i)
+        if "Permitir" in opt:
+            sys.stderr.write(f"    {GREEN}[{key}]{NC} {opt}\n")
+        elif "Rechazar" in opt:
+            sys.stderr.write(f"    {RED}[{key}]{NC} {opt}\n")
+        else:
+            sys.stderr.write(f"    {CYAN}[{key}]{NC} {opt}\n")
+    sys.stderr.write(f"\n  › ")
+    sys.stderr.flush()
+
     try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
+        choice = input().strip().lower()
+        idx = ord(choice) - ord('a') if choice and len(choice) == 1 else -1
+        if 0 <= idx < len(options):
+            print(options[idx])
+        else:
+            print("Rechazar")
+    except:
+        print("Rechazar")
+    sys.exit(0)
+
+import tty
+import termios
+
+def get_key():
+    old_settings = termios.tcgetattr(tty_fd)
+    try:
+        tty.setraw(tty_fd)
+        ch = tty_file.read(1)
         if ch == '\x1b':
-            ch2 = sys.stdin.read(1)
+            ch2 = tty_file.read(1)
             if ch2 == '[':
-                ch3 = sys.stdin.read(1)
+                ch3 = tty_file.read(1)
                 if ch3 == 'A': return 'up'
                 if ch3 == 'B': return 'down'
             return 'esc'
@@ -55,9 +92,9 @@ def get_key():
         if ch == '\x03': return 'ctrl-c'
         return ch
     finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        termios.tcsetattr(tty_fd, termios.TCSADRAIN, old_settings)
 
-def render(prompt, options, selected_idx, first_render=False):
+def render(first_render=False):
     if not first_render:
         for _ in range(len(options) + 1):
             sys.stderr.write(f"{MOVE_UP}{CLEAR_LINE}")
@@ -65,7 +102,6 @@ def render(prompt, options, selected_idx, first_render=False):
     sys.stderr.write(f"  {BOLD}{prompt}{NC}\n")
 
     for i, opt in enumerate(options):
-        # Color based on option type
         if i == selected_idx:
             if "Permitir" in opt:
                 sys.stderr.write(f"    {GREEN}❯ {opt}{NC}\n")
@@ -78,41 +114,36 @@ def render(prompt, options, selected_idx, first_render=False):
 
     sys.stderr.flush()
 
-prompt = sys.argv[1]
-options = sys.argv[2:]
-
-if not options:
-    print("")
-    sys.exit(1)
-
 selected_idx = 0
 
 sys.stderr.write(HIDE_CURSOR)
 sys.stderr.flush()
 
 try:
-    render(prompt, options, selected_idx, first_render=True)
+    render(first_render=True)
 
     while True:
         key = get_key()
 
         if key == 'up':
             selected_idx = (selected_idx - 1) % len(options)
-            render(prompt, options, selected_idx)
+            render()
         elif key == 'down':
             selected_idx = (selected_idx + 1) % len(options)
-            render(prompt, options, selected_idx)
+            render()
         elif key == 'enter':
             break
         elif key in ('esc', 'ctrl-c', 'q'):
             sys.stderr.write(SHOW_CURSOR)
             sys.stderr.flush()
+            tty_file.close()
             print("Rechazar")
             sys.exit(0)
 
 finally:
     sys.stderr.write(SHOW_CURSOR)
     sys.stderr.flush()
+    tty_file.close()
 
 print(options[selected_idx])
 PYEOF
