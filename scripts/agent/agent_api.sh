@@ -1210,8 +1210,18 @@ try:
                 else:
                     spinner.update("Pensando...")
 
+            elif event_type == "rag_search":
+                # RAG search initiated - show what the LLM is searching for
+                search_query = parsed.get("query", "")[:60]
+                search_project = parsed.get("project_type", "")
+                project_label = f" @{search_project}" if search_project else ""
+
+                spinner.stop()
+                sys.stderr.write(f"  {CYAN}🔍 Buscando{project_label}:{NC} {DIM}\"{search_query}...\"{NC}\n")
+                spinner.start("Buscando en codebase...")
+
             elif event_type == "rag_context":
-                # RAG context event - update indicator for header display
+                # RAG context event - show results found
                 rag_chunks = parsed.get("chunks", 0)
                 rag_scope = parsed.get("scope", "current")
                 rag_projects = parsed.get("projects", "")
@@ -1224,8 +1234,13 @@ try:
                     project_label = f" @{rag_project_type}" if rag_project_type and rag_project_type != "current" else ""
                     rag_indicator_for_header = f" {GREEN}[RAG:{rag_chunks}{project_label}]{NC}"
 
-                # Update spinner to show RAG is being used
-                spinner.update(f"Procesando con RAG ({rag_chunks} chunks)...")
+                # Show results count
+                spinner.stop()
+                if rag_chunks > 0:
+                    sys.stderr.write(f"  {GREEN}✓{NC} Encontrados {rag_chunks} chunks relevantes\n")
+                else:
+                    sys.stderr.write(f"  {YELLOW}○{NC} No se encontraron chunks relevantes\n")
+                spinner.start("Procesando respuesta...")
 
             elif event_type == "text":
                 content = parsed.get("content", "")
