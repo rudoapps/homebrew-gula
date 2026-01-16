@@ -84,6 +84,121 @@ read_multiline_input() {
 }
 
 # ============================================================================
+# INTERACTIVE SELECTOR
+# ============================================================================
+
+# Interactive option selector with arrow keys
+# Usage: selected=$(interactive_select "Pregunta?" "Opción 1" "Opción 2" "Opción 3")
+# Returns: the selected option text
+interactive_select() {
+    local prompt="$1"
+    shift
+    local options=("$@")
+
+    python3 - "$prompt" "${options[@]}" << 'PYEOF'
+import sys
+import tty
+import termios
+
+# Colors
+BOLD = "\033[1m"
+DIM = "\033[2m"
+NC = "\033[0m"
+CYAN = "\033[0;36m"
+GREEN = "\033[0;32m"
+YELLOW = "\033[1;33m"
+
+# Cursor control
+HIDE_CURSOR = "\033[?25l"
+SHOW_CURSOR = "\033[?25h"
+CLEAR_LINE = "\033[2K"
+MOVE_UP = "\033[A"
+
+def get_key():
+    """Read a single keypress."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        if ch == '\x1b':  # Escape sequence
+            ch2 = sys.stdin.read(1)
+            if ch2 == '[':
+                ch3 = sys.stdin.read(1)
+                if ch3 == 'A': return 'up'
+                if ch3 == 'B': return 'down'
+            return 'esc'
+        if ch in ('\r', '\n'): return 'enter'
+        if ch == '\x03': return 'ctrl-c'  # Ctrl+C
+        return ch
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+def render(prompt, options, selected_idx, first_render=False):
+    """Render the selector."""
+    # Move up to clear previous render (except first time)
+    if not first_render:
+        # Move up: 1 for prompt + number of options
+        for _ in range(len(options) + 1):
+            sys.stderr.write(f"{MOVE_UP}{CLEAR_LINE}")
+
+    # Print prompt
+    sys.stderr.write(f"{BOLD}{prompt}{NC}\n")
+
+    # Print options
+    for i, opt in enumerate(options):
+        if i == selected_idx:
+            sys.stderr.write(f"  {GREEN}❯{NC} {BOLD}{opt}{NC}\n")
+        else:
+            sys.stderr.write(f"    {DIM}{opt}{NC}\n")
+
+    sys.stderr.flush()
+
+# Get arguments
+prompt = sys.argv[1]
+options = sys.argv[2:]
+
+if not options:
+    print("")
+    sys.exit(1)
+
+selected_idx = 0
+
+# Hide cursor
+sys.stderr.write(HIDE_CURSOR)
+sys.stderr.flush()
+
+try:
+    render(prompt, options, selected_idx, first_render=True)
+
+    while True:
+        key = get_key()
+
+        if key == 'up':
+            selected_idx = (selected_idx - 1) % len(options)
+            render(prompt, options, selected_idx)
+        elif key == 'down':
+            selected_idx = (selected_idx + 1) % len(options)
+            render(prompt, options, selected_idx)
+        elif key == 'enter':
+            break
+        elif key in ('esc', 'ctrl-c', 'q'):
+            # Return empty on cancel
+            sys.stderr.write(SHOW_CURSOR)
+            sys.stderr.flush()
+            print("")
+            sys.exit(0)
+
+finally:
+    sys.stderr.write(SHOW_CURSOR)
+    sys.stderr.flush()
+
+# Output selected option
+print(options[selected_idx])
+PYEOF
+}
+
+# ============================================================================
 # RESPONSE DISPLAY
 # ============================================================================
 
@@ -643,10 +758,10 @@ agent_chat_interactive() {
             if [ "$max_iter_reached" = "True" ]; then
                 echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
                 echo -e "${YELLOW}El agente ha alcanzado el limite de iteraciones del servidor.${NC}"
-                echo -ne "${BOLD}Deseas que continue? (s/n/si/continua): ${NC}"
-                read -r continue_answer
+                echo ""
+                local continue_choice=$(interactive_select "¿Qué deseas hacer?" "Continuar" "Detener")
 
-                if [[ "$continue_answer" =~ ^([sS]|[sS][iI]|[cC]ontinua)$ ]]; then
+                if [ "$continue_choice" = "Continuar" ]; then
                     current_prompt="continua"
                     echo ""
                 else
@@ -662,10 +777,10 @@ agent_chat_interactive() {
                 echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
                 echo -e "${YELLOW}El agente ha ejecutado muchas herramientas (20+ en esta sesión).${NC}"
                 echo -e "${DIM}Esto es un limite de seguridad para evitar bucles infinitos.${NC}"
-                echo -ne "${BOLD}Deseas que continue? (s/n/si/continua): ${NC}"
-                read -r continue_answer
+                echo ""
+                local tool_choice=$(interactive_select "¿Qué deseas hacer?" "Continuar" "Detener")
 
-                if [[ "$continue_answer" =~ ^([sS]|[sS][iI]|[cC]ontinua)$ ]]; then
+                if [ "$tool_choice" = "Continuar" ]; then
                     current_prompt="continua con la tarea"
                     continue_iterations=true
                     echo ""
