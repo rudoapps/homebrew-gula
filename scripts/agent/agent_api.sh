@@ -1419,6 +1419,61 @@ TOOL_ICONS = {
     "git_info": "🔀",
 }
 
+# Action verbs for clearer display
+TOOL_VERBS = {
+    "read_file": "Leyendo",
+    "write_file": "Escribiendo",
+    "list_files": "Listando",
+    "search_code": "Buscando",
+    "run_command": "Ejecutando",
+    "git_info": "Git",
+}
+
+# ============================================================================
+# ESC key detection for abort
+# ============================================================================
+
+import select
+import termios
+import tty
+
+class KeyboardMonitor:
+    """Monitor for ESC key to abort operations."""
+
+    def __init__(self):
+        self.aborted = False
+        self.old_settings = None
+
+    def start(self):
+        """Start monitoring (set terminal to raw mode)."""
+        try:
+            self.old_settings = termios.tcgetattr(sys.stdin)
+            tty.setcbreak(sys.stdin.fileno())
+        except:
+            pass  # Not a TTY, ignore
+
+    def stop(self):
+        """Stop monitoring (restore terminal settings)."""
+        if self.old_settings:
+            try:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
+            except:
+                pass
+
+    def check_abort(self):
+        """Check if ESC was pressed (non-blocking)."""
+        if self.aborted:
+            return True
+        try:
+            if select.select([sys.stdin], [], [], 0)[0]:
+                ch = sys.stdin.read(1)
+                if ch == '\x1b':  # ESC key
+                    self.aborted = True
+                    return True
+        except:
+            pass
+        return False
+
 # ============================================================================
 # Spinner for tool execution
 # ============================================================================
@@ -1471,38 +1526,72 @@ with open(tmp_file) as f:
 
 results = []
 total_tools = len(tool_requests)
+aborted = False
 
 # Calculate total elapsed time
 total_elapsed = int(time.time()) - request_start_time
 
+# Initialize keyboard monitor for ESC detection
+keyboard_monitor = KeyboardMonitor()
+keyboard_monitor.start()
+
+# Show ESC hint on first tool
+sys.stderr.write(f"  {DIM}[ESC para cancelar]{NC}\n")
+sys.stderr.flush()
+
 for idx, tc in enumerate(tool_requests, 1):
+    # Check for ESC abort before each tool
+    if keyboard_monitor.check_abort():
+        aborted = True
+        sys.stderr.write(f"\n  {YELLOW}⚡ Operación cancelada por usuario{NC}\n")
+        sys.stderr.flush()
+        break
     tc_id = tc["id"]
     tc_name = tc["name"]
     tc_input = tc["input"]
 
-    # Get icon and format detail
+    # Get icon, verb, and format detail
     icon = TOOL_ICONS.get(tc_name, "⚡")
+    verb = TOOL_VERBS.get(tc_name, tc_name)
 
     # Format the detail based on tool type
     if tc_name == "read_file":
-        detail = tc_input.get("path", "")
+        path = tc_input.get("path", "")
+        # Show only filename for cleaner display
+        filename = os.path.basename(path) if path else ""
+        detail = filename or path
+        action_msg = f"{verb} {filename}"
     elif tc_name == "write_file":
-        detail = tc_input.get("path", "")
+        path = tc_input.get("path", "")
+        filename = os.path.basename(path) if path else ""
+        detail = filename or path
+        action_msg = f"{verb} {filename}"
     elif tc_name == "list_files":
-        detail = tc_input.get("path", ".") + "/" + tc_input.get("pattern", "*")
+        path = tc_input.get("path", ".")
+        pattern = tc_input.get("pattern", "*")
+        detail = f"{path}/{pattern}"
+        action_msg = f"{verb} {pattern}"
     elif tc_name == "search_code":
-        detail = f'"{tc_input.get("query", "")}"'
+        query = tc_input.get("query", "")[:30]
+        detail = f'"{query}"'
+        action_msg = f'{verb} "{query}"'
     elif tc_name == "run_command":
         cmd = tc_input.get("command", "")
+        # Extract command name for cleaner display
+        cmd_name = cmd.split()[0] if cmd else ""
         detail = cmd[:40] + "..." if len(cmd) > 40 else cmd
+        action_msg = f"{verb} {cmd_name}"
     elif tc_name == "git_info":
-        detail = tc_input.get("type", "status")
+        git_type = tc_input.get("type", "status")
+        detail = git_type
+        action_msg = f"{verb} {git_type}"
     else:
         detail = str(tc_input)[:40]
+        action_msg = f"{verb} {tc_name}"
 
-    # Start spinner with tool info
+    # Start spinner with action message
     spinner = ToolSpinner()
-    spinner.start(f"{icon} {tc_name} {DIM}{detail}{NC}")
+    spinner.start(f"{icon} {action_msg}")
 
     # Write input to temp file
     import tempfile
@@ -1552,12 +1641,13 @@ for idx, tc in enumerate(tool_requests, 1):
         else:
             preview = preview[:60] + "..."
 
-    # Print result in two lines for better readability
+    # Print result with verb for clearer action summary
     status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
-    # Line 1: status + tool name + file/detail
-    sys.stderr.write(f"  {status_icon} {tc_name:<12} {DIM}{detail}{NC}\n")
-    # Line 2: preview indented
-    sys.stderr.write(f"                 {DIM}→ {preview}{NC}\n")
+    # Single line: status + verb + detail + preview
+    sys.stderr.write(f"  {status_icon} {verb:<12} {detail}\n")
+    # Preview line only if there's meaningful output
+    if preview and len(preview) > 3 and preview != "Sin resultado":
+        sys.stderr.write(f"    {DIM}→ {preview}{NC}\n")
     sys.stderr.flush()
 
     results.append({
@@ -1566,7 +1656,22 @@ for idx, tc in enumerate(tool_requests, 1):
         "result": output
     })
 
-print(json.dumps(results))
+# Cleanup keyboard monitor
+keyboard_monitor.stop()
+
+# Output results with abort flag if applicable
+output_data = {
+    "results": results,
+    "aborted": aborted,
+    "completed_tools": len(results),
+    "total_tools": total_tools
+}
+
+# For backwards compatibility, if not aborted just output results array
+if aborted:
+    print(json.dumps(output_data))
+else:
+    print(json.dumps(results))
 PYEOF
 
     rm -f "$tmp_requests"
@@ -1659,7 +1764,21 @@ run_hybrid_chat() {
                 return 1
             fi
 
-            # Verify it's valid JSON array
+            # Check if operation was aborted by user (ESC key)
+            local was_aborted=$(echo "$tool_results" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if isinstance(d, dict) and d.get('aborted') else 'no')" 2>/dev/null)
+
+            if [ "$was_aborted" = "yes" ]; then
+                # Extract partial results and return abort response
+                local completed_tools=$(echo "$tool_results" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('completed_tools', 0))" 2>/dev/null)
+                local total_tools=$(echo "$tool_results" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('total_tools', 0))" 2>/dev/null)
+                local total_elapsed=$(($(date +%s) - start_time))
+
+                # Return abort response - conversation remains active
+                echo "{\"error\": null, \"aborted\": true, \"conversation_id\": \"$current_conv_id\", \"total_elapsed\": $total_elapsed, \"session_tokens\": $accumulated_session_tokens, \"session_cost\": $accumulated_session_cost, \"response\": \"Operación cancelada ($completed_tools/$total_tools tools ejecutados)\", \"completed_tools\": $completed_tools, \"total_tools\": $total_tools}"
+                return 0
+            fi
+
+            # Verify it's valid JSON array (normal case)
             local is_valid=$(echo "$tool_results" | python3 -c "import sys,json; r=json.load(sys.stdin); print('yes' if isinstance(r, list) and len(r) > 0 else 'no')" 2>/dev/null)
             if [ "$is_valid" != "yes" ]; then
                 echo "{\"error\": \"Invalid tool results format\", \"response\": \"\", \"debug\": $(echo "$tool_results" | head -c 200 | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')}"

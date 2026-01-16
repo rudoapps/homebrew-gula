@@ -528,6 +528,27 @@ agent_chat_interactive() {
                 break
             fi
 
+            # Check if operation was aborted by user (ESC key)
+            local was_aborted=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('aborted', False))" 2>/dev/null)
+            if [ "$was_aborted" = "True" ]; then
+                local completed_tools=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('completed_tools', 0))" 2>/dev/null)
+                local total_tools=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('total_tools', 0))" 2>/dev/null)
+                local abort_conv_id=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('conversation_id', ''))" 2>/dev/null)
+
+                # Update conversation ID if available
+                if [ -n "$abort_conv_id" ] && [ "$abort_conv_id" != "None" ] && [ "$abort_conv_id" != "null" ]; then
+                    conversation_id="$abort_conv_id"
+                    save_project_conversation "$conversation_id"
+                fi
+
+                echo ""
+                echo -e "${YELLOW}⚡ Operación cancelada${NC} ${DIM}($completed_tools/$total_tools herramientas ejecutadas)${NC}"
+                echo -e "${DIM}La conversación #$conversation_id sigue activa.${NC}"
+                echo -e "${DIM}Escribe otro mensaje para continuar o dar nuevas instrucciones.${NC}"
+                echo ""
+                break  # Exit inner loop but stay in interactive mode
+            fi
+
             # Extract response data
             local text_response=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('response', ''))" 2>/dev/null)
             local new_conv_id=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('conversation_id', ''))" 2>/dev/null)
