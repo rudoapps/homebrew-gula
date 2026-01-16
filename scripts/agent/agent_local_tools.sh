@@ -44,12 +44,27 @@ if not options:
     print("")
     sys.exit(1)
 
-# Try to open /dev/tty directly for interactive input
+# Open /dev/tty directly for interactive input
 try:
-    tty_fd = os.open('/dev/tty', os.O_RDWR)
-    tty_file = os.fdopen(tty_fd, 'r+', buffering=1)
+    tty_file = open('/dev/tty', 'r')
+except Exception as e:
+    sys.stderr.write(f"{RED}Error: No se puede abrir terminal: {e}{NC}\n")
+    print("Rechazar")
+    sys.exit(1)
+
+import tty
+import termios
+
+# Check if we can use raw mode for arrow keys
+use_arrow_keys = True
+try:
+    old_settings = termios.tcgetattr(tty_file.fileno())
 except:
-    # Fallback to simple input if TTY not available
+    use_arrow_keys = False
+    old_settings = None
+
+if not use_arrow_keys:
+    # Fallback to simple letter input (no arrow keys)
     sys.stderr.write(f"  {BOLD}{prompt}{NC}\n")
     for i, opt in enumerate(options):
         key = chr(ord('a') + i)
@@ -63,18 +78,23 @@ except:
     sys.stderr.flush()
 
     try:
-        choice = input().strip().lower()
-        idx = ord(choice) - ord('a') if choice and len(choice) == 1 else -1
+        # Read single char in cbreak mode
+        tty.setcbreak(tty_file.fileno())
+        choice = tty_file.read(1).lower()
+        sys.stderr.write(f"{choice}\n")
+        idx = ord(choice) - ord('a') if choice else -1
         if 0 <= idx < len(options):
             print(options[idx])
         else:
             print("Rechazar")
-    except:
+    except Exception as ex:
+        sys.stderr.write(f"\n{RED}Error: {ex}{NC}\n")
         print("Rechazar")
+    finally:
+        tty_file.close()
     sys.exit(0)
 
-import tty
-import termios
+tty_fd = tty_file.fileno()
 
 def get_key():
     old_settings = termios.tcgetattr(tty_fd)
