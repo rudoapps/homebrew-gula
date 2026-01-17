@@ -84,6 +84,46 @@ read_multiline_input() {
 }
 
 # ============================================================================
+# TYPING INDICATOR (Spinner)
+# ============================================================================
+
+# PID del proceso de spinner (global para poder matarlo)
+TYPING_INDICATOR_PID=""
+
+# Mostrar indicador de typing (spinner animado)
+# Ejecutar en background: show_typing_indicator &
+show_typing_indicator() {
+    local message="${1:-Pensando...}"
+    local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local i=0
+    local start_time=$(date +%s)
+
+    # Ocultar cursor
+    printf "\033[?25l" >&2
+
+    while true; do
+        local elapsed=$(($(date +%s) - start_time))
+        printf "\r\033[2K  \033[0;36m${frames[$i]}\033[0m %s \033[2m(%ds)\033[0m" "$message" "$elapsed" >&2
+        i=$(( (i + 1) % 10 ))
+        sleep 0.08
+    done
+}
+
+# Detener indicador de typing
+stop_typing_indicator() {
+    if [ -n "$TYPING_INDICATOR_PID" ]; then
+        kill "$TYPING_INDICATOR_PID" 2>/dev/null
+        wait "$TYPING_INDICATOR_PID" 2>/dev/null
+        TYPING_INDICATOR_PID=""
+    fi
+    # Limpiar línea y mostrar cursor
+    printf "\r\033[2K\033[?25h" >&2
+}
+
+# Asegurar que el spinner se detenga al salir (Ctrl+C, etc.)
+trap 'stop_typing_indicator' EXIT INT TERM
+
+# ============================================================================
 # INTERACTIVE SELECTOR
 # ============================================================================
 
@@ -290,9 +330,14 @@ display_summary() {
 agent_chat_single() {
     local prompt="$1"
 
-    echo -e "${BOLD}Analizando proyecto y enviando mensaje...${NC}"
     show_project_info
     echo ""
+
+    # Mostrar indicador de typing inmediatamente
+    show_typing_indicator "Pensando..." &
+    TYPING_INDICATOR_PID=$!
+    # Exportar PID para que send_chat_hybrid pueda detenerlo
+    export GULA_TYPING_PID=$TYPING_INDICATOR_PID
 
     local response run_status
     # Temporarily disable errexit to capture non-zero return codes
@@ -300,6 +345,10 @@ agent_chat_single() {
     response=$(run_hybrid_chat "$prompt" "")
     run_status=$?
     set -e
+
+    # Asegurar que el typing indicator esté detenido
+    stop_typing_indicator
+    unset GULA_TYPING_PID
 
     # Handle auth errors - try refresh first, then prompt for login
     if [ $run_status -eq 2 ]; then
@@ -592,6 +641,12 @@ agent_chat_interactive() {
         local current_prompt="$user_input"
         local continue_iterations=true
 
+        # Mostrar indicador de typing inmediatamente
+        show_typing_indicator "Pensando..." &
+        TYPING_INDICATOR_PID=$!
+        # Exportar PID para que send_chat_hybrid pueda detenerlo
+        export GULA_TYPING_PID=$TYPING_INDICATOR_PID
+
         while [ "$continue_iterations" = true ]; do
             echo ""
 
@@ -602,6 +657,10 @@ agent_chat_interactive() {
             response=$(run_hybrid_chat "$current_prompt" "$conversation_id")
             run_status=$?
             set -e
+
+            # Asegurar que el typing indicator esté detenido después de cada llamada
+            stop_typing_indicator
+            unset GULA_TYPING_PID
 
             # Handle auth errors - try refresh first, then prompt for login
             if [ $run_status -eq 2 ]; then

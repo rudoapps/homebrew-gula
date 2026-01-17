@@ -481,6 +481,7 @@ import json
 import subprocess
 import time
 import threading
+import os
 
 # ============================================================================
 # UI Configuration
@@ -1092,6 +1093,17 @@ with open(tmp_payload) as f:
 spinner = Spinner()
 start_time = time.time()
 tools_executed = 0
+
+# Kill bash typing indicator if running (from agent_chat.sh)
+typing_pid = os.environ.get('GULA_TYPING_PID')
+if typing_pid:
+    try:
+        os.kill(int(typing_pid), 9)  # SIGKILL
+        # Clear the line left by bash spinner
+        sys.stderr.write("\r\033[2K")
+        sys.stderr.flush()
+    except:
+        pass  # Process already dead or invalid PID
 
 # Start spinner immediately (before curl connects)
 spinner.start("Conectando con el servidor...")
