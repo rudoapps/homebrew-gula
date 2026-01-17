@@ -2,7 +2,7 @@
 
 ## Descripcion
 
-Gula es una herramienta CLI para acelerar el desarrollo con arquetipos y modulos predefinidos. Soporta proyectos **Android**, **iOS**, **Flutter** y **Python**.
+Gula es una herramienta CLI para acelerar el desarrollo con arquetipos y modulos predefinidos. Incluye un **agente AI** integrado para asistencia en desarrollo. Soporta proyectos **Android**, **iOS**, **Flutter** y **Python**.
 
 ## Requisitos
 
@@ -29,6 +29,18 @@ gula <comando> [opciones]
 
 ## Comandos disponibles
 
+### Agente AI
+
+| Comando | Descripcion |
+|---------|-------------|
+| `chat` | Inicia conversacion con el agente AI |
+| `login` | Inicia sesion en el agente AI |
+| `logout` | Cierra sesion del agente AI |
+| `setup` | Instala dependencias del agente AI |
+| `whoami` | Muestra el usuario actual del agente |
+
+### Modulos y Proyectos
+
 | Comando | Descripcion |
 |---------|-------------|
 | `list` | Lista modulos disponibles para el proyecto actual |
@@ -51,11 +63,38 @@ gula <comando> [opciones]
 | `--type=ZZZZ` | Tipo de template: `clean`, `fastapi` |
 | `--archetype=ZZZZ` | Plataforma: `android`, `ios`, `flutter`, `python` |
 | `--force` | Forzar reinstalacion sin confirmar |
+| `--module` | Instalar como modulo completo (modo por defecto) |
+| `--integrate` | [Solo iOS] Integrar en estructura existente |
 | `--list` | Lista todos los templates disponibles |
 | `--json` | Salida en formato JSON |
 | `--help`, `-h` | Muestra la ayuda |
 
 ## Ejemplos de uso
+
+### Usar el agente AI
+
+```bash
+# Instalar dependencias del agente
+gula setup
+
+# Iniciar sesion
+gula login
+
+# Modo interactivo
+gula chat
+
+# Mensaje unico
+gula chat "Hola"
+
+# Continuar ultima conversacion
+gula chat --continue
+
+# Ver usuario actual
+gula whoami
+
+# Cerrar sesion
+gula logout
+```
 
 ### Listar modulos disponibles
 
@@ -78,6 +117,12 @@ gula install network --key=mi_clave --tag=v1.0.0
 
 # Forzar reinstalacion
 gula install authentication --key=mi_clave --force
+
+# Instalar como modulo completo (sin preguntar)
+gula install authentication --key=mi_clave --module
+
+# [iOS] Integrar en capas existentes (data→data, domain→domain)
+gula install authentication --key=mi_clave --integrate
 
 # Instalar multiples modulos (batch)
 gula install login,wallet,payments --key=mi_clave
@@ -152,9 +197,11 @@ gula install-hook
 
 ## Notas
 
+- `chat/login/setup`: Comandos del agente AI, usa `gula setup` primero para instalar dependencias
 - `template`: No requiere `--key` (usa templates locales)
 - `install/list`: Requiere `--key` para acceder a repositorios privados
 - `create`: Requiere `--key` para descargar arquetipos
+- `--integrate`: Solo disponible para proyectos iOS
 - Los comandos `list/install` detectan automaticamente el tipo de proyecto
 - Todas las operaciones se registran en `.gula.log` (formato JSON)
 - Use `gula status` para ver el historial de operaciones
