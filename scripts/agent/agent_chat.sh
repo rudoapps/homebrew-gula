@@ -336,6 +336,7 @@ agent_chat_single() {
     # Mostrar indicador de typing inmediatamente
     show_typing_indicator "Pensando..." &
     TYPING_INDICATOR_PID=$!
+    disown $TYPING_INDICATOR_PID 2>/dev/null  # Evitar mensaje "Killed" al terminar
     # Exportar PID para que send_chat_hybrid pueda detenerlo
     export GULA_TYPING_PID=$TYPING_INDICATOR_PID
 
@@ -644,6 +645,7 @@ agent_chat_interactive() {
         # Mostrar indicador de typing inmediatamente
         show_typing_indicator "Pensando..." &
         TYPING_INDICATOR_PID=$!
+        disown $TYPING_INDICATOR_PID 2>/dev/null  # Evitar mensaje "Killed" al terminar
         # Exportar PID para que send_chat_hybrid pueda detenerlo
         export GULA_TYPING_PID=$TYPING_INDICATOR_PID
 
