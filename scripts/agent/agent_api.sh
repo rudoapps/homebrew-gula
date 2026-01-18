@@ -1576,6 +1576,10 @@ total_elapsed = int(time.time()) - request_start_time
 keyboard_monitor = KeyboardMonitor()
 keyboard_monitor.start()
 
+# Ensure terminal is restored on exit (including crashes)
+import atexit
+atexit.register(keyboard_monitor.stop)
+
 # Show ESC hint on first tool
 sys.stderr.write(f"  {DIM}[ESC para cancelar]{NC}\n")
 sys.stderr.flush()
@@ -1847,14 +1851,17 @@ run_hybrid_chat() {
         # No hay tool_requests, devolver respuesta final
         # Add total elapsed time and accumulated session costs to response
         local total_elapsed=$(($(date +%s) - start_time))
+        # Ensure values are valid numbers
+        [ -z "$accumulated_session_tokens" ] && accumulated_session_tokens=0
+        [ -z "$accumulated_session_cost" ] && accumulated_session_cost=0
         echo "$response" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-data['total_elapsed'] = $total_elapsed
-data['session_tokens'] = $accumulated_session_tokens
-data['session_cost'] = $accumulated_session_cost
+data['total_elapsed'] = ${total_elapsed:-0}
+data['session_tokens'] = ${accumulated_session_tokens:-0}
+data['session_cost'] = ${accumulated_session_cost:-0}
 print(json.dumps(data))
-"
+" 2>/dev/null || echo "$response"
         return 0
     done
 

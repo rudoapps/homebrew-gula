@@ -664,11 +664,12 @@ agent_chat_interactive() {
             set +e
             response=$(run_hybrid_chat "$current_prompt" "$conversation_id")
             run_status=$?
-            set -e
 
             # Asegurar que el typing indicator esté detenido después de cada llamada
+            # Keep errexit disabled - kill/wait can fail if process already dead
             stop_typing_indicator
             unset GULA_TYPING_PID
+            set -e
 
             # Check for empty or invalid response
             if [ -z "$response" ] || [ "$response" = "{}" ]; then
