@@ -1099,6 +1099,7 @@ with open(tmp_payload) as f:
 spinner = Spinner()
 start_time = time.time()
 tools_executed = 0
+got_complete_event = False  # Track if we received the 'complete' event from server
 
 # Kill bash typing indicator if running (from agent_chat.sh)
 typing_pid = os.environ.get('GULA_TYPING_PID')
@@ -1303,6 +1304,7 @@ try:
                 spinner.stop()
 
             elif event_type == "complete":
+                got_complete_event = True
                 result["conversation_id"] = parsed.get("conversation_id")
                 result["total_cost"] = parsed.get("total_cost", 0)
                 result["total_tokens"] = parsed.get("total_input_tokens", 0) + parsed.get("total_output_tokens", 0)
@@ -1382,11 +1384,16 @@ finally:
 proc.wait()
 
 # Check if stream ended without proper completion
-if not result.get("error") and not result.get("conversation_id") and not result.get("tool_requests"):
-    result["error"] = "La conexion con el servidor termino inesperadamente"
-    sys.stderr.write(f"\n  {RED}✗{NC} La conexion con el servidor termino inesperadamente\n")
-    sys.stderr.write(f"  {DIM}Esto puede indicar un timeout o error de red.{NC}\n")
+if not result.get("error") and not got_complete_event and not result.get("tool_requests"):
+    # Server disconnected without sending 'complete' event
+    result["error"] = "El servidor cerro la conexion sin completar la respuesta"
+    sys.stderr.write(f"\n  {RED}✗{NC} El servidor cerro la conexion sin completar\n")
+    sys.stderr.write(f"  {DIM}La respuesta puede estar incompleta. Intenta de nuevo.{NC}\n")
     sys.stderr.flush()
+    # If we have partial text, include it in the response anyway
+    if texts:
+        result["response"] = "".join(texts)
+        result["partial"] = True
 
 # Calculate elapsed time
 result["elapsed_time"] = round(time.time() - start_time, 2)
