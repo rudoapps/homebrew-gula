@@ -743,18 +743,20 @@ agent_chat_interactive() {
                 break  # Exit inner loop but stay in interactive mode
             fi
 
-            # Extract response data
-            local text_response=$(json_get "$response" "response")
-            local new_conv_id=$(json_get "$response" "conversation_id")
-            local msg_cost=$(json_get_num "$response" "total_cost")
-            local session_cost=$(json_get_num "$response" "session_cost")
-            local msg_elapsed=$(json_get_num "$response" "elapsed_time")
-            local msg_tokens=$(json_get_num "$response" "total_tokens")
-            local session_tokens=$(json_get_num "$response" "session_tokens")
-            local msg_tools=$(json_get_num "$response" "tools_count")
-            local max_iter_reached=$(json_get "$response" "max_iterations_reached")
-            local total_elapsed=$(json_get_num "$response" "total_elapsed")
-            local text_streamed=$(json_get "$response" "text_streamed")
+            # Extract response data - disable errexit to prevent crashes on missing fields
+            set +e
+            local text_response=$(json_get "$response" "response" 2>/dev/null || echo "")
+            local new_conv_id=$(json_get "$response" "conversation_id" 2>/dev/null || echo "")
+            local msg_cost=$(json_get_num "$response" "total_cost" 2>/dev/null || echo "0")
+            local session_cost=$(json_get_num "$response" "session_cost" 2>/dev/null || echo "0")
+            local msg_elapsed=$(json_get_num "$response" "elapsed_time" 2>/dev/null || echo "0")
+            local msg_tokens=$(json_get_num "$response" "total_tokens" 2>/dev/null || echo "0")
+            local session_tokens=$(json_get_num "$response" "session_tokens" 2>/dev/null || echo "0")
+            local msg_tools=$(json_get_num "$response" "tools_count" 2>/dev/null || echo "0")
+            local max_iter_reached=$(json_get "$response" "max_iterations_reached" 2>/dev/null || echo "")
+            local total_elapsed=$(json_get_num "$response" "total_elapsed" 2>/dev/null || echo "0")
+            local text_streamed=$(json_get "$response" "text_streamed" 2>/dev/null || echo "")
+            set -e
 
             # Update conversation ID if this is a new conversation
             if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ] && [ "$new_conv_id" != "null" ]; then
@@ -763,8 +765,11 @@ agent_chat_interactive() {
                 save_project_conversation "$conversation_id"
             fi
 
-            # Update total cost
-            total_cost=$(python3 -c "print(round($total_cost + $msg_cost, 6))" 2>/dev/null || echo "$total_cost")
+            # Update total cost (protect against empty values)
+            set +e
+            [ -z "$msg_cost" ] && msg_cost=0
+            total_cost=$(python3 -c "print(round(${total_cost:-0} + ${msg_cost:-0}, 6))" 2>/dev/null || echo "$total_cost")
+            set -e
 
             # Display response (or notice if empty)
             # Skip if text was already streamed to the terminal
@@ -780,14 +785,17 @@ agent_chat_interactive() {
                 display_response "$text_response"
             fi
 
-            # Display summary box
+            # Display summary box - disable errexit to prevent crashes on formatting
+            set +e
             echo ""
             echo -e "${DIM}┌──────────────────────────────────────────────────────────────┐${NC}"
 
             # Line 1: Session info (this run)
             local session_line="  ${GREEN}✓${NC} Esta ejecución: "
             if [ -n "$session_tokens" ] && [ "$session_tokens" != "0" ]; then
-                local session_cost_fmt=$(python3 -c "print(f'{float($session_cost):.2f}')" 2>/dev/null || echo "0.00")
+                # Ensure session_cost has a valid value
+                [ -z "$session_cost" ] && session_cost=0
+                local session_cost_fmt=$(python3 -c "print(f'{float(${session_cost:-0}):.2f}')" 2>/dev/null || echo "0.00")
                 session_line="${session_line}${BOLD}${session_tokens}${NC} tokens  ${BOLD}\$${session_cost_fmt}${NC}"
             else
                 session_line="${session_line}${DIM}sin llamadas LLM${NC}"
@@ -799,17 +807,21 @@ agent_chat_interactive() {
 
             # Line 2: Total conversation info
             if [ -n "$msg_tokens" ] && [ "$msg_tokens" != "0" ]; then
-                local total_cost_fmt=$(python3 -c "print(f'{float($msg_cost):.2f}')" 2>/dev/null || echo "0.00")
+                # Ensure msg_cost has a valid value
+                [ -z "$msg_cost" ] && msg_cost=0
+                local total_cost_fmt=$(python3 -c "print(f'{float(${msg_cost:-0}):.2f}')" 2>/dev/null || echo "0.00")
                 echo -e "${DIM}│  ${NC}${DIM}Total conversación: ${msg_tokens} tokens  \$${total_cost_fmt}${NC}"
             fi
 
-            # Line 3: Tools if any
-            if [ -n "$msg_tools" ] && [ "$msg_tools" != "0" ] && [ "$msg_tools" -gt 0 ] 2>/dev/null; then
-                echo -e "${DIM}│  ${NC}${DIM}Herramientas: ${msg_tools}${NC}"
+            # Line 3: Tools if any (use safe numeric comparison)
+            local tools_count=${msg_tools:-0}
+            if [ "$tools_count" != "0" ] && [ "$tools_count" != "" ]; then
+                echo -e "${DIM}│  ${NC}${DIM}Herramientas: ${tools_count}${NC}"
             fi
 
             echo -e "${DIM}└──────────────────────────────────────────────────────────────┘${NC}"
             echo ""
+            set -e
 
             # Show status bar (RAG + Presupuesto) after each response
             # Disable errexit for status bar - these are non-critical
@@ -869,6 +881,9 @@ agent_chat_interactive() {
                 fi
             fi
         done
+
+        # Disable errexit before going back to read input - prevents exit on EOF or read errors
+        set +e
 
         # Visual separator and hint that user can continue
         echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
