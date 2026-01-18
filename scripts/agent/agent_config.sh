@@ -98,7 +98,7 @@ json_is_true() {
         [ "$result" = "true" ] || [ "$result" = "True" ]
     else
         local result=$(echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$field', False))" 2>/dev/null)
-        [ "$result" = "True" ]
+        [ "$result" = "True" ] || [ "$result" = "true" ]
     fi
 }
 

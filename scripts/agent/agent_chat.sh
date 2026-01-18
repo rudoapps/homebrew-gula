@@ -400,7 +400,8 @@ agent_chat_single() {
     [ -n "$total_elapsed" ] && [ "$total_elapsed" != "0" ] && elapsed="$total_elapsed"
 
     # Display response (skip if already streamed)
-    if [ "$text_streamed" != "True" ]; then
+    # Note: Python json outputs lowercase "true"
+    if [ "$text_streamed" != "True" ] && [ "$text_streamed" != "true" ]; then
         display_response "$text_response"
     fi
     display_summary "$tokens" "$cost" "$elapsed" "$tools_count" "$conv_id"
@@ -773,7 +774,8 @@ agent_chat_interactive() {
 
             # Display response (or notice if empty)
             # Skip if text was already streamed to the terminal
-            if [ "$text_streamed" = "True" ]; then
+            # Note: Python json outputs lowercase "true", bash comparison is case-sensitive
+            if [ "$text_streamed" = "True" ] || [ "$text_streamed" = "true" ]; then
                 : # Text was already shown during streaming
             elif [ -z "$text_response" ] || [ "$text_response" = "None" ]; then
                 echo ""
@@ -782,7 +784,10 @@ agent_chat_interactive() {
                 echo -e "${DIM}(El agente ejecutó herramientas pero no generó respuesta de texto)${NC}"
                 echo -e "${DIM}Escribe otro mensaje para continuar o pedir explicación.${NC}"
             else
+                # Disable errexit for display_response (glow or python could fail)
+                set +e
                 display_response "$text_response"
+                set -e
             fi
 
             # Display summary box - disable errexit to prevent crashes on formatting
