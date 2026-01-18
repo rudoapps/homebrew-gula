@@ -365,7 +365,7 @@ agent_chat_single() {
     fi
 
     # Check for other errors
-    local error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+    local error=$(json_get_error "$response")
 
     if [ -n "$error" ] && [ "$error" != "None" ]; then
         echo -e "${RED}Error: $error${NC}"
@@ -373,8 +373,7 @@ agent_chat_single() {
     fi
 
     # Check if conversation was repaired (interrupted session)
-    local was_repaired=$(echo "$response" | python3 -c "import sys, json; print('yes' if json.load(sys.stdin).get('repaired') else 'no')" 2>/dev/null)
-    if [ "$was_repaired" = "yes" ]; then
+    if json_is_true "$response" "repaired"; then
         echo ""
         echo -e "  ${YELLOW}⚠️  La conversacion estaba interrumpida y fue recuperada.${NC}"
         echo -e "  ${DIM}Puedes continuar escribiendo tu siguiente mensaje.${NC}"
@@ -383,14 +382,14 @@ agent_chat_single() {
     fi
 
     # Extract response data
-    local text_response=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('response', ''))" 2>/dev/null)
-    local conv_id=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('conversation_id', ''))" 2>/dev/null)
-    local cost=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('total_cost', 0))" 2>/dev/null)
-    local elapsed=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('elapsed_time', 0))" 2>/dev/null)
-    local tokens=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('total_tokens', 0))" 2>/dev/null)
-    local tools_count=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('tools_count', 0))" 2>/dev/null)
-    local total_elapsed=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('total_elapsed', 0))" 2>/dev/null)
-    local text_streamed=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('text_streamed', False))" 2>/dev/null)
+    local text_response=$(json_get "$response" "response")
+    local conv_id=$(json_get "$response" "conversation_id")
+    local cost=$(json_get_num "$response" "total_cost")
+    local elapsed=$(json_get_num "$response" "elapsed_time")
+    local tokens=$(json_get_num "$response" "total_tokens")
+    local tools_count=$(json_get_num "$response" "tools_count")
+    local total_elapsed=$(json_get_num "$response" "total_elapsed")
+    local text_streamed=$(json_get "$response" "text_streamed")
 
     # Use total_elapsed if available (includes tool execution time)
     [ -n "$total_elapsed" ] && [ "$total_elapsed" != "0" ] && elapsed="$total_elapsed"
@@ -432,7 +431,8 @@ agent_chat_interactive() {
     # RAG status
     local rag_git_url=$(get_rag_git_url 2>/dev/null)
     if [ -n "$rag_git_url" ]; then
-        local rag_status=$(check_rag_index 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+        local rag_response=$(check_rag_index 2>/dev/null)
+        local rag_status=$(json_get "$rag_response" "status")
         case "$rag_status" in
             "ready")
                 status_parts="${GREEN}●${NC} RAG"
@@ -677,11 +677,10 @@ agent_chat_interactive() {
             fi
 
             # Check for rate limit (not an error - just wait)
-            local rate_limited=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('rate_limited', False))" 2>/dev/null)
-            if [ "$rate_limited" = "True" ]; then
-                local rate_msg=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('rate_limit_message', 'Rate limit alcanzado'))" 2>/dev/null)
+            if json_is_true "$response" "rate_limited"; then
+                local rate_msg=$(json_get "$response" "rate_limit_message" "Rate limit alcanzado")
                 # Update conversation_id if provided
-                local rate_conv_id=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('conversation_id', ''))" 2>/dev/null)
+                local rate_conv_id=$(json_get "$response" "conversation_id")
                 if [ -n "$rate_conv_id" ] && [ "$rate_conv_id" != "None" ] && [ "$rate_conv_id" != "null" ]; then
                     conversation_id="$rate_conv_id"
                     save_project_conversation "$conversation_id"
@@ -696,7 +695,7 @@ agent_chat_interactive() {
             fi
 
             # Check for errors
-            local error=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('error') or '')" 2>/dev/null)
+            local error=$(json_get "$response" "error")
 
             if [ -n "$error" ] && [ "$error" != "None" ]; then
                 echo -e "${RED}Error: $error${NC}"
@@ -705,11 +704,10 @@ agent_chat_interactive() {
             fi
 
             # Check if operation was aborted by user (ESC key)
-            local was_aborted=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('aborted', False))" 2>/dev/null)
-            if [ "$was_aborted" = "True" ]; then
-                local completed_tools=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('completed_tools', 0))" 2>/dev/null)
-                local total_tools=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('total_tools', 0))" 2>/dev/null)
-                local abort_conv_id=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('conversation_id', ''))" 2>/dev/null)
+            if json_is_true "$response" "aborted"; then
+                local completed_tools=$(json_get_num "$response" "completed_tools")
+                local total_tools=$(json_get_num "$response" "total_tools")
+                local abort_conv_id=$(json_get "$response" "conversation_id")
 
                 # Update conversation ID if available
                 if [ -n "$abort_conv_id" ] && [ "$abort_conv_id" != "None" ] && [ "$abort_conv_id" != "null" ]; then
@@ -726,17 +724,17 @@ agent_chat_interactive() {
             fi
 
             # Extract response data
-            local text_response=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('response', ''))" 2>/dev/null)
-            local new_conv_id=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('conversation_id', ''))" 2>/dev/null)
-            local msg_cost=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('total_cost', 0))" 2>/dev/null)
-            local session_cost=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('session_cost', 0))" 2>/dev/null)
-            local msg_elapsed=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('elapsed_time', 0))" 2>/dev/null)
-            local msg_tokens=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('total_tokens', 0))" 2>/dev/null)
-            local session_tokens=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('session_tokens', 0))" 2>/dev/null)
-            local msg_tools=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('tools_count', 0))" 2>/dev/null)
-            local max_iter_reached=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('max_iterations_reached', False))" 2>/dev/null)
-            local total_elapsed=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('total_elapsed', 0))" 2>/dev/null)
-            local text_streamed=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('text_streamed', False))" 2>/dev/null)
+            local text_response=$(json_get "$response" "response")
+            local new_conv_id=$(json_get "$response" "conversation_id")
+            local msg_cost=$(json_get_num "$response" "total_cost")
+            local session_cost=$(json_get_num "$response" "session_cost")
+            local msg_elapsed=$(json_get_num "$response" "elapsed_time")
+            local msg_tokens=$(json_get_num "$response" "total_tokens")
+            local session_tokens=$(json_get_num "$response" "session_tokens")
+            local msg_tools=$(json_get_num "$response" "tools_count")
+            local max_iter_reached=$(json_get "$response" "max_iterations_reached")
+            local total_elapsed=$(json_get_num "$response" "total_elapsed")
+            local text_streamed=$(json_get "$response" "text_streamed")
 
             # Update conversation ID if this is a new conversation
             if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ] && [ "$new_conv_id" != "null" ]; then
@@ -797,7 +795,8 @@ agent_chat_interactive() {
             local status_parts=""
             local rag_git_url=$(get_rag_git_url 2>/dev/null)
             if [ -n "$rag_git_url" ]; then
-                local rag_status=$(check_rag_index 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+                local rag_response=$(check_rag_index 2>/dev/null)
+                local rag_status=$(json_get "$rag_response" "status")
                 case "$rag_status" in
                     "ready") status_parts="${GREEN}●${NC} RAG" ;;
                     "pending") status_parts="${YELLOW}○${NC} RAG ${DIM}pendiente${NC}" ;;
@@ -833,8 +832,7 @@ agent_chat_interactive() {
             fi
 
             # Check if max tool iterations was reached (client-side safety limit)
-            local max_tool_iter_reached=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('max_tool_iterations_reached', False))" 2>/dev/null)
-            if [ "$max_tool_iter_reached" = "True" ]; then
+            if json_is_true "$response" "max_tool_iterations_reached"; then
                 echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
                 echo -e "${YELLOW}El agente ha ejecutado muchas herramientas (20+ en esta sesión).${NC}"
                 echo -e "${DIM}Esto es un limite de seguridad para evitar bucles infinitos.${NC}"
@@ -940,7 +938,7 @@ agent_conversations() {
         -H "Authorization: Bearer $access_token")
 
     # Check for errors
-    local error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+    local error=$(json_get_error "$response")
 
     if [ -n "$error" ] && [ "$error" != "None" ]; then
         # Check if it's an auth error
@@ -951,7 +949,7 @@ agent_conversations() {
                 access_token=$(get_agent_config "access_token")
                 response=$(curl -s "$api_url/agent/conversations" \
                     -H "Authorization: Bearer $access_token")
-                error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+                error=$(json_get_error "$response")
                 if [ -n "$error" ] && [ "$error" != "None" ]; then
                     echo -e "${RED}Error: $error${NC}"
                     return 1

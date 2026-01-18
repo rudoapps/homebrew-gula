@@ -54,8 +54,8 @@ refresh_agent_token() {
         -d "{\"refresh_token\": \"$refresh_token\"}" 2>/dev/null)
 
     # Check if we got new tokens
-    local new_access_token=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token', ''))" 2>/dev/null)
-    local new_refresh_token=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('refresh_token', ''))" 2>/dev/null)
+    local new_access_token=$(json_get "$response" "access_token")
+    local new_refresh_token=$(json_get "$response" "refresh_token")
 
     if [ -n "$new_access_token" ] && [ "$new_access_token" != "null" ] && [ "$new_access_token" != "" ]; then
         # Save new tokens
@@ -121,7 +121,7 @@ agent_login() {
 
     # Create session
     local response=$(curl -s -X POST "$api_url/cli-auth/session")
-    local session_id=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('session_id', ''))" 2>/dev/null)
+    local session_id=$(json_get "$response" "session_id")
 
     if [ -z "$session_id" ]; then
         echo -e "${RED}Error: No se pudo crear la sesion de autenticacion${NC}"
@@ -155,13 +155,13 @@ agent_login() {
     while [ $attempt -lt $max_attempts ]; do
         sleep 2
         local poll_response=$(curl -s "$api_url/cli-auth/poll?session=$session_id")
-        local status=$(echo "$poll_response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status', ''))" 2>/dev/null)
+        local status=$(json_get "$poll_response" "status")
 
         case "$status" in
             "completed")
-                local access_token=$(echo "$poll_response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token', ''))" 2>/dev/null)
-                local refresh_token=$(echo "$poll_response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('refresh_token', ''))" 2>/dev/null)
-                local user_email=$(echo "$poll_response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('user_email', ''))" 2>/dev/null)
+                local access_token=$(json_get "$poll_response" "access_token")
+                local refresh_token=$(json_get "$poll_response" "refresh_token")
+                local user_email=$(json_get "$poll_response" "user_email")
 
                 set_agent_config "access_token" "$access_token"
                 set_agent_config "refresh_token" "$refresh_token"

@@ -17,6 +17,107 @@ AGENT_API_URL="${AGENT_API_URL:-https://agent.rudo.es/api/v1}"
 AGENT_REQUIRED_DEPS=("python3" "curl")
 AGENT_OPTIONAL_DEPS=("glow")
 
+# Detect jq for faster JSON parsing
+HAS_JQ=$(command -v jq &>/dev/null && echo "1" || echo "")
+
+# ============================================================================
+# JSON HELPER FUNCTIONS (jq with python fallback)
+# ============================================================================
+
+# Get a value from JSON string
+# Usage: json_get "$json" "field"
+# Usage: json_get "$json" "field" "default"
+json_get() {
+    local json="$1"
+    local field="$2"
+    local default="${3:-}"
+
+    if [ -n "$HAS_JQ" ]; then
+        local result=$(echo "$json" | jq -r ".$field // empty" 2>/dev/null)
+        [ -n "$result" ] && echo "$result" || echo "$default"
+    else
+        local result=$(echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); v=d.get('$field'); print('' if v is None else v)" 2>/dev/null)
+        [ -n "$result" ] && echo "$result" || echo "$default"
+    fi
+}
+
+# Get nested value from JSON string
+# Usage: json_get_nested "$json" ".field.subfield"
+json_get_nested() {
+    local json="$1"
+    local path="$2"
+    local default="${3:-}"
+
+    if [ -n "$HAS_JQ" ]; then
+        local result=$(echo "$json" | jq -r "$path // empty" 2>/dev/null)
+        [ -n "$result" ] && echo "$result" || echo "$default"
+    else
+        # For Python, convert jq path to Python: .field.sub -> ['field']['sub']
+        local py_path=$(echo "$path" | sed "s/\./']['/g" | sed "s/^']//" | sed "s/$/']/" | sed "s/^\['/['/")
+        local result=$(echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d$py_path)" 2>/dev/null)
+        [ -n "$result" ] && echo "$result" || echo "$default"
+    fi
+}
+
+# Check if JSON has error field
+# Usage: json_get_error "$json" -> returns error message or empty
+json_get_error() {
+    local json="$1"
+
+    if [ -n "$HAS_JQ" ]; then
+        echo "$json" | jq -r '.error // .detail // empty' 2>/dev/null
+    else
+        echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error') or d.get('detail') or '')" 2>/dev/null
+    fi
+}
+
+# Check if JSON field equals a value
+# Usage: json_check "$json" "field" "value" && echo "match"
+json_check() {
+    local json="$1"
+    local field="$2"
+    local expected="$3"
+
+    if [ -n "$HAS_JQ" ]; then
+        local result=$(echo "$json" | jq -r ".$field" 2>/dev/null)
+        [ "$result" = "$expected" ]
+    else
+        local result=$(echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$field'))" 2>/dev/null)
+        [ "$result" = "$expected" ]
+    fi
+}
+
+# Check if JSON field is truthy
+# Usage: json_is_true "$json" "field" && echo "true"
+json_is_true() {
+    local json="$1"
+    local field="$2"
+
+    if [ -n "$HAS_JQ" ]; then
+        local result=$(echo "$json" | jq -r ".$field" 2>/dev/null)
+        [ "$result" = "true" ] || [ "$result" = "True" ]
+    else
+        local result=$(echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$field', False))" 2>/dev/null)
+        [ "$result" = "True" ]
+    fi
+}
+
+# Get numeric value from JSON (with default 0)
+# Usage: json_get_num "$json" "field"
+json_get_num() {
+    local json="$1"
+    local field="$2"
+    local default="${3:-0}"
+
+    if [ -n "$HAS_JQ" ]; then
+        local result=$(echo "$json" | jq -r ".$field // $default" 2>/dev/null)
+        echo "${result:-$default}"
+    else
+        local result=$(echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$field', $default))" 2>/dev/null)
+        echo "${result:-$default}"
+    fi
+}
+
 # ============================================================================
 # CONFIGURATION FUNCTIONS
 # ============================================================================
@@ -33,7 +134,11 @@ init_agent_config() {
 get_agent_config() {
     local key=$1
     if [ -f "$AGENT_CONFIG_FILE" ]; then
-        python3 -c "import json; print(json.load(open('$AGENT_CONFIG_FILE')).get('$key', ''))" 2>/dev/null || echo ""
+        if [ -n "$HAS_JQ" ]; then
+            jq -r ".$key // empty" "$AGENT_CONFIG_FILE" 2>/dev/null || echo ""
+        else
+            python3 -c "import json; print(json.load(open('$AGENT_CONFIG_FILE')).get('$key', ''))" 2>/dev/null || echo ""
+        fi
     fi
 }
 
@@ -42,12 +147,21 @@ set_agent_config() {
     local key=$1
     local value=$2
     if [ -f "$AGENT_CONFIG_FILE" ]; then
-        python3 -c "
+        if [ -n "$HAS_JQ" ]; then
+            local tmp=$(mktemp)
+            if [ "$value" = "null" ]; then
+                jq ".$key = null" "$AGENT_CONFIG_FILE" > "$tmp" && mv "$tmp" "$AGENT_CONFIG_FILE"
+            else
+                jq ".$key = \"$value\"" "$AGENT_CONFIG_FILE" > "$tmp" && mv "$tmp" "$AGENT_CONFIG_FILE"
+            fi
+        else
+            python3 -c "
 import json
 config = json.load(open('$AGENT_CONFIG_FILE'))
 config['$key'] = '$value' if '$value' != 'null' else None
 json.dump(config, open('$AGENT_CONFIG_FILE', 'w'), indent=2)
 "
+        fi
     fi
 }
 

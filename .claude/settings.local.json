@@ -62,7 +62,8 @@
       "Bash(/Users/fer/gula/gula.sh create:*)",
       "Bash(/Users/fer/gula/gula.sh install:*)",
       "Bash(./create_release.sh:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []

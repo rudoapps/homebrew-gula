@@ -18,7 +18,7 @@ get_quota_status_inline() {
         -H "Content-Type: application/json" 2>/dev/null)
 
     # Check for errors silently
-    local error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+    local error=$(json_get_error "$response")
     if [ -n "$error" ] && [ "$error" != "None" ] && [ "$error" != "" ]; then
         return 0  # Silently ignore errors
     fi
@@ -86,7 +86,7 @@ fetch_and_show_quota() {
         -H "Content-Type: application/json")
 
     # Check for errors
-    local error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+    local error=$(json_get_error "$response")
 
     if [ -n "$error" ] && [ "$error" != "None" ] && [ "$error" != "" ]; then
         echo -e "${RED}Error: $error${NC}"
@@ -195,7 +195,7 @@ show_available_models() {
     local response=$(fetch_available_models)
 
     # Check for errors
-    local error=$(echo "$response" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', d.get('detail', '')))" 2>/dev/null)
+    local error=$(json_get_error "$response")
 
     if [ -n "$error" ] && [ "$error" != "None" ] && [ "$error" != "" ]; then
         echo -e "${RED}Error: $error${NC}"
@@ -464,8 +464,9 @@ PYEOF
     fi
 
     # Validate payload has either prompt or tool_results (required by server)
-    local has_content=$(echo "$payload" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if d.get('prompt') or d.get('tool_results') else 'no')" 2>/dev/null)
-    if [ "$has_content" != "yes" ]; then
+    local has_prompt=$(json_get "$payload" "prompt")
+    local has_tools=$(json_get "$payload" "tool_results")
+    if [ -z "$has_prompt" ] && [ -z "$has_tools" ]; then
         echo '{"error": "Request must have either prompt or tool_results", "response": ""}'
         return 1
     fi
@@ -1718,7 +1719,12 @@ run_hybrid_chat() {
         if [ -n "$images_json" ] && [ "$images_json" != "[]" ]; then
             # Remove image paths from prompt text
             cleaned_prompt=$(remove_image_paths_from_text "$prompt")
-            local num_images=$(echo "$images_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+            local num_images
+            if [ -n "$HAS_JQ" ]; then
+                num_images=$(echo "$images_json" | jq 'length' 2>/dev/null || echo "0")
+            else
+                num_images=$(echo "$images_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+            fi
             if [ "$num_images" -gt 0 ]; then
                 echo -e "  ${GREEN}📎${NC} ${num_images} imagen(es) detectada(s)" >&2
             fi
@@ -1739,7 +1745,7 @@ run_hybrid_chat() {
         fi
 
         # Verificar error
-        local error=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error') or '')" 2>/dev/null)
+        local error=$(json_get "$response" "error")
         if [ -n "$error" ]; then
             # Check if it's an auth error (case insensitive patterns)
             local error_lower=$(echo "$error" | tr '[:upper:]' '[:lower:]')
@@ -1755,16 +1761,21 @@ run_hybrid_chat() {
         fi
 
         # Obtener conversation_id
-        current_conv_id=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('conversation_id') or '')" 2>/dev/null)
+        current_conv_id=$(json_get "$response" "conversation_id")
 
         # Accumulate session costs from this response
-        local this_session_tokens=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_tokens', 0))" 2>/dev/null)
-        local this_session_cost=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_cost', 0))" 2>/dev/null)
-        accumulated_session_tokens=$(python3 -c "print(int($accumulated_session_tokens) + int($this_session_tokens))" 2>/dev/null || echo "$accumulated_session_tokens")
-        accumulated_session_cost=$(python3 -c "print($accumulated_session_cost + $this_session_cost)" 2>/dev/null || echo "$accumulated_session_cost")
+        local this_session_tokens=$(json_get_num "$response" "session_tokens")
+        local this_session_cost=$(json_get_num "$response" "session_cost")
+        accumulated_session_tokens=$((accumulated_session_tokens + this_session_tokens))
+        accumulated_session_cost=$(echo "$accumulated_session_cost + $this_session_cost" | bc 2>/dev/null || echo "$accumulated_session_cost")
 
         # Verificar si hay tool_requests
-        local tool_requests=$(echo "$response" | python3 -c "import sys,json; r=json.load(sys.stdin).get('tool_requests'); print(json.dumps(r) if r else '')" 2>/dev/null)
+        local tool_requests
+        if [ -n "$HAS_JQ" ]; then
+            tool_requests=$(echo "$response" | jq -c '.tool_requests // empty' 2>/dev/null)
+        else
+            tool_requests=$(echo "$response" | python3 -c "import sys,json; r=json.load(sys.stdin).get('tool_requests'); print(json.dumps(r) if r else '')" 2>/dev/null)
+        fi
 
         if [ -n "$tool_requests" ] && [ "$tool_requests" != "null" ]; then
             # Ejecutar tools localmente (pass start_time for elapsed calculation)
@@ -1777,12 +1788,10 @@ run_hybrid_chat() {
             fi
 
             # Check if operation was aborted by user (ESC key)
-            local was_aborted=$(echo "$tool_results" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if isinstance(d, dict) and d.get('aborted') else 'no')" 2>/dev/null)
-
-            if [ "$was_aborted" = "yes" ]; then
+            if json_is_true "$tool_results" "aborted"; then
                 # Extract partial results and return abort response
-                local completed_tools=$(echo "$tool_results" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('completed_tools', 0))" 2>/dev/null)
-                local total_tools=$(echo "$tool_results" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('total_tools', 0))" 2>/dev/null)
+                local completed_tools=$(json_get_num "$tool_results" "completed_tools")
+                local total_tools=$(json_get_num "$tool_results" "total_tools")
                 local total_elapsed=$(($(date +%s) - start_time))
 
                 # Return abort response - conversation remains active
@@ -1791,9 +1800,15 @@ run_hybrid_chat() {
             fi
 
             # Verify it's valid JSON array (normal case)
-            local is_valid=$(echo "$tool_results" | python3 -c "import sys,json; r=json.load(sys.stdin); print('yes' if isinstance(r, list) and len(r) > 0 else 'no')" 2>/dev/null)
+            local is_valid
+            if [ -n "$HAS_JQ" ]; then
+                is_valid=$(echo "$tool_results" | jq -r 'if type == "array" and length > 0 then "yes" else "no" end' 2>/dev/null)
+            else
+                is_valid=$(echo "$tool_results" | python3 -c "import sys,json; r=json.load(sys.stdin); print('yes' if isinstance(r, list) and len(r) > 0 else 'no')" 2>/dev/null)
+            fi
             if [ "$is_valid" != "yes" ]; then
-                echo "{\"error\": \"Invalid tool results format\", \"response\": \"\", \"debug\": $(echo "$tool_results" | head -c 200 | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')}"
+                local debug_preview=$(echo "$tool_results" | head -c 200)
+                echo "{\"error\": \"Invalid tool results format\", \"response\": \"\", \"debug\": \"$debug_preview\"}"
                 return 1
             fi
 
