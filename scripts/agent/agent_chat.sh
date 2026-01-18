@@ -804,7 +804,7 @@ agent_chat_interactive() {
             fi
 
             # Line 3: Tools if any
-            if [ "$msg_tools" -gt 0 ] 2>/dev/null; then
+            if [ -n "$msg_tools" ] && [ "$msg_tools" != "0" ] && [ "$msg_tools" -gt 0 ] 2>/dev/null; then
                 echo -e "${DIM}│  ${NC}${DIM}Herramientas: ${msg_tools}${NC}"
             fi
 
@@ -812,11 +812,13 @@ agent_chat_interactive() {
             echo ""
 
             # Show status bar (RAG + Presupuesto) after each response
+            # Disable errexit for status bar - these are non-critical
+            set +e
             local status_parts=""
-            local rag_git_url=$(get_rag_git_url 2>/dev/null)
+            local rag_git_url=$(get_rag_git_url 2>/dev/null || echo "")
             if [ -n "$rag_git_url" ]; then
-                local rag_response=$(check_rag_index 2>/dev/null)
-                local rag_status=$(json_get "$rag_response" "status")
+                local rag_response=$(check_rag_index 2>/dev/null || echo "{}")
+                local rag_status=$(json_get "$rag_response" "status" 2>/dev/null || echo "")
                 case "$rag_status" in
                     "ready") status_parts="${GREEN}●${NC} RAG" ;;
                     "pending") status_parts="${YELLOW}○${NC} RAG ${DIM}pendiente${NC}" ;;
@@ -826,16 +828,17 @@ agent_chat_interactive() {
             else
                 status_parts="${DIM}○ RAG${NC}"
             fi
-            local quota_str=$(get_quota_status_inline)
+            local quota_str=$(get_quota_status_inline 2>/dev/null || echo "")
             if [ -n "$quota_str" ]; then
                 status_parts="$status_parts  │  $quota_str"
             fi
+            set -e
             echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
             echo -e " $status_parts"
             echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
 
             # Check if max iterations was reached (server-side)
-            if [ "$max_iter_reached" = "True" ]; then
+            if [ "$max_iter_reached" = "True" ] || [ "$max_iter_reached" = "true" ]; then
                 echo -e "${YELLOW}───────────────────────────────────────────────────────────────${NC}"
                 echo -e "${YELLOW}El agente ha alcanzado el limite de iteraciones del servidor.${NC}"
                 echo ""
