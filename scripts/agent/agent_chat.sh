@@ -120,8 +120,13 @@ stop_typing_indicator() {
     printf "\r\033[2K\033[?25h" >&2
 }
 
-# Asegurar que el spinner se detenga al salir (Ctrl+C, etc.)
-trap 'stop_typing_indicator' EXIT INT TERM
+# Asegurar que el spinner se detenga y cursor se restaure al salir (Ctrl+C, etc.)
+cleanup_on_exit() {
+    stop_typing_indicator
+    # Always ensure cursor is visible
+    printf "\033[?25h" >&2
+}
+trap 'cleanup_on_exit' EXIT INT TERM
 
 # ============================================================================
 # INTERACTIVE SELECTOR
@@ -664,6 +669,16 @@ agent_chat_interactive() {
             stop_typing_indicator
             unset GULA_TYPING_PID
 
+            # Check for empty or invalid response
+            if [ -z "$response" ] || [ "$response" = "{}" ]; then
+                echo ""
+                echo -e "${RED}✗ No se recibio respuesta del servidor${NC}"
+                echo -e "${DIM}  La conexion puede haber terminado inesperadamente.${NC}"
+                echo -e "${DIM}  Intenta de nuevo.${NC}"
+                echo ""
+                break
+            fi
+
             # Handle auth errors - try refresh first, then prompt for login
             if [ $run_status -eq 2 ]; then
                 if handle_auth_error; then
@@ -698,7 +713,12 @@ agent_chat_interactive() {
             local error=$(json_get "$response" "error")
 
             if [ -n "$error" ] && [ "$error" != "None" ]; then
-                echo -e "${RED}Error: $error${NC}"
+                echo ""
+                echo -e "${RED}✗ Error: $error${NC}"
+                # Give helpful hints based on error type
+                if [[ "$error" == *"inesperadamente"* ]] || [[ "$error" == *"timeout"* ]]; then
+                    echo -e "${DIM}  Sugerencia: Intenta de nuevo con un mensaje mas corto.${NC}"
+                fi
                 echo ""
                 break
             fi
@@ -847,7 +867,8 @@ agent_chat_interactive() {
             fi
         done
 
-        echo -e "${BOLD}───────────────────────────────────────────────────────────────${NC}"
+        # Visual separator and hint that user can continue
+        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
         echo ""
     done
 }

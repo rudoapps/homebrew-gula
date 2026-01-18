@@ -1065,7 +1065,12 @@ class Spinner:
         if self.thread:
             self.thread.join(timeout=0.2)
 
-        sys.stderr.write(f"{CURSOR_START}{CLEAR_LINE}{SHOW_CURSOR}")
+        # ALWAYS ensure cursor is visible and line is cleared
+        try:
+            sys.stderr.write(f"{CURSOR_START}{CLEAR_LINE}{SHOW_CURSOR}")
+            sys.stderr.flush()
+        except:
+            pass  # Ignore errors if stderr is closed
 
         if final_message:
             elapsed = time.time() - self.start_time if self.start_time else 0
@@ -1179,7 +1184,10 @@ try:
             data = line[6:].strip()
             try:
                 parsed = json.loads(data)
-            except:
+            except json.JSONDecodeError as e:
+                # Log JSON parse errors for debugging
+                sys.stderr.write(f"\n  {YELLOW}⚠ JSON parse error:{NC} {str(e)[:50]}\n")
+                sys.stderr.flush()
                 continue
 
             if event_type == "started":
@@ -1360,12 +1368,25 @@ try:
 except KeyboardInterrupt:
     spinner.stop("Cancelado", "error")
     proc.terminate()
+except Exception as e:
+    # Capture any unexpected errors
+    spinner.stop(f"Error inesperado: {str(e)[:50]}", "error")
+    result["error"] = f"Error de procesamiento: {str(e)}"
 finally:
-    # Ensure spinner is stopped
+    # ALWAYS ensure cursor is visible and spinner is stopped
+    sys.stderr.write(SHOW_CURSOR)
+    sys.stderr.flush()
     if spinner.running:
         spinner.stop()
 
 proc.wait()
+
+# Check if stream ended without proper completion
+if not result.get("error") and not result.get("conversation_id") and not result.get("tool_requests"):
+    result["error"] = "La conexion con el servidor termino inesperadamente"
+    sys.stderr.write(f"\n  {RED}✗{NC} La conexion con el servidor termino inesperadamente\n")
+    sys.stderr.write(f"  {DIM}Esto puede indicar un timeout o error de red.{NC}\n")
+    sys.stderr.flush()
 
 # Calculate elapsed time
 result["elapsed_time"] = round(time.time() - start_time, 2)
