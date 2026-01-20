@@ -1542,6 +1542,21 @@ class KeyboardMonitor:
             sys.stderr.write(f"\r\033[2K")
             sys.stderr.flush()
 
+    def pause(self):
+        """Temporarily restore normal terminal mode (for subprocess input)."""
+        if self.old_settings:
+            try:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
+            except:
+                pass
+
+    def resume(self):
+        """Re-enable cbreak mode after subprocess completes."""
+        try:
+            tty.setcbreak(sys.stdin.fileno())
+        except:
+            pass
+
     def get_buffered_input(self):
         """Return any buffered user input."""
         return self.input_buffer.strip()
@@ -1724,6 +1739,8 @@ for idx, tc in enumerate(tool_requests, 1):
         cmd = f'source "{agent_script_dir}/agent_local_tools.sh" && execute_tool_locally "{tc_name}" "{input_file}"'
         # Stop spinner BEFORE running command that might need user input
         spinner.stop()
+        # Pause keyboard monitor to allow subprocess to read stdin normally
+        keyboard_monitor.pause()
         result = subprocess.run(
             ["bash", "-c", cmd],
             stdout=subprocess.PIPE,  # Capture stdout only
@@ -1733,12 +1750,16 @@ for idx, tc in enumerate(tool_requests, 1):
             timeout=120,  # More time for user interaction
             env={**os.environ, "AGENT_SCRIPT_DIR": agent_script_dir}
         )
+        # Resume keyboard monitor after subprocess
+        keyboard_monitor.resume()
         output = result.stdout or "Sin resultado"
         success = result.returncode == 0 and not output.startswith("Error:")
     except subprocess.TimeoutExpired:
+        keyboard_monitor.resume()  # Resume on timeout
         output = "Error: Timeout ejecutando tool (60s)"
         success = False
     except Exception as e:
+        keyboard_monitor.resume()  # Resume on error
         output = f"Error: {str(e)}"
         success = False
     finally:
