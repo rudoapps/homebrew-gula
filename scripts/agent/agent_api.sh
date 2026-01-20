@@ -1627,29 +1627,10 @@ aborted = False
 # Calculate total elapsed time
 total_elapsed = int(time.time()) - request_start_time
 
-# Initialize keyboard monitor for ESC detection
-keyboard_monitor = KeyboardMonitor()
-keyboard_monitor.start()
-
-# Ensure terminal is restored on exit (including crashes)
-import atexit
-atexit.register(keyboard_monitor.stop)
-
 # Track lines output for later clearing
 tool_output_lines = 0
 
-# Show ESC hint on first tool
-sys.stderr.write(f"  {DIM}[ESC para cancelar]{NC}\n")
-sys.stderr.flush()
-tool_output_lines += 1
-
 for idx, tc in enumerate(tool_requests, 1):
-    # Check for ESC abort before each tool
-    if keyboard_monitor.check_abort():
-        aborted = True
-        sys.stderr.write(f"\n  {YELLOW}⚡ Operación cancelada por usuario{NC}\n")
-        sys.stderr.flush()
-        break
     tc_id = tc["id"]
     tc_name = tc["name"]
     tc_input = tc["input"]
@@ -1708,8 +1689,6 @@ for idx, tc in enumerate(tool_requests, 1):
         cmd = f'source "{agent_script_dir}/agent_local_tools.sh" && execute_tool_locally "{tc_name}" "{input_file}"'
         # Stop spinner BEFORE running command that might need user input
         spinner.stop()
-        # Pause keyboard monitor to allow subprocess to read stdin normally
-        keyboard_monitor.pause()
         result = subprocess.run(
             ["bash", "-c", cmd],
             stdout=subprocess.PIPE,  # Capture stdout only
@@ -1719,16 +1698,12 @@ for idx, tc in enumerate(tool_requests, 1):
             timeout=120,  # More time for user interaction
             env={**os.environ, "AGENT_SCRIPT_DIR": agent_script_dir}
         )
-        # Resume keyboard monitor after subprocess
-        keyboard_monitor.resume()
         output = result.stdout or "Sin resultado"
         success = result.returncode == 0 and not output.startswith("Error:")
     except subprocess.TimeoutExpired:
-        keyboard_monitor.resume()  # Resume on timeout
         output = "Error: Timeout ejecutando tool (60s)"
         success = False
     except Exception as e:
-        keyboard_monitor.resume()  # Resume on error
         output = f"Error: {str(e)}"
         success = False
     finally:
@@ -1768,12 +1743,6 @@ for idx, tc in enumerate(tool_requests, 1):
         "result": output
     })
 
-# Cleanup keyboard monitor
-keyboard_monitor.stop()
-
-# Get any buffered user input
-user_inline_input = keyboard_monitor.get_buffered_input()
-
 # Output results with metadata
 output_data = {
     "results": results,
@@ -1781,13 +1750,7 @@ output_data = {
     "completed_tools": len(results),
     "total_tools": total_tools,
     "tool_output_lines": tool_output_lines,
-    "user_input": user_inline_input  # User's typed input during tool execution
 }
-
-# Show confirmation if user typed something
-if user_inline_input:
-    sys.stderr.write(f"  {GREEN}↳{NC} {DIM}Mensaje añadido: \"{user_inline_input[:50]}{'...' if len(user_inline_input) > 50 else ''}\"{NC}\n")
-    sys.stderr.flush()
 
 # Always output full data (includes line count for clearing)
 print(json.dumps(output_data))
