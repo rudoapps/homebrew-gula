@@ -1514,13 +1514,11 @@ import termios
 import tty
 
 class KeyboardMonitor:
-    """Monitor for ESC key to abort and capture user input during tool execution."""
+    """Monitor for ESC key to abort tool execution."""
 
     def __init__(self):
         self.aborted = False
         self.old_settings = None
-        self.input_buffer = ""  # Stores user's typed text
-        self.input_line_shown = False  # Track if we're showing input line
 
     def start(self):
         """Start monitoring (set terminal to raw mode)."""
@@ -1537,10 +1535,6 @@ class KeyboardMonitor:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
             except:
                 pass
-        # Clear input line if shown
-        if self.input_line_shown:
-            sys.stderr.write(f"\r\033[2K")
-            sys.stderr.flush()
 
     def pause(self):
         """Temporarily restore normal terminal mode (for subprocess input)."""
@@ -1558,19 +1552,11 @@ class KeyboardMonitor:
             pass
 
     def get_buffered_input(self):
-        """Return any buffered user input."""
-        return self.input_buffer.strip()
-
-    def _show_input_line(self):
-        """Display the current input buffer."""
-        if self.input_buffer:
-            # Show input on its own line with prompt
-            sys.stderr.write(f"\r\033[2K  {CYAN}›{NC} {self.input_buffer}")
-            sys.stderr.flush()
-            self.input_line_shown = True
+        """Return empty string - inline input disabled for now."""
+        return ""
 
     def check_abort(self):
-        """Check if ESC was pressed and capture any typed text (non-blocking)."""
+        """Check if ESC was pressed (non-blocking)."""
         if self.aborted:
             return True
         try:
@@ -1578,25 +1564,8 @@ class KeyboardMonitor:
                 ch = sys.stdin.read(1)
                 if ch == '\x1b':  # ESC key
                     self.aborted = True
-                    # Clear input line if any
-                    if self.input_line_shown:
-                        sys.stderr.write(f"\r\033[2K")
-                        sys.stderr.flush()
                     return True
-                elif ch == '\r' or ch == '\n':  # Enter - finalize input
-                    if self.input_buffer:
-                        # Clear the input line, will be processed later
-                        sys.stderr.write(f"\r\033[2K")
-                        sys.stderr.flush()
-                        self.input_line_shown = False
-                    # Don't add newline to buffer
-                elif ch == '\x7f' or ch == '\x08':  # Backspace
-                    if self.input_buffer:
-                        self.input_buffer = self.input_buffer[:-1]
-                        self._show_input_line()
-                elif ch >= ' ' and ch <= '~':  # Printable ASCII
-                    self.input_buffer += ch
-                    self._show_input_line()
+                # Ignore other keys for now
         except:
             pass
         return False
