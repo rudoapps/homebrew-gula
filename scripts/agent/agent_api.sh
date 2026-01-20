@@ -445,6 +445,17 @@ try:
     if debug_mode and data.get("target_project_type"):
         print(f"[DEBUG] Sending target_project_type={data['target_project_type']}", file=sys.stderr)
 
+    # Check for inline user input (typed during tool execution)
+    import os
+    user_inline_input = os.environ.get('GULA_USER_INLINE_INPUT', '').strip()
+    if user_inline_input:
+        # Add as additional context for the agent
+        data["user_context"] = user_inline_input
+        if debug_mode:
+            print(f"[DEBUG] Including user inline input: {user_inline_input[:50]}", file=sys.stderr)
+        # Clear the env var so it's not sent again
+        os.environ['GULA_USER_INLINE_INPUT'] = ''
+
     # Ensure we always output valid JSON
     print(json.dumps(data))
 
@@ -1495,7 +1506,7 @@ TOOL_VERBS = {
 }
 
 # ============================================================================
-# ESC key detection for abort
+# Keyboard monitor for ESC abort and inline input capture
 # ============================================================================
 
 import select
@@ -1503,11 +1514,13 @@ import termios
 import tty
 
 class KeyboardMonitor:
-    """Monitor for ESC key to abort operations."""
+    """Monitor for ESC key to abort and capture user input during tool execution."""
 
     def __init__(self):
         self.aborted = False
         self.old_settings = None
+        self.input_buffer = ""  # Stores user's typed text
+        self.input_line_shown = False  # Track if we're showing input line
 
     def start(self):
         """Start monitoring (set terminal to raw mode)."""
@@ -1524,17 +1537,51 @@ class KeyboardMonitor:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
             except:
                 pass
+        # Clear input line if shown
+        if self.input_line_shown:
+            sys.stderr.write(f"\r\033[2K")
+            sys.stderr.flush()
+
+    def get_buffered_input(self):
+        """Return any buffered user input."""
+        return self.input_buffer.strip()
+
+    def _show_input_line(self):
+        """Display the current input buffer."""
+        if self.input_buffer:
+            # Show input on its own line with prompt
+            sys.stderr.write(f"\r\033[2K  {CYAN}›{NC} {self.input_buffer}")
+            sys.stderr.flush()
+            self.input_line_shown = True
 
     def check_abort(self):
-        """Check if ESC was pressed (non-blocking)."""
+        """Check if ESC was pressed and capture any typed text (non-blocking)."""
         if self.aborted:
             return True
         try:
-            if select.select([sys.stdin], [], [], 0)[0]:
+            while select.select([sys.stdin], [], [], 0)[0]:
                 ch = sys.stdin.read(1)
                 if ch == '\x1b':  # ESC key
                     self.aborted = True
+                    # Clear input line if any
+                    if self.input_line_shown:
+                        sys.stderr.write(f"\r\033[2K")
+                        sys.stderr.flush()
                     return True
+                elif ch == '\r' or ch == '\n':  # Enter - finalize input
+                    if self.input_buffer:
+                        # Clear the input line, will be processed later
+                        sys.stderr.write(f"\r\033[2K")
+                        sys.stderr.flush()
+                        self.input_line_shown = False
+                    # Don't add newline to buffer
+                elif ch == '\x7f' or ch == '\x08':  # Backspace
+                    if self.input_buffer:
+                        self.input_buffer = self.input_buffer[:-1]
+                        self._show_input_line()
+                elif ch >= ' ' and ch <= '~':  # Printable ASCII
+                    self.input_buffer += ch
+                    self._show_input_line()
         except:
             pass
         return False
@@ -1734,14 +1781,23 @@ for idx, tc in enumerate(tool_requests, 1):
 # Cleanup keyboard monitor
 keyboard_monitor.stop()
 
+# Get any buffered user input
+user_inline_input = keyboard_monitor.get_buffered_input()
+
 # Output results with metadata
 output_data = {
     "results": results,
     "aborted": aborted,
     "completed_tools": len(results),
     "total_tools": total_tools,
-    "tool_output_lines": tool_output_lines
+    "tool_output_lines": tool_output_lines,
+    "user_input": user_inline_input  # User's typed input during tool execution
 }
+
+# Show confirmation if user typed something
+if user_inline_input:
+    sys.stderr.write(f"  {GREEN}↳{NC} {DIM}Mensaje añadido: \"{user_inline_input[:50]}{'...' if len(user_inline_input) > 50 else ''}\"{NC}\n")
+    sys.stderr.flush()
 
 # Always output full data (includes line count for clearing)
 print(json.dumps(output_data))
@@ -1859,8 +1915,9 @@ run_hybrid_chat() {
                 return 0
             fi
 
-            # Extract results array and line count from tool output
+            # Extract results array, line count, and user input from tool output
             local tool_output_lines=$(json_get_num "$tool_output" "tool_output_lines")
+            local user_inline_input=$(json_get "$tool_output" "user_input")
             if [ -n "$HAS_JQ" ]; then
                 tool_results=$(echo "$tool_output" | jq -c '.results' 2>/dev/null)
             else
@@ -1869,6 +1926,9 @@ run_hybrid_chat() {
 
             # Export line count for next send_chat_hybrid call to clear
             export GULA_TOOL_OUTPUT_LINES="$tool_output_lines"
+
+            # Export user input for next send_chat_hybrid call
+            export GULA_USER_INLINE_INPUT="$user_inline_input"
 
             # Verify it's valid JSON array
             local is_valid
