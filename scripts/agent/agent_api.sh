@@ -1101,6 +1101,12 @@ start_time = time.time()
 tools_executed = 0
 got_complete_event = False  # Track if we received the 'complete' event from server
 
+# Check if we need to clear previous tool output lines
+tool_lines_to_clear = int(os.environ.get('GULA_TOOL_OUTPUT_LINES', '0'))
+if tool_lines_to_clear > 0:
+    # Clear the environment variable so it's not used again
+    os.environ['GULA_TOOL_OUTPUT_LINES'] = '0'
+
 # Kill bash typing indicator if running (from agent_chat.sh)
 typing_pid = os.environ.get('GULA_TYPING_PID')
 if typing_pid:
@@ -1268,10 +1274,20 @@ try:
                 content = parsed.get("content", "")
                 msg_model = parsed.get("model", "")
                 if content:
-                    # First text chunk - update spinner, save model info
+                    # First text chunk - clear tool output if needed, update spinner
                     if not streaming_text:
                         streaming_text = True
                         result["msg_model"] = msg_model
+
+                        # Clear previous tool output lines before showing response
+                        if tool_lines_to_clear > 0:
+                            spinner.stop()
+                            # Move cursor up and clear each line
+                            for _ in range(tool_lines_to_clear):
+                                sys.stderr.write(f"\033[A\033[2K")
+                            sys.stderr.flush()
+                            tool_lines_to_clear = 0  # Don't clear again
+
                         spinner.update(f"Recibiendo respuesta... {DIM}({msg_model}){NC}" if msg_model else "Recibiendo respuesta...")
 
                     # Buffer text (don't display yet - will render with glow at the end)
@@ -1286,6 +1302,14 @@ try:
                 # Capture session info from tool_requests
                 result["session_cost"] = parsed.get("session_cost", 0)
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
+
+                # Clear previous tool output lines before showing new content
+                if tool_lines_to_clear > 0:
+                    spinner.stop()
+                    for _ in range(tool_lines_to_clear):
+                        sys.stderr.write(f"\033[A\033[2K")
+                    sys.stderr.flush()
+                    tool_lines_to_clear = 0
 
                 # Render buffered text before tool execution
                 if texts:
@@ -1580,9 +1604,13 @@ keyboard_monitor.start()
 import atexit
 atexit.register(keyboard_monitor.stop)
 
+# Track lines output for later clearing
+tool_output_lines = 0
+
 # Show ESC hint on first tool
 sys.stderr.write(f"  {DIM}[ESC para cancelar]{NC}\n")
 sys.stderr.flush()
+tool_output_lines += 1
 
 for idx, tc in enumerate(tool_requests, 1):
     # Check for ESC abort before each tool
@@ -1690,9 +1718,11 @@ for idx, tc in enumerate(tool_requests, 1):
     status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
     # Single line: status + verb + detail + preview
     sys.stderr.write(f"  {status_icon} {verb:<12} {detail}\n")
+    tool_output_lines += 1
     # Preview line only if there's meaningful output
     if preview and len(preview) > 3 and preview != "Sin resultado":
         sys.stderr.write(f"    {DIM}→ {preview}{NC}\n")
+        tool_output_lines += 1
     sys.stderr.flush()
 
     results.append({
@@ -1704,19 +1734,17 @@ for idx, tc in enumerate(tool_requests, 1):
 # Cleanup keyboard monitor
 keyboard_monitor.stop()
 
-# Output results with abort flag if applicable
+# Output results with metadata
 output_data = {
     "results": results,
     "aborted": aborted,
     "completed_tools": len(results),
-    "total_tools": total_tools
+    "total_tools": total_tools,
+    "tool_output_lines": tool_output_lines
 }
 
-# For backwards compatibility, if not aborted just output results array
-if aborted:
-    print(json.dumps(output_data))
-else:
-    print(json.dumps(results))
+# Always output full data (includes line count for clearing)
+print(json.dumps(output_data))
 PYEOF
 
     rm -f "$tmp_requests"
@@ -1811,19 +1839,19 @@ run_hybrid_chat() {
 
         if [ -n "$tool_requests" ] && [ "$tool_requests" != "null" ]; then
             # Ejecutar tools localmente (pass start_time for elapsed calculation)
-            tool_results=$(execute_tools_locally "$tool_requests" "$start_time")
+            local tool_output=$(execute_tools_locally "$tool_requests" "$start_time")
 
-            # Validate tool_results is valid JSON
-            if [ -z "$tool_results" ]; then
+            # Validate tool_output is valid JSON
+            if [ -z "$tool_output" ]; then
                 echo '{"error": "Tool execution returned empty results", "response": ""}'
                 return 1
             fi
 
             # Check if operation was aborted by user (ESC key)
-            if json_is_true "$tool_results" "aborted"; then
+            if json_is_true "$tool_output" "aborted"; then
                 # Extract partial results and return abort response
-                local completed_tools=$(json_get_num "$tool_results" "completed_tools")
-                local total_tools=$(json_get_num "$tool_results" "total_tools")
+                local completed_tools=$(json_get_num "$tool_output" "completed_tools")
+                local total_tools=$(json_get_num "$tool_output" "total_tools")
                 local total_elapsed=$(($(date +%s) - start_time))
 
                 # Return abort response - conversation remains active
@@ -1831,7 +1859,18 @@ run_hybrid_chat() {
                 return 0
             fi
 
-            # Verify it's valid JSON array (normal case)
+            # Extract results array and line count from tool output
+            local tool_output_lines=$(json_get_num "$tool_output" "tool_output_lines")
+            if [ -n "$HAS_JQ" ]; then
+                tool_results=$(echo "$tool_output" | jq -c '.results' 2>/dev/null)
+            else
+                tool_results=$(echo "$tool_output" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin).get('results',[])))" 2>/dev/null)
+            fi
+
+            # Export line count for next send_chat_hybrid call to clear
+            export GULA_TOOL_OUTPUT_LINES="$tool_output_lines"
+
+            # Verify it's valid JSON array
             local is_valid
             if [ -n "$HAS_JQ" ]; then
                 is_valid=$(echo "$tool_results" | jq -r 'if type == "array" and length > 0 then "yes" else "no" end' 2>/dev/null)
