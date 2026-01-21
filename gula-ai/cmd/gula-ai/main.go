@@ -75,11 +75,7 @@ Options:
 Keyboard Shortcuts:
   Enter          Send message
   Ctrl+N         New conversation
-  Ctrl+T         Toggle tools panel
-  Ctrl+S         List sessions
-  Ctrl+M         Change model
-  Tab            Switch panel focus
-  ?              Show help
+  Esc            Cancel request
   Ctrl+C         Quit
 
 Configuration:
@@ -88,7 +84,5 @@ Configuration:
 Environment Variables:
   GULA_CONFIG_DIR  Override config directory location
   GULA_API_KEY     API key for authentication
-  GULA_API_URL     Override API base URL
-
-For more information, visit: https://github.com/fer/gula-ai`)
+  GULA_API_URL     Override API base URL`)
 }

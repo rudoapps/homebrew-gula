@@ -8,20 +8,25 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	APIBaseURL      string `json:"api_base_url"`
-	APIKey          string `json:"api_key"`
-	DefaultModel    string `json:"default_model"`
-	ConversationID  string `json:"conversation_id,omitempty"`
-	WorkingDir      string `json:"working_dir,omitempty"`
-	RAGEnabled      bool   `json:"rag_enabled"`
-	MaxTokens       int    `json:"max_tokens,omitempty"`
-	Temperature     float64 `json:"temperature,omitempty"`
+	// API settings (compatible with gula CLI config)
+	APIURL       string `json:"api_url"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	UserEmail    string `json:"user_email,omitempty"`
+
+	// App settings
+	DefaultModel   string  `json:"default_model"`
+	ConversationID string  `json:"conversation_id,omitempty"`
+	WorkingDir     string  `json:"working_dir,omitempty"`
+	RAGEnabled     bool    `json:"rag_enabled"`
+	MaxTokens      int     `json:"max_tokens,omitempty"`
+	Temperature    float64 `json:"temperature,omitempty"`
 }
 
 // DefaultConfig returns a config with sensible defaults
 func DefaultConfig() *Config {
 	return &Config{
-		APIBaseURL:   "http://localhost:8000",
+		APIURL:       "https://agent.rudo.es/api/v1",
 		DefaultModel: "claude-sonnet",
 		RAGEnabled:   true,
 		MaxTokens:    4096,
@@ -75,10 +80,13 @@ func LoadConfig() (*Config, error) {
 
 	// Override with environment variables if set
 	if apiKey := os.Getenv("GULA_API_KEY"); apiKey != "" {
-		config.APIKey = apiKey
+		config.AccessToken = apiKey
 	}
 	if apiURL := os.Getenv("GULA_API_URL"); apiURL != "" {
-		config.APIBaseURL = apiURL
+		config.APIURL = apiURL
+	}
+	if apiURL := os.Getenv("AGENT_API_URL"); apiURL != "" {
+		config.APIURL = apiURL
 	}
 
 	return config, nil

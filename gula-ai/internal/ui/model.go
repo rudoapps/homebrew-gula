@@ -1,21 +1,16 @@
 package ui
 
 import (
+	"context"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/fer/gula-ai/internal/api"
 	"github.com/fer/gula-ai/internal/app"
-)
-
-// FocusedPanel represents which panel is currently focused
-type FocusedPanel int
-
-const (
-	FocusInput FocusedPanel = iota
-	FocusChat
-	FocusTools
 )
 
 // AppState represents the current state of the application
@@ -23,117 +18,86 @@ type AppState int
 
 const (
 	StateIdle AppState = iota
-	StateThinking
+	StateConnecting
 	StateStreaming
-	StateWaitingApproval
 	StateError
 )
 
 // Message represents a chat message
 type Message struct {
-	Role    string // "user", "assistant", "system", "error"
+	Role    string // "user", "assistant", "system", "error", "tool"
 	Content string
-	Model   string // For assistant messages
-}
-
-// ToolExecution represents a tool being executed
-type ToolExecution struct {
-	Name       string
-	Args       map[string]interface{}
-	Status     string // "pending", "running", "complete", "error"
-	Result     string
-	Error      string
-	NeedsApproval bool
-}
-
-// SessionStats holds session statistics
-type SessionStats struct {
-	ConversationID string
-	TotalTokens    int
-	InputTokens    int
-	OutputTokens   int
-	TotalCost      float64
+	Model   string
 }
 
 // Model is the main application model
 type Model struct {
 	// Configuration
-	Config *app.Config
-	Styles *Styles
-	Keys   KeyMap
+	Config    *app.Config
+	Styles    *Styles
+	Keys      KeyMap
+	APIClient *api.Client
 
 	// UI State
-	Width         int
-	Height        int
-	FocusedPanel  FocusedPanel
-	ShowToolsPanel bool
-	ShowHelp      bool
-	AppState      AppState
+	Width    int
+	Height   int
+	AppState AppState
+	ShowHelp bool
 
 	// Components
 	Input    textarea.Model
 	ChatView viewport.Model
-	ToolView viewport.Model
 	Spinner  spinner.Model
 
 	// Data
-	Messages     []Message
-	Tools        []ToolExecution
-	Stats        SessionStats
-	CurrentModel string
+	Messages       []Message
+	ConversationID int
+	CurrentModel   string
+	TotalTokens    int
+	TotalCost      float64
 
 	// Streaming state
 	StreamingContent string
-	IsStreaming      bool
 
-	// Error state
-	LastError string
-
-	// Dialog state
-	DialogActive  bool
-	DialogTitle   string
-	DialogContent string
-	DialogTool    *ToolExecution
+	// Cancel context for API calls
+	cancelFunc context.CancelFunc
 }
 
 // NewModel creates a new Model with default values
 func NewModel(cfg *app.Config) Model {
 	// Initialize textarea for input
 	ta := textarea.New()
-	ta.Placeholder = "Type your message..."
+	ta.Placeholder = "Escribe tu mensaje... (Enter para enviar, Ctrl+C para salir)"
 	ta.Focus()
 	ta.Prompt = "› "
 	ta.CharLimit = 10000
 	ta.SetWidth(80)
-	ta.SetHeight(1)
+	ta.SetHeight(3)
 	ta.ShowLineNumbers = false
-	ta.KeyMap.InsertNewline.SetEnabled(false) // We'll handle newlines ourselves
+	ta.KeyMap.InsertNewline.SetEnabled(false)
 
 	// Initialize spinner
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
-	// Initialize viewports
+	// Initialize viewport
 	chatVP := viewport.New(80, 20)
-	toolVP := viewport.New(25, 20)
+
+	// Create API client
+	client := api.NewClient(cfg.APIURL, cfg.AccessToken)
 
 	return Model{
 		Config:         cfg,
 		Styles:         DefaultStyles(),
 		Keys:           DefaultKeyMap(),
-		FocusedPanel:   FocusInput,
-		ShowToolsPanel: true,
-		ShowHelp:       false,
+		APIClient:      client,
 		AppState:       StateIdle,
+		ShowHelp:       false,
 		Input:          ta,
 		ChatView:       chatVP,
-		ToolView:       toolVP,
 		Spinner:        sp,
 		Messages:       []Message{},
-		Tools:          []ToolExecution{},
-		Stats:          SessionStats{},
 		CurrentModel:   cfg.DefaultModel,
-		IsStreaming:    false,
 	}
 }
 
@@ -143,4 +107,66 @@ func (m Model) Init() tea.Cmd {
 		textarea.Blink,
 		m.Spinner.Tick,
 	)
+}
+
+// AddMessage adds a message and updates the chat view
+func (m *Model) AddMessage(role, content string) {
+	m.Messages = append(m.Messages, Message{
+		Role:    role,
+		Content: content,
+		Model:   m.CurrentModel,
+	})
+	m.updateChatView()
+}
+
+// updateChatView updates the viewport content
+func (m *Model) updateChatView() {
+	var sb strings.Builder
+
+	for _, msg := range m.Messages {
+		switch msg.Role {
+		case "user":
+			sb.WriteString(m.Styles.UserPrefix.Render("› "))
+			sb.WriteString(m.Styles.UserMessage.Render(msg.Content))
+			sb.WriteString("\n\n")
+		case "assistant":
+			sb.WriteString(m.Styles.AgentPrefix.Render("Agent"))
+			if msg.Model != "" {
+				sb.WriteString(m.Styles.Dim.Render(" (" + msg.Model + ")"))
+			}
+			sb.WriteString("\n")
+			sb.WriteString(m.Styles.AgentMessage.Render(msg.Content))
+			sb.WriteString("\n\n")
+		case "system":
+			sb.WriteString(m.Styles.SystemMessage.Render(msg.Content))
+			sb.WriteString("\n\n")
+		case "error":
+			sb.WriteString(m.Styles.ErrorMessage.Render("Error: " + msg.Content))
+			sb.WriteString("\n\n")
+		case "tool":
+			sb.WriteString(m.Styles.ToolName.Render("  ⚡ " + msg.Content))
+			sb.WriteString("\n")
+		}
+	}
+
+	// Add streaming content
+	if m.StreamingContent != "" {
+		sb.WriteString(m.Styles.AgentPrefix.Render("Agent"))
+		sb.WriteString("\n")
+		sb.WriteString(m.Styles.AgentMessage.Render(m.StreamingContent))
+	}
+
+	m.ChatView.SetContent(sb.String())
+	m.ChatView.GotoBottom()
+}
+
+// updateLayout updates component sizes based on terminal dimensions
+func (m *Model) updateLayout() {
+	inputHeight := 5
+	statusHeight := 1
+	chatHeight := m.Height - inputHeight - statusHeight - 2
+
+	m.Input.SetWidth(m.Width - 4)
+	m.ChatView.Width = m.Width - 2
+	m.ChatView.Height = chatHeight
 }
