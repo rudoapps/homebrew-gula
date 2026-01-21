@@ -183,7 +183,8 @@ show_help() {
   echo ""
   echo -e "${BOLD}COMANDOS PRINCIPALES:${NC}"
   echo ""
-  echo -e "${BOLD}  chat${NC}     Inicia conversacion con el agente AI"
+  echo -e "${BOLD}  ai${NC}       Inicia TUI rica para el agente AI (Go + Bubble Tea)"
+  echo -e "${BOLD}  chat${NC}     Inicia conversacion con el agente AI (modo bash)"
   echo -e "${BOLD}  login${NC}    Inicia sesion en el agente AI"
   echo -e "${BOLD}  setup${NC}    Instala dependencias del agente AI"
   echo -e "${BOLD}  list${NC}     Lista módulos disponibles para el proyecto actual"
@@ -258,7 +259,8 @@ show_help() {
   echo -e "${BOLD}  Usar el agente AI:${NC}"
   echo "  gula setup                                      # Instalar dependencias del agente"
   echo "  gula login                                      # Iniciar sesion"
-  echo "  gula chat                                       # Modo interactivo"
+  echo "  gula ai                                         # TUI rica (Go + Bubble Tea)"
+  echo "  gula chat                                       # Modo interactivo (bash)"
   echo "  gula chat \"Hola\"                                # Mensaje unico"
   echo "  gula chat --continue                            # Continuar ultima conversacion"
   echo ""
@@ -428,7 +430,7 @@ create_project() {
 
 # Verificar que se haya pasado un comando válido
 if [ -z "${1:-}" ]; then
-  echo "Uso: $0 {chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
+  echo "Uso: $0 {ai|chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para más información."
   exit 1
 fi
@@ -464,6 +466,32 @@ if [[ "$COMMAND" == "chat" || "$COMMAND" == "login" || "$COMMAND" == "setup" || 
   shift  # Remove the command from args
   agent_command "$COMMAND" "$@"
   exit $?
+fi
+
+# Manejar comando gula ai - TUI rica con Go + Bubble Tea
+if [[ "$COMMAND" == "ai" ]]; then
+  # Buscar binario gula-ai en orden de prioridad
+  GULA_AI_BIN=""
+  if [ -f "$HOMEBREW_PREFIX/opt/gula/bin/gula-ai" ]; then
+    # Instalación Homebrew
+    GULA_AI_BIN="$HOMEBREW_PREFIX/opt/gula/bin/gula-ai"
+  elif [ -f "$SCRIPT_DIR/gula-ai/bin/gula-ai" ]; then
+    # Desarrollo local (dentro del repo gula)
+    GULA_AI_BIN="$SCRIPT_DIR/gula-ai/bin/gula-ai"
+  fi
+
+  if [ -z "$GULA_AI_BIN" ] || [ ! -f "$GULA_AI_BIN" ]; then
+    echo -e "${RED}Error: gula-ai no encontrado.${NC}"
+    echo ""
+    echo "Para instalar gula-ai:"
+    echo "  1. Si usas Homebrew: brew upgrade gula"
+    echo "  2. Si desarrollas local: cd $SCRIPT_DIR/gula-ai && make build"
+    exit 1
+  fi
+
+  export GULA_CONFIG_DIR="$HOME/.config/gula-agent"
+  shift  # Remove 'ai' from args
+  exec "$GULA_AI_BIN" "$@"
 fi
 
 # Mantener compatibilidad con: gula agent <subcommand> [args]
@@ -689,7 +717,7 @@ elif [ "$COMMAND" == "install-hook" ]; then
 elif [ "$COMMAND" == "agent" ]; then
   agent_command "$AGENT_SUBCOMMAND" $AGENT_ARGS
 else
-  echo "Comando no reconocido. Uso: $0 {chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
+  echo "Comando no reconocido. Uso: $0 {ai|chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
