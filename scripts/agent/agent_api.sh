@@ -245,6 +245,9 @@ else:
         input_price = m.get("input_price", "0")
         output_price = m.get("output_price", "0")
         is_default = m.get("is_default", False)
+        status = m.get("status", "unknown")
+        available = m.get("available", True)
+        status_message = m.get("status_message", "")
 
         # Indicators
         indicators = []
@@ -253,12 +256,30 @@ else:
         elif is_default:
             indicators.append(f"{CYAN}★ default{NC}")
 
+        # Status indicator
+        if status == "no_credits":
+            indicators.append(f"{RED}💳 sin créditos{NC}")
+        elif status == "degraded":
+            indicators.append(f"{YELLOW}⚠ limitado{NC}")
+        elif status == "error":
+            indicators.append(f"{RED}✗ error{NC}")
+        elif status == "available":
+            indicators.append(f"{GREEN}✓{NC}")
+        # 'unknown' status: no indicator (not yet tested)
+
         indicator_str = " ".join(indicators)
         if indicator_str:
             indicator_str = f"  {indicator_str}"
 
-        print(f"  {BOLD}{model_id}{NC}{indicator_str}")
-        print(f"    {DIM}{name} ({provider}){NC}")
+        # Model line - dim if not available
+        if not available:
+            print(f"  {DIM}{model_id}{NC}{indicator_str}")
+            print(f"    {DIM}{name} ({provider}){NC}")
+            if status_message:
+                print(f"    {RED}{status_message}{NC}")
+        else:
+            print(f"  {BOLD}{model_id}{NC}{indicator_str}")
+            print(f"    {DIM}{name} ({provider}){NC}")
         print(f"    {DIM}Precio: \${input_price}/1M in, \${output_price}/1M out{NC}")
         print("")
 
@@ -1388,6 +1409,46 @@ try:
                 result["rate_limit_message"] = parsed.get("message", "Rate limit alcanzado")
                 result["conversation_id"] = parsed.get("conversation_id")
                 spinner.stop(f"⚠️ {result['rate_limit_message']}", "info")
+
+            elif event_type == "provider_fallback":
+                # Provider switched due to error (credits, rate limit, etc.)
+                failed_provider = parsed.get("failed_provider", "?")
+                new_provider = parsed.get("new_provider", "?")
+                new_model = parsed.get("new_model", "")
+                reason = parsed.get("reason", "error")
+                message = parsed.get("message", f"Cambiando de {failed_provider} a {new_provider}")
+
+                result["provider_fallback"] = True
+                result["failed_provider"] = failed_provider
+                result["new_provider"] = new_provider
+
+                # Show warning about provider switch
+                spinner.stop()
+                if reason == "insufficient_credits":
+                    sys.stderr.write(f"  {YELLOW}💳 {failed_provider} sin créditos{NC} → {GREEN}Usando {new_provider}{NC}")
+                    if new_model:
+                        sys.stderr.write(f" {DIM}({new_model}){NC}")
+                    sys.stderr.write("\n")
+                else:
+                    sys.stderr.write(f"  {YELLOW}⚠️ {message}{NC}\n")
+                sys.stderr.flush()
+                spinner.start(f"Procesando con {new_provider}...")
+
+            elif event_type == "no_providers_available":
+                # All providers failed (no fallback or all have issues)
+                providers_tried = parsed.get("providers_tried", [])
+                message = parsed.get("message", "No hay proveedores disponibles")
+                result["no_providers_available"] = True
+                result["providers_tried"] = providers_tried
+                spinner.stop()
+                sys.stderr.write(f"\n  {RED}❌ {message}{NC}\n")
+                if providers_tried:
+                    sys.stderr.write(f"  {DIM}Proveedores intentados: {', '.join(providers_tried)}{NC}\n")
+                sys.stderr.write(f"  {YELLOW}💡 Opciones:{NC}\n")
+                sys.stderr.write(f"     - Recarga créditos en el proveedor\n")
+                sys.stderr.write(f"     - Configura un proveedor alternativo\n")
+                sys.stderr.write(f"     - Usa /model para seleccionar otro modelo\n")
+                sys.stderr.flush()
 
             elif event_type == "repaired":
                 # Conversation was repaired due to interrupted session
