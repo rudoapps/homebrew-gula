@@ -320,23 +320,64 @@ generate_project_context() {
         fi
     done
 
-    python3 << PYEOF
+    # Use temp files to avoid heredoc quote escaping issues
+    local tmp_file_tree=$(mktemp)
+    local tmp_git_status=$(mktemp)
+    local tmp_dependencies=$(mktemp)
+    local tmp_project_rules=$(mktemp)
+
+    echo "$file_tree" > "$tmp_file_tree"
+    echo "$git_status" > "$tmp_git_status"
+    echo "$dependencies" > "$tmp_dependencies"
+    echo "$project_rules" > "$tmp_project_rules"
+
+    python3 - "$project_type" "$project_name" "$PWD" "$git_branch" "$key_files" \
+        "$tmp_file_tree" "$tmp_git_status" "$tmp_dependencies" "$tmp_project_rules" << 'PYEOF'
 import json
+import sys
+
+project_type = sys.argv[1]
+project_name = sys.argv[2]
+root_path = sys.argv[3]
+git_branch = sys.argv[4]
+key_files_json = sys.argv[5]
+tmp_file_tree = sys.argv[6]
+tmp_git_status = sys.argv[7]
+tmp_dependencies = sys.argv[8]
+tmp_project_rules = sys.argv[9]
+
+# Read content from temp files
+with open(tmp_file_tree) as f:
+    file_tree = f.read().strip()
+with open(tmp_git_status) as f:
+    git_status = f.read().strip()
+with open(tmp_dependencies) as f:
+    dependencies = f.read().strip()
+with open(tmp_project_rules) as f:
+    project_rules = f.read().strip()
+
+# Parse key_files JSON
+try:
+    key_files = json.loads(key_files_json) if key_files_json else []
+except:
+    key_files = []
 
 context = {
-    "project_type": "$project_type",
-    "project_name": "$project_name",
-    "root_path": "$PWD",
-    "file_tree": """$file_tree""".strip(),
-    "git_branch": "$git_branch",
-    "git_status": """$git_status""".strip(),
-    "key_files": $key_files,
-    "dependencies": """$dependencies""".strip(),
-    "project_rules": """$project_rules""".strip()
+    "project_type": project_type,
+    "project_name": project_name,
+    "root_path": root_path,
+    "file_tree": file_tree,
+    "git_branch": git_branch,
+    "git_status": git_status,
+    "key_files": key_files,
+    "dependencies": dependencies,
+    "project_rules": project_rules
 }
 
 print(json.dumps(context))
 PYEOF
+
+    rm -f "$tmp_file_tree" "$tmp_git_status" "$tmp_dependencies" "$tmp_project_rules"
 }
 
 # ============================================================================
