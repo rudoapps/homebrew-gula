@@ -21,7 +21,7 @@ get_git_remote_url() {
     python3 -c "
 import sys
 import re
-url = '''$url'''.strip()
+url = sys.argv[1].strip()
 
 # Convert SSH to HTTPS
 if url.startswith('git@'):
@@ -40,7 +40,7 @@ if url.endswith('.git'):
 url = url.rstrip('/')
 
 print(url)
-"
+" "$url"
 }
 
 # ============================================================================
@@ -62,7 +62,7 @@ check_rag_index() {
     local endpoint="$api_url/rag/check"
 
     # URL encode the git_remote_url
-    local encoded_url=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''$git_remote_url''', safe=''))")
+    local encoded_url=$(python3 -c "import urllib.parse; import sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$git_remote_url")
 
     # Make request to check endpoint
     local response=$(curl -s -X GET \
@@ -77,12 +77,21 @@ check_rag_index() {
     fi
 
     # Parse response and add git_remote_url for reference
-    python3 -c "
+    # Use temp file to avoid heredoc quote escaping issues
+    local tmp_response=$(mktemp)
+    echo "$response" > "$tmp_response"
+    python3 - "$tmp_response" "$git_remote_url" <<'PYEOF'
 import json
 import sys
 
+tmp_file = sys.argv[1]
+git_remote_url = sys.argv[2] if len(sys.argv) > 2 else ""
+
+with open(tmp_file) as f:
+    response_text = f.read()
+
 try:
-    data = json.loads('''$response''')
+    data = json.loads(response_text)
 
     # Handle error responses (list format from FastAPI)
     if isinstance(data, list):
@@ -92,20 +101,21 @@ try:
             'has_index': False,
             'status': 'error',
             'message': error_msg,
-            'git_remote_url': '''$git_remote_url'''
+            'git_remote_url': git_remote_url
         }))
     else:
         # Normal dict response
-        data['git_remote_url'] = '''$git_remote_url'''
+        data['git_remote_url'] = git_remote_url
         print(json.dumps(data))
 except Exception as e:
     print(json.dumps({
         'has_index': False,
         'status': 'error',
         'message': str(e),
-        'git_remote_url': '''$git_remote_url'''
+        'git_remote_url': git_remote_url
     }))
-"
+PYEOF
+    rm -f "$tmp_response"
 }
 
 # ============================================================================

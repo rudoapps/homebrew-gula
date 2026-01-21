@@ -24,7 +24,10 @@ get_quota_status_inline() {
     fi
 
     # Parse and return formatted quota string
-    python3 - <<PYEOF 2>/dev/null
+    # Use temp file to avoid heredoc quote escaping issues
+    local tmp_response=$(mktemp)
+    echo "$response" > "$tmp_response"
+    python3 - "$tmp_response" <<'PYEOF' 2>/dev/null
 import json
 import sys
 
@@ -35,7 +38,9 @@ RED = "\033[0;31m"
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
 
-response = '''$response'''
+tmp_file = sys.argv[1]
+with open(tmp_file) as f:
+    response = f.read()
 try:
     data = json.loads(response)
 except:
@@ -65,6 +70,7 @@ else:
     bar = f"{bar_color}{'█' * filled}{NC}{DIM}{'░' * empty}{NC}"
     print(f"💰 Presupuesto: {bar} {usage_pct:.0f}% {DIM}(\${current_cost:.2f}/\${monthly_limit:.2f}){NC}")
 PYEOF
+    rm -f "$tmp_response"
 }
 
 # Show inline quota status (legacy, calls get_quota_status_inline)
@@ -94,7 +100,10 @@ fetch_and_show_quota() {
     fi
 
     # Parse and display quota info
-    python3 - <<PYEOF
+    # Use temp file to avoid heredoc quote escaping issues
+    local tmp_response=$(mktemp)
+    echo "$response" > "$tmp_response"
+    python3 - "$tmp_response" <<'PYEOF'
 import json
 import sys
 
@@ -106,7 +115,9 @@ GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
 CYAN = "\033[0;36m"
 
-response = '''$response'''
+tmp_file = sys.argv[1]
+with open(tmp_file) as f:
+    response = f.read()
 try:
     data = json.loads(response)
 except:
@@ -173,6 +184,7 @@ print("")
 print(f"{BOLD}══════════════════════════════════════════════════════════════{NC}")
 print("")
 PYEOF
+    rm -f "$tmp_response"
 }
 
 # ============================================================================
@@ -206,7 +218,10 @@ show_available_models() {
     local current_model=$(get_agent_config "preferred_model")
 
     # Display models
-    python3 - <<PYEOF
+    # Use temp file to avoid heredoc quote escaping issues
+    local tmp_response=$(mktemp)
+    echo "$response" > "$tmp_response"
+    python3 - "$tmp_response" "$current_model" <<'PYEOF'
 import json
 import sys
 
@@ -216,9 +231,13 @@ NC = "\033[0m"
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
 CYAN = "\033[0;36m"
+RED = "\033[0;31m"
 
-response = '''$response'''
-current_model = '''$current_model'''
+tmp_file = sys.argv[1]
+current_model = sys.argv[2] if len(sys.argv) > 2 else ""
+
+with open(tmp_file) as f:
+    response = f.read()
 
 try:
     data = json.loads(response)
@@ -287,6 +306,7 @@ print(f"{DIM}Uso: /model <id> para cambiar de modelo{NC}")
 print(f"{DIM}     /model auto para usar routing automático{NC}")
 print("")
 PYEOF
+    rm -f "$tmp_response"
 }
 
 # ============================================================================
