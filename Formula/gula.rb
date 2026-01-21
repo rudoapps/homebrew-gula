@@ -1,10 +1,11 @@
 class Gula < Formula
   desc "CLI para desarrollo móvil y agente IA"
   homepage "https://github.com/rudoapps/gula"
-  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/v0.0.209.tar.gz"
-  sha256 "3d8628bd51a0b011cc11bcbf6b28abe1e01c88170a4c5efd0d22b123cb7ca129"
+  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/v0.0.210.tar.gz"
+  sha256 "c2da6cd99067f2a5ac0570e008bc405979cd430079a9217399d19cd296922ce9"
   license "MIT"
 
+  depends_on "go" => :build
   depends_on "jq"
   depends_on "glow" => :recommended  # For better markdown/table rendering
 
@@ -17,6 +18,11 @@ class Gula < Formula
 
     # Instalar scripts en opt/gula/scripts (donde el script los busca)
     prefix.install "scripts"
+
+    # Compilar e instalar gula-ai (Go TUI)
+    cd "gula-ai" do
+      system "go", "build", *std_go_args(ldflags: "-s -w"), "-o", bin/"gula-ai", "./cmd/gula-ai"
+    end
   end
 
   test do
