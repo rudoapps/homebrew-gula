@@ -2,7 +2,7 @@
 
 ## Descripcion
 
-Gula es una herramienta CLI para acelerar el desarrollo con arquetipos y modulos predefinidos. Incluye un **agente AI** integrado para asistencia en desarrollo. Soporta proyectos **Android**, **iOS**, **Flutter** y **Python**.
+Gula es una herramienta CLI para acelerar el desarrollo con arquetipos y modulos predefinidos. Soporta proyectos **Android**, **iOS**, **Flutter** y **Python**.
 
 ## Requisitos
 
@@ -28,18 +28,6 @@ gula <comando> [opciones]
 ```
 
 ## Comandos disponibles
-
-### Agente AI
-
-| Comando | Descripcion |
-|---------|-------------|
-| `chat` | Inicia conversacion con el agente AI |
-| `login` | Inicia sesion en el agente AI |
-| `logout` | Cierra sesion del agente AI |
-| `setup` | Instala dependencias del agente AI |
-| `whoami` | Muestra el usuario actual del agente |
-
-### Modulos y Proyectos
 
 | Comando | Descripcion |
 |---------|-------------|
@@ -70,31 +58,6 @@ gula <comando> [opciones]
 | `--help`, `-h` | Muestra la ayuda |
 
 ## Ejemplos de uso
-
-### Usar el agente AI
-
-```bash
-# Instalar dependencias del agente
-gula setup
-
-# Iniciar sesion
-gula login
-
-# Modo interactivo
-gula chat
-
-# Mensaje unico
-gula chat "Hola"
-
-# Continuar ultima conversacion
-gula chat --continue
-
-# Ver usuario actual
-gula whoami
-
-# Cerrar sesion
-gula logout
-```
 
 ### Listar modulos disponibles
 
@@ -197,7 +160,6 @@ gula install-hook
 
 ## Notas
 
-- `chat/login/setup`: Comandos del agente AI, usa `gula setup` primero para instalar dependencias
 - `template`: No requiere `--key` (usa templates locales)
 - `install/list`: Requiere `--key` para acceder a repositorios privados
 - `create`: Requiere `--key` para descargar arquetipos

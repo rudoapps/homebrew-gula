@@ -63,7 +63,15 @@
       "Bash(/Users/fer/gula/gula.sh install:*)",
       "Bash(./create_release.sh:*)",
       "Bash(tree:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:opencode.ai)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "Bash(brew list:*)",
+      "Bash(/opt/homebrew/bin/go mod:*)",
+      "Bash(/opt/homebrew/bin/go get:*)",
+      "Bash(go build:*)"
     ],
     "deny": [],
     "ask": []

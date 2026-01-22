@@ -79,7 +79,6 @@ source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
 source "$scripts_dir/support/validation.sh"
-source "$scripts_dir/agent/agent.sh"
 
 # list_branches function loaded from general_support.sh
 
@@ -457,55 +456,6 @@ if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
 fi
 
 # Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
-if [[ "$COMMAND" == "chat" || "$COMMAND" == "login" || "$COMMAND" == "setup" || "$COMMAND" == "logout" || "$COMMAND" == "whoami" ]]; then
-  # Check if --help is requested
-  if [[ "${2:-}" == "--help" || "${2:-}" == "-h" ]]; then
-    agent_command "help"
-    exit $?
-  fi
-  shift  # Remove the command from args
-  agent_command "$COMMAND" "$@"
-  exit $?
-fi
-
-# Manejar comando gula ai - TUI rica con Go + Bubble Tea
-if [[ "$COMMAND" == "ai" ]]; then
-  # Buscar binario gula-ai en orden de prioridad
-  GULA_AI_BIN=""
-  if [ -f "$HOMEBREW_PREFIX/opt/gula/bin/gula-ai" ]; then
-    # Instalación Homebrew
-    GULA_AI_BIN="$HOMEBREW_PREFIX/opt/gula/bin/gula-ai"
-  elif [ -f "$SCRIPT_DIR/gula-ai/bin/gula-ai" ]; then
-    # Desarrollo local (dentro del repo gula)
-    GULA_AI_BIN="$SCRIPT_DIR/gula-ai/bin/gula-ai"
-  fi
-
-  if [ -z "$GULA_AI_BIN" ] || [ ! -f "$GULA_AI_BIN" ]; then
-    echo -e "${RED}Error: gula-ai no encontrado.${NC}"
-    echo ""
-    echo "Para instalar gula-ai:"
-    echo "  1. Si usas Homebrew: brew upgrade gula"
-    echo "  2. Si desarrollas local: cd $SCRIPT_DIR/gula-ai && make build"
-    exit 1
-  fi
-
-  export GULA_CONFIG_DIR="$HOME/.config/gula-agent"
-  shift  # Remove 'ai' from args
-  exec "$GULA_AI_BIN" "$@"
-fi
-
-# Mantener compatibilidad con: gula agent <subcommand> [args]
-if [[ "$COMMAND" == "agent" ]]; then
-  AGENT_SUBCOMMAND="${2:---help}"
-  # Normalize --help to help
-  if [[ "$AGENT_SUBCOMMAND" == "--help" || "$AGENT_SUBCOMMAND" == "-h" ]]; then
-    AGENT_SUBCOMMAND="help"
-  fi
-  shift 2 2>/dev/null || shift
-  # Skip the while loop for agent commands - pass remaining args properly quoted
-  agent_command "$AGENT_SUBCOMMAND" "$@"
-  exit $?
-fi
 
 shift
 
@@ -714,10 +664,8 @@ elif [ "$COMMAND" == "validate" ]; then
   fi
 elif [ "$COMMAND" == "install-hook" ]; then
   install_validation_hook
-elif [ "$COMMAND" == "agent" ]; then
-  agent_command "$AGENT_SUBCOMMAND" $AGENT_ARGS
 else
-  echo "Comando no reconocido. Uso: $0 {ai|chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
+  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
