@@ -79,6 +79,7 @@ source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
 source "$scripts_dir/support/validation.sh"
+source "$scripts_dir/agent/agent.sh"
 
 # list_branches function loaded from general_support.sh
 
@@ -429,7 +430,7 @@ create_project() {
 
 # Verificar que se haya pasado un comando válido
 if [ -z "${1:-}" ]; then
-  echo "Uso: $0 {ai|chat|login|setup|install|list|template|create|branches|status|validate|help} [opciones]"
+  echo "Uso: $0 {chat|login|setup|logout|whoami|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para más información."
   exit 1
 fi
@@ -456,6 +457,29 @@ if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
 fi
 
 # Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
+if [[ "$COMMAND" == "chat" || "$COMMAND" == "login" || "$COMMAND" == "setup" || "$COMMAND" == "logout" || "$COMMAND" == "whoami" ]]; then
+  # Check if --help is requested
+  if [[ "${2:-}" == "--help" || "${2:-}" == "-h" ]]; then
+    agent_command "help"
+    exit $?
+  fi
+  shift  # Remove the command from args
+  agent_command "$COMMAND" "$@"
+  exit $?
+fi
+
+# Mantener compatibilidad con: gula agent <subcommand> [args]
+if [[ "$COMMAND" == "agent" ]]; then
+  AGENT_SUBCOMMAND="${2:---help}"
+  # Normalize --help to help
+  if [[ "$AGENT_SUBCOMMAND" == "--help" || "$AGENT_SUBCOMMAND" == "-h" ]]; then
+    AGENT_SUBCOMMAND="help"
+  fi
+  shift 2 2>/dev/null || shift
+  # Skip the while loop for agent commands - pass remaining args properly quoted
+  agent_command "$AGENT_SUBCOMMAND" "$@"
+  exit $?
+fi
 
 shift
 
@@ -665,7 +689,7 @@ elif [ "$COMMAND" == "validate" ]; then
 elif [ "$COMMAND" == "install-hook" ]; then
   install_validation_hook
 else
-  echo "Comando no reconocido. Uso: $0 {install|list|template|create|branches|status|validate|help} [opciones]"
+  echo "Comando no reconocido. Uso: $0 {chat|login|setup|logout|whoami|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
