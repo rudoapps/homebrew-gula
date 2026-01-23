@@ -4,6 +4,13 @@
 # Handles RAG (Retrieval Augmented Generation) integration with the server
 
 # ============================================================================
+# RAG CACHE (TTL: 5 minutes)
+# ============================================================================
+RAG_STATUS_CACHE=""
+RAG_STATUS_TIMESTAMP=0
+RAG_CACHE_TTL=300  # 5 minutes in seconds
+
+# ============================================================================
 # GIT REMOTE URL FUNCTIONS
 # ============================================================================
 
@@ -47,13 +54,23 @@ print(url)
 # RAG INDEX CHECK
 # ============================================================================
 
-# Check if project has RAG index on server
+# Check if project has RAG index on server - WITH CACHE (5 min TTL)
 # Returns JSON: {has_index: bool, status: string, project_id: int, ...}
 check_rag_index() {
     local git_remote_url=$(get_git_remote_url)
 
     if [ -z "$git_remote_url" ]; then
         echo '{"has_index": false, "status": "no_git_remote", "message": "No git remote configured"}'
+        return 0
+    fi
+
+    # Check cache validity
+    local now=$(date +%s)
+    local cache_age=$((now - RAG_STATUS_TIMESTAMP))
+
+    if [[ -n "$RAG_STATUS_CACHE" ]] && ((cache_age < RAG_CACHE_TTL)); then
+        # Cache hit - return cached result
+        echo "$RAG_STATUS_CACHE"
         return 0
     fi
 
@@ -80,7 +97,7 @@ check_rag_index() {
     # Use temp file to avoid heredoc quote escaping issues
     local tmp_response=$(mktemp)
     echo "$response" > "$tmp_response"
-    python3 - "$tmp_response" "$git_remote_url" <<'PYEOF'
+    local result=$(python3 - "$tmp_response" "$git_remote_url" <<'PYEOF'
 import json
 import sys
 
@@ -115,7 +132,14 @@ except Exception as e:
         'git_remote_url': git_remote_url
     }))
 PYEOF
+)
     rm -f "$tmp_response"
+
+    # Cache the result
+    RAG_STATUS_CACHE="$result"
+    RAG_STATUS_TIMESTAMP=$(date +%s)
+
+    echo "$result"
 }
 
 # ============================================================================

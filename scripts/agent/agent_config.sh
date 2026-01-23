@@ -14,6 +14,19 @@ AGENT_SETUP_DONE_FILE="$AGENT_CONFIG_DIR/.setup_done"
 AGENT_UNDO_DIR="$AGENT_CONFIG_DIR/undo"
 AGENT_API_URL="${AGENT_API_URL:-https://agent.rudo.es/api/v1}"
 
+# ============================================================================
+# PERFORMANCE CACHING
+# ============================================================================
+
+# Project ID cache (per directory)
+PROJECT_ID_CACHE=""
+PROJECT_DIR_CACHE=""
+
+# Config JSON cache (in-memory)
+declare -A CONFIG_CACHE
+CONFIG_CACHE_FILE=""
+CONFIG_CACHE_MTIME=""
+
 # Required and optional dependencies
 AGENT_REQUIRED_DEPS=("python3" "curl")
 AGENT_OPTIONAL_DEPS=("glow")
@@ -129,18 +142,47 @@ init_agent_config() {
     if [ ! -f "$AGENT_CONFIG_FILE" ]; then
         echo '{"api_url":"'"$AGENT_API_URL"'","access_token":null,"refresh_token":null}' > "$AGENT_CONFIG_FILE"
     fi
+
+    # Cleanup old backups in background (non-blocking)
+    # Run once per session to avoid overhead
+    if [ -z "${AGENT_CLEANUP_DONE:-}" ]; then
+        cleanup_old_backups 20 2>/dev/null &
+        export AGENT_CLEANUP_DONE=1
+    fi
 }
 
-# Get value from config
+# Get value from config - WITH CACHE
 get_agent_config() {
     local key=$1
-    if [ -f "$AGENT_CONFIG_FILE" ]; then
-        if [ -n "$HAS_JQ" ]; then
-            jq -r ".$key // empty" "$AGENT_CONFIG_FILE" 2>/dev/null || echo ""
-        else
-            python3 -c "import json; print(json.load(open('$AGENT_CONFIG_FILE')).get('$key', ''))" 2>/dev/null || echo ""
-        fi
+
+    if [ ! -f "$AGENT_CONFIG_FILE" ]; then
+        return 0
     fi
+
+    # Check if cache is valid
+    local current_mtime=$(stat -f %m "$AGENT_CONFIG_FILE" 2>/dev/null || stat -c %Y "$AGENT_CONFIG_FILE" 2>/dev/null)
+
+    # Invalidate cache if file changed or different file
+    if [[ "$CONFIG_CACHE_FILE" != "$AGENT_CONFIG_FILE" ]] || [[ "$CONFIG_CACHE_MTIME" != "$current_mtime" ]]; then
+        # Reload cache - parse all keys at once
+        CONFIG_CACHE=()
+
+        if [ -n "$HAS_JQ" ]; then
+            while IFS='=' read -r k v; do
+                CONFIG_CACHE["$k"]="$v"
+            done < <(jq -r 'to_entries | .[] | "\(.key)=\(.value // "")"' "$AGENT_CONFIG_FILE" 2>/dev/null)
+        else
+            while IFS='=' read -r k v; do
+                CONFIG_CACHE["$k"]="$v"
+            done < <(python3 -c "import json; d=json.load(open('$AGENT_CONFIG_FILE')); [print(f'{k}={v}' if v is not None else f'{k}=') for k,v in d.items()]" 2>/dev/null)
+        fi
+
+        CONFIG_CACHE_FILE="$AGENT_CONFIG_FILE"
+        CONFIG_CACHE_MTIME="$current_mtime"
+    fi
+
+    # Return cached value
+    echo "${CONFIG_CACHE[$key]}"
 }
 
 # Set value in config
@@ -163,6 +205,9 @@ config['$key'] = '$value' if '$value' != 'null' else None
 json.dump(config, open('$AGENT_CONFIG_FILE', 'w'), indent=2)
 "
         fi
+
+        # Invalidate cache after modification
+        CONFIG_CACHE_MTIME=""
     fi
 }
 
@@ -170,16 +215,30 @@ json.dump(config, open('$AGENT_CONFIG_FILE', 'w'), indent=2)
 # PER-PROJECT CONVERSATION TRACKING
 # ============================================================================
 
-# Get project identifier (git remote URL or path)
+# Get project identifier (git remote URL or path) - WITH CACHE
 get_project_id() {
+    local current_dir="$(pwd)"
+
+    # Return cached value if directory hasn't changed
+    if [[ "$PROJECT_DIR_CACHE" == "$current_dir" ]] && [[ -n "$PROJECT_ID_CACHE" ]]; then
+        echo "$PROJECT_ID_CACHE"
+        return 0
+    fi
+
+    # Calculate project ID
     local git_url=$(git remote get-url origin 2>/dev/null)
     if [ -n "$git_url" ]; then
         # Normalize: remove .git suffix and user@ prefix
-        echo "$git_url" | sed 's/\.git$//' | sed 's|.*@||' | sed 's|:|/|'
+        PROJECT_ID_CACHE=$(echo "$git_url" | sed 's/\.git$//' | sed 's|.*@||' | sed 's|:|/|')
     else
         # Fallback to current directory
-        pwd
+        PROJECT_ID_CACHE="$current_dir"
     fi
+
+    # Cache for this directory
+    PROJECT_DIR_CACHE="$current_dir"
+
+    echo "$PROJECT_ID_CACHE"
 }
 
 # Save last conversation ID for current project
