@@ -22,10 +22,10 @@ AGENT_API_URL="${AGENT_API_URL:-https://agent.rudo.es/api/v1}"
 PROJECT_ID_CACHE=""
 PROJECT_DIR_CACHE=""
 
-# Config JSON cache (in-memory)
-declare -A CONFIG_CACHE
+# Config JSON cache (using temp file for bash 3.2 compatibility)
 CONFIG_CACHE_FILE=""
 CONFIG_CACHE_MTIME=""
+CONFIG_CACHE_TEMP=""
 
 # Required and optional dependencies
 AGENT_REQUIRED_DEPS=("python3" "curl")
@@ -164,25 +164,26 @@ get_agent_config() {
 
     # Invalidate cache if file changed or different file
     if [[ "$CONFIG_CACHE_FILE" != "$AGENT_CONFIG_FILE" ]] || [[ "$CONFIG_CACHE_MTIME" != "$current_mtime" ]]; then
-        # Reload cache - parse all keys at once
-        CONFIG_CACHE=()
+        # Reload cache - parse all keys at once into temp file (bash 3.2 compatible)
+        # Clean up old temp file
+        [ -n "$CONFIG_CACHE_TEMP" ] && [ -f "$CONFIG_CACHE_TEMP" ] && rm -f "$CONFIG_CACHE_TEMP"
+
+        CONFIG_CACHE_TEMP=$(mktemp)
 
         if [ -n "$HAS_JQ" ]; then
-            while IFS='=' read -r k v; do
-                CONFIG_CACHE["$k"]="$v"
-            done < <(jq -r 'to_entries | .[] | "\(.key)=\(.value // "")"' "$AGENT_CONFIG_FILE" 2>/dev/null)
+            jq -r 'to_entries | .[] | "\(.key)=\(.value // "")"' "$AGENT_CONFIG_FILE" 2>/dev/null > "$CONFIG_CACHE_TEMP"
         else
-            while IFS='=' read -r k v; do
-                CONFIG_CACHE["$k"]="$v"
-            done < <(python3 -c "import json; d=json.load(open('$AGENT_CONFIG_FILE')); [print(f'{k}={v}' if v is not None else f'{k}=') for k,v in d.items()]" 2>/dev/null)
+            python3 -c "import json; d=json.load(open('$AGENT_CONFIG_FILE')); [print(f'{k}={v}' if v is not None else f'{k}=') for k,v in d.items()]" 2>/dev/null > "$CONFIG_CACHE_TEMP"
         fi
 
         CONFIG_CACHE_FILE="$AGENT_CONFIG_FILE"
         CONFIG_CACHE_MTIME="$current_mtime"
     fi
 
-    # Return cached value
-    echo "${CONFIG_CACHE[$key]}"
+    # Return cached value from temp file
+    if [ -f "$CONFIG_CACHE_TEMP" ]; then
+        grep "^${key}=" "$CONFIG_CACHE_TEMP" 2>/dev/null | cut -d'=' -f2-
+    fi
 }
 
 # Set value in config
@@ -208,6 +209,12 @@ json.dump(config, open('$AGENT_CONFIG_FILE', 'w'), indent=2)
 
         # Invalidate cache after modification
         CONFIG_CACHE_MTIME=""
+
+        # Clean up temp file
+        if [ -n "$CONFIG_CACHE_TEMP" ] && [ -f "$CONFIG_CACHE_TEMP" ]; then
+            rm -f "$CONFIG_CACHE_TEMP"
+            CONFIG_CACHE_TEMP=""
+        fi
     fi
 }
 
