@@ -1825,9 +1825,13 @@ for idx, tc in enumerate(tool_requests, 1):
         detail = str(tc_input)[:40]
         action_msg = f"{verb} {tc_name}"
 
-    # Start spinner with action message
+    # Start spinner with action message and progress indicator
     spinner = ToolSpinner()
-    spinner.start(f"{icon} {action_msg}")
+    progress_indicator = f"{DIM}({idx}/{total_tools}){NC}" if total_tools > 1 else ""
+    spinner.start(f"🔧 {progress_indicator} {icon} {action_msg}")
+
+    # Track start time for this tool
+    tool_start_time = time.time()
 
     # Write input to temp file
     import tempfile
@@ -1860,8 +1864,8 @@ for idx, tc in enumerate(tool_requests, 1):
     finally:
         os.unlink(input_file)
 
-    # Spinner already stopped before command execution
-    elapsed = 0  # Time already calculated in spinner.stop() above
+    # Calculate elapsed time for this tool
+    tool_elapsed = time.time() - tool_start_time
 
     # Truncate long output
     if len(output) > 10000:
@@ -1879,8 +1883,9 @@ for idx, tc in enumerate(tool_requests, 1):
 
     # Print result with verb for clearer action summary
     status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
-    # Single line: status + verb + detail + preview
-    sys.stderr.write(f"  {status_icon} {verb:<12} {detail}\n")
+    elapsed_str = f"{DIM}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
+    # Single line: status + verb + detail + time
+    sys.stderr.write(f"  {status_icon} {verb:<12} {detail} {elapsed_str}\n")
     tool_output_lines += 1
     # Preview line only if there's meaningful output
     if preview and len(preview) > 3 and preview != "Sin resultado":

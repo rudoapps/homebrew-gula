@@ -4,6 +4,41 @@
 # Handles chat UI, interactive mode, and conversations
 
 # ============================================================================
+# ERROR FORMATTING
+# ============================================================================
+
+# Display formatted error with cause and solutions
+# Usage: show_formatted_error "title" "cause" "solution1" "solution2" ...
+show_formatted_error() {
+    local title="$1"
+    local cause="$2"
+    shift 2
+    local solutions=("$@")
+
+    echo ""
+    echo -e "${RED}┌─${NC} ${RED}✗ Error${NC} ${RED}─────────────────────────────────────────${NC}"
+    echo -e "${RED}│${NC}"
+    echo -e "${RED}│${NC}  ${BOLD}${title}${NC}"
+
+    if [ -n "$cause" ]; then
+        echo -e "${RED}│${NC}"
+        echo -e "${RED}│${NC}  ${DIM}Causa:${NC} ${cause}"
+    fi
+
+    if [ ${#solutions[@]} -gt 0 ]; then
+        echo -e "${RED}│${NC}"
+        echo -e "${RED}│${NC}  ${YELLOW}💡 Soluciones:${NC}"
+        for solution in "${solutions[@]}"; do
+            echo -e "${RED}│${NC}     ${DIM}•${NC} ${solution}"
+        done
+    fi
+
+    echo -e "${RED}│${NC}"
+    echo -e "${RED}└─────────────────────────────────────────────────${NC}"
+    echo ""
+}
+
+# ============================================================================
 # MULTI-LINE INPUT
 # ============================================================================
 
@@ -673,11 +708,12 @@ agent_chat_interactive() {
 
             # Check for empty or invalid response
             if [ -z "$response" ] || [ "$response" = "{}" ]; then
-                echo ""
-                echo -e "${RED}✗ No se recibio respuesta del servidor${NC}"
-                echo -e "${DIM}  La conexion puede haber terminado inesperadamente.${NC}"
-                echo -e "${DIM}  Intenta de nuevo.${NC}"
-                echo ""
+                show_formatted_error \
+                    "No se recibió respuesta del servidor" \
+                    "La conexión terminó inesperadamente" \
+                    "Verifica tu conexión a internet" \
+                    "Verifica que el servidor esté activo" \
+                    "Intenta de nuevo en unos momentos"
                 break
             fi
 
@@ -715,13 +751,31 @@ agent_chat_interactive() {
             local error=$(json_get "$response" "error")
 
             if [ -n "$error" ] && [ "$error" != "None" ]; then
-                echo ""
-                echo -e "${RED}✗ Error: $error${NC}"
-                # Give helpful hints based on error type
+                # Provide contextual error messages based on error type
                 if [[ "$error" == *"inesperadamente"* ]] || [[ "$error" == *"timeout"* ]]; then
-                    echo -e "${DIM}  Sugerencia: Intenta de nuevo con un mensaje mas corto.${NC}"
+                    show_formatted_error \
+                        "Timeout o conexión interrumpida" \
+                        "$error" \
+                        "Intenta con un mensaje más corto" \
+                        "Verifica tu conexión a internet" \
+                        "Espera unos momentos y reintenta"
+                elif [[ "$error" == *"Connection"* ]] || [[ "$error" == *"connection"* ]]; then
+                    show_formatted_error \
+                        "Error de conexión" \
+                        "$error" \
+                        "Verifica tu conexión a internet" \
+                        "Verifica que el servidor esté activo: https://agent.rudo.es" \
+                        "Intenta de nuevo en unos momentos"
+                elif [[ "$error" == *"Not Found"* ]] || [[ "$error" == *"404"* ]]; then
+                    show_formatted_error \
+                        "Servidor no disponible" \
+                        "$error" \
+                        "El servidor puede estar en mantenimiento" \
+                        "Contacta al administrador" \
+                        "Intenta de nuevo más tarde"
+                else
+                    show_formatted_error "$error" "" "Intenta de nuevo" "Si el problema persiste, contacta soporte"
                 fi
-                echo ""
                 break
             fi
 
@@ -791,41 +845,47 @@ agent_chat_interactive() {
                 set -e
             fi
 
-            # Display summary box - disable errexit to prevent crashes on formatting
+            # Display enhanced summary box - disable errexit to prevent crashes on formatting
             set +e
             echo ""
-            echo -e "${DIM}┌──────────────────────────────────────────────────────────────┐${NC}"
+            echo -e "${DIM}┌─${NC} ${BOLD}Resumen${NC} ${DIM}──────────────────────────────────────────────────${NC}"
+            echo -e "${DIM}│${NC}"
 
-            # Line 1: Session info (this run)
-            local session_line="  ${GREEN}✓${NC} Esta ejecución: "
-            if [ -n "$session_tokens" ] && [ "$session_tokens" != "0" ]; then
-                # Ensure session_cost has a valid value
-                [ -z "$session_cost" ] && session_cost=0
-                local session_cost_fmt=$(python3 -c "print(f'{float(${session_cost:-0}):.2f}')" 2>/dev/null || echo "0.00")
-                session_line="${session_line}${BOLD}${session_tokens}${NC} tokens  ${BOLD}\$${session_cost_fmt}${NC}"
-            else
-                session_line="${session_line}${DIM}sin llamadas LLM${NC}"
-            fi
+            # Line 1: Session duration (formatted)
             if [ -n "$total_elapsed" ] && [ "$total_elapsed" != "0" ]; then
-                session_line="${session_line}  ${DIM}(${total_elapsed}s)${NC}"
+                local duration_fmt=$(python3 -c "
+t = ${total_elapsed}
+if t >= 60:
+    m = int(t / 60)
+    s = int(t % 60)
+    print(f'{m}m {s}s')
+else:
+    print(f'{int(t)}s')
+" 2>/dev/null || echo "${total_elapsed}s")
+                echo -e "${DIM}│${NC}  ⏱  Duración: ${BOLD}${duration_fmt}${NC}"
             fi
-            echo -e "${DIM}│${NC}${session_line}"
 
-            # Line 2: Total conversation info
-            if [ -n "$msg_tokens" ] && [ "$msg_tokens" != "0" ]; then
-                # Ensure msg_cost has a valid value
-                [ -z "$msg_cost" ] && msg_cost=0
-                local total_cost_fmt=$(python3 -c "print(f'{float(${msg_cost:-0}):.2f}')" 2>/dev/null || echo "0.00")
-                echo -e "${DIM}│  ${NC}${DIM}Total conversación: ${msg_tokens} tokens  \$${total_cost_fmt}${NC}"
-            fi
-
-            # Line 3: Tools if any (use safe numeric comparison)
+            # Line 2: Tools executed (with breakdown by type)
             local tools_count=${msg_tools:-0}
             if [ "$tools_count" != "0" ] && [ "$tools_count" != "" ]; then
-                echo -e "${DIM}│  ${NC}${DIM}Herramientas: ${tools_count}${NC}"
+                # Get tool details from response if available
+                local tool_breakdown=$(json_get "$response" "tool_breakdown" 2>/dev/null || echo "")
+                if [ -n "$tool_breakdown" ] && [ "$tool_breakdown" != "null" ]; then
+                    echo -e "${DIM}│${NC}  🔧 Herramientas: ${BOLD}${tools_count}${NC}"
+                    echo -e "${DIM}│${NC}     ${DIM}${tool_breakdown}${NC}"
+                else
+                    echo -e "${DIM}│${NC}  🔧 Herramientas: ${BOLD}${tools_count}${NC}"
+                fi
             fi
 
-            echo -e "${DIM}└──────────────────────────────────────────────────────────────┘${NC}"
+            # Line 3: Cost and tokens (this run)
+            if [ -n "$session_tokens" ] && [ "$session_tokens" != "0" ]; then
+                [ -z "$session_cost" ] && session_cost=0
+                local session_cost_fmt=$(python3 -c "print(f'{float(${session_cost:-0}):.4f}')" 2>/dev/null || echo "0.0000")
+                echo -e "${DIM}│${NC}  💰 Costo: ${BOLD}\$${session_cost_fmt}${NC}  ${DIM}(${session_tokens} tokens)${NC}"
+            fi
+
+            echo -e "${DIM}└────────────────────────────────────────────────────────────────${NC}"
             echo ""
             set -e
 
