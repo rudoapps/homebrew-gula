@@ -4,6 +4,76 @@
 # Handles communication with the server (SSE, hybrid chat)
 
 # ============================================================================
+# HTTP RETRY LOGIC (with exponential backoff)
+# ============================================================================
+
+# Execute curl with retry logic and exponential backoff
+# Usage: curl_with_retry <max_retries> <curl_args...>
+# Example: curl_with_retry 3 -s "$endpoint" -H "Authorization: Bearer $token"
+curl_with_retry() {
+    local max_retries="${1:-3}"
+    shift
+    local curl_args=("$@")
+
+    local attempt=1
+    local backoff=1
+
+    while [ $attempt -le $max_retries ]; do
+        # Execute curl and capture HTTP code + response
+        local http_code
+        local response
+        local curl_output=$(mktemp)
+
+        # Run curl with -w to get HTTP code, -o to save response
+        http_code=$(curl -w "%{http_code}" -o "$curl_output" "${curl_args[@]}" 2>/dev/null)
+        local curl_exit=$?
+        response=$(cat "$curl_output")
+        rm -f "$curl_output"
+
+        # Success cases: curl succeeded AND (HTTP 2xx or 4xx)
+        # We don't retry on 4xx because those are client errors (auth, validation, etc.)
+        if [ $curl_exit -eq 0 ]; then
+            # Check HTTP code
+            if [[ "$http_code" =~ ^[24] ]]; then
+                # Success (2xx) or client error (4xx) - return response
+                echo "$response"
+                return 0
+            elif [[ "$http_code" =~ ^5 ]]; then
+                # Server error (5xx) - retry
+                if [ $attempt -lt $max_retries ]; then
+                    echo "  ${YELLOW}⚠${NC} ${DIM}Error del servidor (${http_code}), reintentando en ${backoff}s...${NC}" >&2
+                    sleep $backoff
+                    backoff=$((backoff * 2))
+                    attempt=$((attempt + 1))
+                    continue
+                else
+                    # Max retries reached
+                    echo "$response"
+                    return 1
+                fi
+            fi
+        else
+            # curl failed (network error, timeout, DNS, etc.)
+            if [ $attempt -lt $max_retries ]; then
+                echo "  ${YELLOW}⚠${NC} ${DIM}Error de conexión, reintentando en ${backoff}s...${NC}" >&2
+                sleep $backoff
+                backoff=$((backoff * 2))
+                attempt=$((attempt + 1))
+                continue
+            else
+                # Max retries reached - return empty (network failure)
+                echo ""
+                return 1
+            fi
+        fi
+    done
+
+    # Fallback (should not reach here)
+    echo "$response"
+    return 1
+}
+
+# ============================================================================
 # QUOTA API
 # ============================================================================
 
@@ -13,9 +83,9 @@ get_quota_status_inline() {
     local access_token=$(get_agent_config "access_token")
     local endpoint="$api_url/agent/quota"
 
-    local response=$(curl -s "$endpoint" \
+    local response=$(curl_with_retry 3 -s "$endpoint" \
         -H "Authorization: Bearer $access_token" \
-        -H "Content-Type: application/json" 2>/dev/null)
+        -H "Content-Type: application/json")
 
     # Check for errors silently
     local error=$(json_get_error "$response")
@@ -87,7 +157,7 @@ fetch_and_show_quota() {
     local access_token=$(get_agent_config "access_token")
     local endpoint="$api_url/agent/quota"
 
-    local response=$(curl -s "$endpoint" \
+    local response=$(curl_with_retry 3 -s "$endpoint" \
         -H "Authorization: Bearer $access_token" \
         -H "Content-Type: application/json")
 
@@ -197,7 +267,7 @@ fetch_available_models() {
     local access_token=$(get_agent_config "access_token")
     local endpoint="$api_url/agent/models"
 
-    curl -s "$endpoint" \
+    curl_with_retry 3 -s "$endpoint" \
         -H "Authorization: Bearer $access_token" \
         -H "Content-Type: application/json"
 }

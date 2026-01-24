@@ -392,15 +392,32 @@ tool_read_file() {
     # Validar que no salga del directorio actual (usando realpath para resolver symlinks)
     local path_check=$(python3 -c "
 import os
+import sys
 path = '$path'
 cwd = os.getcwd()
+
+# Validar contra null bytes (path traversal attack)
+if '\\x00' in path or '\\0' in path:
+    print('ERROR:Path contiene null bytes (ataque detectado)')
+    sys.exit(1)
+
 # Resolver ruta REAL (sigue symlinks) - protección contra symlink attacks
-real_path = os.path.realpath(path)
-# Verificar que esta dentro del directorio actual
-if real_path.startswith(cwd + os.sep) or real_path == cwd:
-    print('OK:' + real_path)
-else:
-    print('ERROR:Path fuera del proyecto (posible symlink): ' + real_path)
+try:
+    real_path = os.path.realpath(path)
+except Exception as e:
+    print('ERROR:Path inválido: ' + str(e))
+    sys.exit(1)
+
+# Verificar que está dentro del directorio actual usando commonpath (más robusto que startswith)
+try:
+    common = os.path.commonpath([cwd, real_path])
+    if common == cwd:
+        print('OK:' + real_path)
+    else:
+        print('ERROR:Path fuera del proyecto: ' + real_path)
+except ValueError:
+    # commonpath falla si las rutas están en diferentes drives (Windows)
+    print('ERROR:Path fuera del proyecto (diferentes unidades): ' + real_path)
 ")
 
     if [[ "$path_check" == ERROR:* ]]; then
@@ -458,13 +475,31 @@ tool_list_files() {
     # Validar que no salga del directorio actual (usando realpath para symlinks)
     local path_check=$(python3 -c "
 import os
+import sys
 path = '$path'
 cwd = os.getcwd()
-real_path = os.path.realpath(path)
-if real_path.startswith(cwd + os.sep) or real_path == cwd:
-    print('OK:' + real_path)
-else:
-    print('ERROR:Path fuera del proyecto (posible symlink): ' + real_path)
+
+# Validar contra null bytes
+if '\\x00' in path or '\\0' in path:
+    print('ERROR:Path contiene null bytes (ataque detectado)')
+    sys.exit(1)
+
+# Resolver ruta REAL
+try:
+    real_path = os.path.realpath(path)
+except Exception as e:
+    print('ERROR:Path inválido: ' + str(e))
+    sys.exit(1)
+
+# Verificar que está dentro del directorio actual usando commonpath
+try:
+    common = os.path.commonpath([cwd, real_path])
+    if common == cwd:
+        print('OK:' + real_path)
+    else:
+        print('ERROR:Path fuera del proyecto: ' + real_path)
+except ValueError:
+    print('ERROR:Path fuera del proyecto (diferentes unidades): ' + real_path)
 ")
 
     if [[ "$path_check" == ERROR:* ]]; then
@@ -547,21 +582,38 @@ print(len(data.get('content', '')))
     # Validar que no salga del directorio actual (usando realpath para symlinks)
     local path_check=$(python3 -c "
 import os
+import sys
 path = '$path'
 cwd = os.getcwd()
+
+# Validar contra null bytes
+if '\\x00' in path or '\\0' in path:
+    print('ERROR:Path contiene null bytes (ataque detectado)')
+    sys.exit(1)
+
 # Para archivos nuevos, resolver el directorio padre
 parent = os.path.dirname(path) or '.'
-if os.path.exists(path):
-    real_path = os.path.realpath(path)
-else:
-    # Archivo nuevo: verificar que el directorio padre está en el proyecto
-    real_parent = os.path.realpath(parent)
-    real_path = os.path.join(real_parent, os.path.basename(path))
-# Verificar que esta dentro del directorio actual
-if real_path.startswith(cwd + os.sep) or real_path == cwd:
-    print('OK:' + real_path)
-else:
-    print('ERROR:Path fuera del proyecto (posible symlink): ' + real_path)
+
+try:
+    if os.path.exists(path):
+        real_path = os.path.realpath(path)
+    else:
+        # Archivo nuevo: verificar que el directorio padre está en el proyecto
+        real_parent = os.path.realpath(parent)
+        real_path = os.path.join(real_parent, os.path.basename(path))
+except Exception as e:
+    print('ERROR:Path inválido: ' + str(e))
+    sys.exit(1)
+
+# Verificar que está dentro del directorio actual usando commonpath
+try:
+    common = os.path.commonpath([cwd, real_path])
+    if common == cwd:
+        print('OK:' + real_path)
+    else:
+        print('ERROR:Path fuera del proyecto: ' + real_path)
+except ValueError:
+    print('ERROR:Path fuera del proyecto (diferentes unidades): ' + real_path)
 ")
 
     if [[ "$path_check" == ERROR:* ]]; then
