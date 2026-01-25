@@ -350,7 +350,19 @@ display_summary() {
 
     # Stats
     [ -n "$tokens" ] && [ "$tokens" != "0" ] && summary_parts="$summary_parts · ${tokens} tokens"
-    [ -n "$cost" ] && { local cost_fmt=$(printf "%.2f" "$cost" 2>/dev/null || echo "$cost"); summary_parts="$summary_parts · \$$cost_fmt"; }
+    if [ -n "$cost" ]; then
+        local cost_fmt=$(python3 -c "
+cost = float('${cost:-0}')
+if cost >= 0.01:
+    fmt = f'{cost:.2f}'
+elif cost >= 0.001:
+    fmt = f'{cost:.4f}'
+else:
+    fmt = f'{cost:.6f}'.rstrip('0').rstrip('.')
+print(fmt)
+" 2>/dev/null || echo "$cost")
+        summary_parts="$summary_parts · \$$cost_fmt"
+    fi
     [ -n "$elapsed" ] && [ "$elapsed" != "0" ] && summary_parts="$summary_parts · ${elapsed}s"
 
     # Remove leading separator if no tools
@@ -520,8 +532,18 @@ agent_chat_interactive() {
                 if [ -n "$conversation_id" ]; then
                     echo -e "Conversacion ID: ${BOLD}$conversation_id${NC}"
                 fi
-                local exit_cost_fmt=$(printf "%.2f" "$total_cost" 2>/dev/null || echo "$total_cost")
-                echo -e "Costo total de la sesion: ${BOLD}\$$exit_cost_fmt${NC}"
+                # Format cost with appropriate precision (use Python for locale-independent formatting)
+                local exit_cost_fmt=$(python3 -c "
+cost = float('${total_cost:-0}')
+if cost >= 0.01:
+    fmt = f'{cost:.2f}'
+elif cost >= 0.001:
+    fmt = f'{cost:.4f}'
+else:
+    fmt = f'{cost:.6f}'.rstrip('0').rstrip('.')
+print(fmt)
+" 2>/dev/null || echo "$total_cost")
+                echo -e "Costo total de la sesion: ${BOLD}\$${exit_cost_fmt}${NC}"
                 echo -e "${GREEN}Hasta luego!${NC}"
                 echo ""
                 return 0
@@ -534,8 +556,17 @@ agent_chat_interactive() {
                 continue
                 ;;
             /cost)
-                local cost_cmd_fmt=$(printf "%.2f" "$total_cost" 2>/dev/null || echo "$total_cost")
-                echo -e "Costo acumulado: ${BOLD}\$$cost_cmd_fmt${NC}"
+                local cost_cmd_fmt=$(python3 -c "
+cost = float('${total_cost:-0}')
+if cost >= 0.01:
+    fmt = f'{cost:.2f}'
+elif cost >= 0.001:
+    fmt = f'{cost:.4f}'
+else:
+    fmt = f'{cost:.6f}'.rstrip('0').rstrip('.')
+print(fmt)
+" 2>/dev/null || echo "$total_cost")
+                echo -e "Costo acumulado: ${BOLD}\$${cost_cmd_fmt}${NC}"
                 if [ -n "$conversation_id" ]; then
                     echo -e "Conversacion actual: ${BOLD}$conversation_id${NC}"
                 fi
