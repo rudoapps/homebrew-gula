@@ -118,7 +118,7 @@ except:
 
 if not data.get("has_quota"):
     cost = float(data.get('current_cost', 0))
-    print(f"💰 Presupuesto: {GREEN}∞{NC} {DIM}(\${cost:.2f} usado){NC}")
+    print(f"💰 Presupuesto: {GREEN}∞{NC} {DIM}(${cost:.2f} usado){NC}")
 else:
     usage_pct = data.get("usage_percent", 0) or 0
     monthly_limit = float(data.get("monthly_limit", 0) or 0)
@@ -138,7 +138,7 @@ else:
         bar_color = GREEN
 
     bar = f"{bar_color}{'█' * filled}{NC}{DIM}{'░' * empty}{NC}"
-    print(f"💰 Presupuesto: {bar} {usage_pct:.0f}% {DIM}(\${current_cost:.2f}/\${monthly_limit:.2f}){NC}")
+    print(f"💰 Presupuesto: {bar} {usage_pct:.0f}% {DIM}(${current_cost:.2f}/${monthly_limit:.2f}){NC}")
 PYEOF
     rm -f "$tmp_response"
 }
@@ -202,7 +202,7 @@ print("")
 
 if not data.get("has_quota"):
     print(f"  {GREEN}∞{NC}  Sin límite configurado")
-    print(f"     Coste acumulado: {BOLD}\${data.get('current_cost', '0.00')}{NC}")
+    print(f"     Coste acumulado: {BOLD}${data.get('current_cost', '0.00')}{NC}")
 else:
     monthly_limit = data.get("monthly_limit", "?")
     current_cost = data.get("current_cost", "0.00")
@@ -239,9 +239,9 @@ else:
     print("")
 
     # Details
-    print(f"  {BOLD}Límite mensual:{NC}  \${monthly_limit}")
-    print(f"  {BOLD}Coste actual:{NC}    \${current_cost}")
-    print(f"  {BOLD}Restante:{NC}        \${remaining}")
+    print(f"  {BOLD}Límite mensual:{NC}  ${monthly_limit}")
+    print(f"  {BOLD}Coste actual:{NC}    ${current_cost}")
+    print(f"  {BOLD}Restante:{NC}        ${remaining}")
     print("")
 
     # Enforcement status
@@ -369,7 +369,7 @@ else:
         else:
             print(f"  {BOLD}{model_id}{NC}{indicator_str}")
             print(f"    {DIM}{name} ({provider}){NC}")
-        print(f"    {DIM}Precio: \${input_price}/1M in, \${output_price}/1M out{NC}")
+        print(f"    {DIM}Precio: ${input_price}/1M in, ${output_price}/1M out{NC}")
         print("")
 
 print(f"{DIM}Uso: /model <id> para cambiar de modelo{NC}")
