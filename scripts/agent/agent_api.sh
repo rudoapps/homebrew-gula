@@ -1781,6 +1781,19 @@ total_elapsed = int(time.time()) - request_start_time
 # Track lines output for later clearing
 tool_output_lines = 0
 
+# Show initial progress bar if multiple tools
+if total_tools > 1:
+    bar_width = 30
+    filled = 0
+    empty = bar_width
+    bar = f"{CYAN}{'━' * filled}{DIM}{'─' * empty}{NC}"
+    sys.stderr.write(f"\n  {DIM}╭{'─' * 50}╮{NC}\n")
+    sys.stderr.write(f"  {DIM}│{NC} {BOLD}Ejecutando {total_tools} herramientas{NC}{' ' * (50 - 24 - len(str(total_tools)))}  {DIM}│{NC}\n")
+    sys.stderr.write(f"  {DIM}│{NC} [{bar}] {DIM}0%{NC}{' ' * (50 - 34)}  {DIM}│{NC}\n")
+    sys.stderr.write(f"  {DIM}╰{'─' * 50}╯{NC}\n")
+    sys.stderr.flush()
+    tool_output_lines += 4
+
 for idx, tc in enumerate(tool_requests, 1):
     tc_id = tc["id"]
     tc_name = tc["name"]
@@ -1898,6 +1911,22 @@ for idx, tc in enumerate(tool_requests, 1):
         "tool_name": tc_name,
         "result": output
     })
+
+    # Update progress bar if multiple tools
+    if total_tools > 1:
+        bar_width = 30
+        progress_pct = (idx / total_tools) * 100
+        filled = int((idx / total_tools) * bar_width)
+        empty = bar_width - filled
+        bar = f"{GREEN}{'━' * filled}{DIM}{'─' * empty}{NC}"
+
+        # Move cursor up to overwrite progress bar (4 lines up)
+        sys.stderr.write(f"\033[4A")
+        sys.stderr.write(f"\r  {DIM}╭{'─' * 50}╮{NC}\n")
+        sys.stderr.write(f"  {DIM}│{NC} {BOLD}Ejecutando {total_tools} herramientas{NC}{' ' * (50 - 24 - len(str(total_tools)))}  {DIM}│{NC}\n")
+        sys.stderr.write(f"  {DIM}│{NC} [{bar}] {BOLD}{progress_pct:.0f}%{NC}{' ' * (50 - 35 - len(f'{progress_pct:.0f}'))}  {DIM}│{NC}\n")
+        sys.stderr.write(f"  {DIM}╰{'─' * 50}╯{NC}\n")
+        sys.stderr.flush()
 
 # Output results with metadata
 output_data = {

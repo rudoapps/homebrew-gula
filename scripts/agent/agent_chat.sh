@@ -435,6 +435,7 @@ agent_chat_single() {
 
     # Extract response data
     local text_response=$(json_get "$response" "response")
+    last_response="$text_response"  # Store for /copy command
     local conv_id=$(json_get "$response" "conversation_id")
     local cost=$(json_get_num "$response" "total_cost")
     local elapsed=$(json_get_num "$response" "elapsed_time")
@@ -462,6 +463,7 @@ agent_chat_single() {
 agent_chat_interactive() {
     local conversation_id=""
     local total_cost=0
+    local last_response=""  # Store last response for /copy command
 
     # Try to recover last conversation for this project
     local saved_conv_id=$(get_project_conversation)
@@ -524,6 +526,30 @@ agent_chat_interactive() {
             continue
         fi
 
+        # Check for clipboard image (only on macOS for now)
+        if [[ "$OSTYPE" == "darwin"* ]] && has_clipboard_image; then
+            echo ""
+            echo -e "${CYAN}📋 Imagen detectada en el clipboard${NC}"
+            echo -n -e "${DIM}¿Incluir en el mensaje? (s/n): ${NC}"
+            local include_clipboard
+            read -n 1 include_clipboard < /dev/tty 2>/dev/null
+            echo ""
+
+            if [[ "$include_clipboard" =~ ^[sS]$ ]]; then
+                echo -e "${DIM}Incluyendo imagen del clipboard...${NC}"
+                # Note: La imagen se enviará automáticamente por el código existente de detect_and_encode_images
+                # Solo agregamos un placeholder en el texto para indicarlo
+                user_input="$user_input
+
+[Imagen del clipboard incluida]"
+                echo -e "${GREEN}✓${NC} Imagen del clipboard agregada"
+                echo ""
+            else
+                echo -e "${DIM}Imagen ignorada${NC}"
+                echo ""
+            fi
+        fi
+
         # Handle special commands
         case "$user_input" in
             /exit|/quit|/q)
@@ -573,6 +599,31 @@ print(fmt)
                 echo ""
                 continue
                 ;;
+            /copy)
+                # Copy last response to clipboard
+                if [ -z "$last_response" ]; then
+                    echo -e "${YELLOW}No hay respuesta para copiar${NC}"
+                    echo -e "${DIM}Primero haz una pregunta al agente${NC}"
+                    echo ""
+                else
+                    if [[ "$OSTYPE" == "darwin"* ]]; then
+                        # macOS
+                        echo "$last_response" | pbcopy
+                        local char_count=${#last_response}
+                        echo -e "${GREEN}✓${NC} Respuesta copiada al clipboard ${DIM}($char_count caracteres)${NC}"
+                    elif command -v xclip &> /dev/null; then
+                        # Linux con xclip
+                        echo "$last_response" | xclip -selection clipboard
+                        local char_count=${#last_response}
+                        echo -e "${GREEN}✓${NC} Respuesta copiada al clipboard ${DIM}($char_count caracteres)${NC}"
+                    else
+                        echo -e "${YELLOW}Clipboard no soportado en este sistema${NC}"
+                        echo -e "${DIM}Instala xclip: sudo apt-get install xclip${NC}"
+                    fi
+                    echo ""
+                fi
+                continue
+                ;;
             /clear)
                 clear
                 echo -e "${BOLD}GULA AGENT - Chat Interactivo${NC}"
@@ -588,6 +639,7 @@ print(fmt)
                 echo -e "  ${YELLOW}/resume <id>${NC}       - Retomar conversacion por ID"
                 echo -e "  ${YELLOW}/cost${NC}              - Ver costo acumulado de la sesion"
                 echo -e "  ${YELLOW}/presupuesto${NC}       - Ver limite y uso mensual"
+                echo -e "  ${YELLOW}/copy${NC}             - Copiar ultima respuesta al clipboard"
                 echo -e "  ${YELLOW}/clear${NC}             - Limpiar pantalla"
                 echo -e "  ${YELLOW}/help${NC}              - Mostrar esta ayuda"
                 echo -e "  ${YELLOW}/debug${NC}             - Activar/desactivar modo debug"
@@ -833,6 +885,7 @@ print(fmt)
             # Extract response data - disable errexit to prevent crashes on missing fields
             set +e
             local text_response=$(json_get "$response" "response" 2>/dev/null || echo "")
+            last_response="$text_response"  # Store for /copy command
             local new_conv_id=$(json_get "$response" "conversation_id" 2>/dev/null || echo "")
             local msg_cost=$(json_get_num "$response" "total_cost" 2>/dev/null || echo "0")
             local session_cost=$(json_get_num "$response" "session_cost" 2>/dev/null || echo "0")
