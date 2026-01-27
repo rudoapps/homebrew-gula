@@ -1392,6 +1392,17 @@ try:
                     sys.stderr.write(f"  {YELLOW}○{NC} No se encontraron chunks relevantes\n")
                 spinner.start("Procesando respuesta...")
 
+            elif event_type == "delegation":
+                # Subagent delegation event
+                subagent_id = parsed.get("subagent_id", "")
+                task_preview = parsed.get("task", "")[:80]
+                if len(parsed.get("task", "")) > 80:
+                    task_preview += "..."
+                spinner.stop()
+                sys.stderr.write(f"  {CYAN}👤 Delegando a subagente:{NC} {BOLD}{subagent_id}{NC}\n")
+                sys.stderr.write(f"  {DIM}Tarea: {task_preview}{NC}\n")
+                spinner.start(f"Subagente {subagent_id} trabajando...")
+
             elif event_type == "text":
                 content = parsed.get("content", "")
                 msg_model = parsed.get("model", "")

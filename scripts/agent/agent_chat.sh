@@ -651,7 +651,15 @@ print(fmt)
                 echo ""
                 echo -e "${BOLD}Subagentes:${NC}"
                 echo -e "  ${YELLOW}/subagents${NC}         - Listar subagentes disponibles"
-                echo -e "  ${YELLOW}/subagent <id> <msg>${NC} - Invocar un subagente"
+                echo -e "  ${YELLOW}/subagent <id> <msg>${NC} - Invocar un subagente especifico"
+                echo ""
+                echo -e "${BOLD}Atajos de subagentes:${NC}"
+                echo -e "  ${YELLOW}/review <archivo>${NC}   - Revisar codigo (code-review)"
+                echo -e "  ${YELLOW}/test <archivo>${NC}     - Generar tests (test-generator)"
+                echo -e "  ${YELLOW}/explain <archivo>${NC}  - Explicar codigo (explainer)"
+                echo -e "  ${YELLOW}/refactor <archivo>${NC} - Sugerir refactorizaciones (refactor)"
+                echo -e "  ${YELLOW}/document <archivo>${NC} - Generar documentacion (documenter)"
+                echo -e "  ${YELLOW}/debug <error>${NC}      - Ayudar a debuggear (debugger)"
                 echo ""
                 echo -e "${BOLD}Entrada multi-linea:${NC}"
                 echo -e "  - Escribe \\ al final de una linea para continuar"
@@ -698,19 +706,6 @@ print(fmt)
                 echo ""
                 continue
                 ;;
-            /debug)
-                local current_debug=$(get_agent_config "debug_mode")
-                if [ "$current_debug" = "true" ]; then
-                    set_agent_config "debug_mode" "false"
-                    echo -e "${YELLOW}Debug mode desactivado${NC}"
-                else
-                    set_agent_config "debug_mode" "true"
-                    echo -e "${GREEN}Debug mode activado${NC}"
-                    echo -e "${DIM}Verás información de diagnóstico en las peticiones${NC}"
-                fi
-                echo ""
-                continue
-                ;;
             /resume\ *)
                 local resume_id="${user_input#/resume }"
                 if [[ "$resume_id" =~ ^[0-9]+$ ]]; then
@@ -726,6 +721,119 @@ print(fmt)
                 ;;
             /subagents)
                 show_available_subagents
+                continue
+                ;;
+            /review\ *)
+                # Code review subagent shortcut
+                local review_msg="${user_input#/review }"
+                if [ -z "$review_msg" ] || [ "$review_msg" = "/review" ]; then
+                    echo -e "${RED}Uso: /review <archivo o mensaje>${NC}"
+                    echo -e "Ejemplo: ${DIM}/review src/auth.py${NC}"
+                    echo ""
+                    continue
+                fi
+                local new_conv_id
+                new_conv_id=$(invoke_subagent_in_chat "code-review" "$review_msg" "$conversation_id")
+                if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ]; then
+                    conversation_id="$new_conv_id"
+                fi
+                echo ""
+                continue
+                ;;
+            /test\ *)
+                # Test generator subagent shortcut
+                local test_msg="${user_input#/test }"
+                if [ -z "$test_msg" ] || [ "$test_msg" = "/test" ]; then
+                    echo -e "${RED}Uso: /test <archivo o mensaje>${NC}"
+                    echo -e "Ejemplo: ${DIM}/test src/utils.py${NC}"
+                    echo ""
+                    continue
+                fi
+                local new_conv_id
+                new_conv_id=$(invoke_subagent_in_chat "test-generator" "$test_msg" "$conversation_id")
+                if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ]; then
+                    conversation_id="$new_conv_id"
+                fi
+                echo ""
+                continue
+                ;;
+            /explain\ *)
+                # Code explainer subagent shortcut
+                local explain_msg="${user_input#/explain }"
+                if [ -z "$explain_msg" ] || [ "$explain_msg" = "/explain" ]; then
+                    echo -e "${RED}Uso: /explain <archivo o mensaje>${NC}"
+                    echo -e "Ejemplo: ${DIM}/explain src/database.py${NC}"
+                    echo ""
+                    continue
+                fi
+                local new_conv_id
+                new_conv_id=$(invoke_subagent_in_chat "explainer" "$explain_msg" "$conversation_id")
+                if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ]; then
+                    conversation_id="$new_conv_id"
+                fi
+                echo ""
+                continue
+                ;;
+            /refactor\ *)
+                # Refactor assistant subagent shortcut
+                local refactor_msg="${user_input#/refactor }"
+                if [ -z "$refactor_msg" ] || [ "$refactor_msg" = "/refactor" ]; then
+                    echo -e "${RED}Uso: /refactor <archivo o mensaje>${NC}"
+                    echo -e "Ejemplo: ${DIM}/refactor src/legacy.py${NC}"
+                    echo ""
+                    continue
+                fi
+                local new_conv_id
+                new_conv_id=$(invoke_subagent_in_chat "refactor" "$refactor_msg" "$conversation_id")
+                if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ]; then
+                    conversation_id="$new_conv_id"
+                fi
+                echo ""
+                continue
+                ;;
+            /document\ *)
+                # Documenter subagent shortcut
+                local doc_msg="${user_input#/document }"
+                if [ -z "$doc_msg" ] || [ "$doc_msg" = "/document" ]; then
+                    echo -e "${RED}Uso: /document <archivo o mensaje>${NC}"
+                    echo -e "Ejemplo: ${DIM}/document src/api.py${NC}"
+                    echo ""
+                    continue
+                fi
+                local new_conv_id
+                new_conv_id=$(invoke_subagent_in_chat "documenter" "$doc_msg" "$conversation_id")
+                if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ]; then
+                    conversation_id="$new_conv_id"
+                fi
+                echo ""
+                continue
+                ;;
+            /debug*)
+                # Handle both /debug (toggle) and /debug <msg> (subagent)
+                local debug_arg="${user_input#/debug}"
+                debug_arg="${debug_arg# }"  # Remove leading space
+
+                if [ -z "$debug_arg" ]; then
+                    # Just "/debug" - toggle debug mode
+                    local current_debug=$(get_agent_config "debug_mode")
+                    if [ "$current_debug" = "true" ]; then
+                        set_agent_config "debug_mode" "false"
+                        echo -e "${YELLOW}Debug mode desactivado${NC}"
+                    else
+                        set_agent_config "debug_mode" "true"
+                        echo -e "${GREEN}Debug mode activado${NC}"
+                        echo -e "${DIM}Verás información de diagnóstico en las peticiones${NC}"
+                    fi
+                    echo ""
+                else
+                    # "/debug <message>" - invoke debugger subagent
+                    local new_conv_id
+                    new_conv_id=$(invoke_subagent_in_chat "debugger" "$debug_arg" "$conversation_id")
+                    if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ]; then
+                        conversation_id="$new_conv_id"
+                    fi
+                    echo ""
+                fi
                 continue
                 ;;
             /subagent\ *)
