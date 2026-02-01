@@ -643,6 +643,7 @@ print(fmt)
                 echo -e "  ${YELLOW}/clear${NC}             - Limpiar pantalla"
                 echo -e "  ${YELLOW}/help${NC}              - Mostrar esta ayuda"
                 echo -e "  ${YELLOW}/debug${NC}             - Activar/desactivar modo debug"
+                echo -e "  ${YELLOW}/preview [on|off]${NC}  - Activar/desactivar preview de cambios"
                 echo ""
                 echo -e "${BOLD}Modelos:${NC}"
                 echo -e "  ${YELLOW}/models${NC}            - Ver modelos disponibles"
@@ -804,6 +805,36 @@ print(fmt)
                 new_conv_id=$(invoke_subagent_in_chat "documenter" "$doc_msg" "$conversation_id")
                 if [ -z "$conversation_id" ] && [ -n "$new_conv_id" ] && [ "$new_conv_id" != "None" ]; then
                     conversation_id="$new_conv_id"
+                fi
+                echo ""
+                continue
+                ;;
+            /preview*)
+                # Toggle preview mode for file changes
+                local preview_arg="${user_input#/preview}"
+                preview_arg="${preview_arg# }"  # Remove leading space
+
+                if [ -z "$preview_arg" ] || [ "$preview_arg" = "toggle" ]; then
+                    # Toggle preview mode
+                    local current_preview=$(get_agent_config "preview_mode")
+                    if [ "$current_preview" = "false" ]; then
+                        set_agent_config "preview_mode" "true"
+                        echo -e "${GREEN}✓ Preview mode activado${NC}"
+                        echo -e "${DIM}Verás una vista previa antes de que el agente modifique archivos${NC}"
+                    else
+                        set_agent_config "preview_mode" "false"
+                        echo -e "${YELLOW}Preview mode desactivado${NC}"
+                        echo -e "${DIM}Los cambios se aplicarán sin confirmación (no recomendado)${NC}"
+                    fi
+                elif [ "$preview_arg" = "on" ]; then
+                    set_agent_config "preview_mode" "true"
+                    echo -e "${GREEN}✓ Preview mode activado${NC}"
+                elif [ "$preview_arg" = "off" ]; then
+                    set_agent_config "preview_mode" "false"
+                    echo -e "${YELLOW}Preview mode desactivado${NC}"
+                else
+                    echo -e "${RED}Uso: /preview [on|off]${NC}"
+                    echo -e "Ejemplo: ${DIM}/preview on${NC}"
                 fi
                 echo ""
                 continue

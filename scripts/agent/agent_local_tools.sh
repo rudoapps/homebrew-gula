@@ -676,6 +676,13 @@ except ValueError:
         fi
     fi
 
+    # Check global preview_mode setting
+    local preview_mode=$(get_agent_config "preview_mode")
+    if [ "$preview_mode" = "true" ] && [ "$needs_approval" = false ]; then
+        needs_approval=true
+        risk_reason="Preview mode activado"
+    fi
+
     # Si requiere aprobación, preguntar al usuario
     if [ "$needs_approval" = true ]; then
         echo "" >&2
@@ -715,16 +722,33 @@ with open('$input_file', 'r') as f:
 with open('$tmp_new', 'w') as f:
     f.write(data.get('content', ''))
 "
-                    # Show colored diff
-                    diff -u "$tmp_old" "$tmp_new" 2>/dev/null | tail -n +4 | head -30 | while IFS= read -r line; do
+                    # Show enhanced colored diff with stats
+                    local diff_output=$(diff -u "$tmp_old" "$tmp_new" 2>/dev/null)
+                    local total_lines=$(echo "$diff_output" | wc -l)
+                    local added=$(echo "$diff_output" | grep -c "^+" || echo "0")
+                    local removed=$(echo "$diff_output" | grep -c "^-" || echo "0")
+
+                    # Show diff stats
+                    echo -e "  ${BOLD}Cambios:${NC} ${GREEN}+$added${NC} ${RED}-$removed${NC} líneas" >&2
+                    echo "" >&2
+
+                    # Show colored diff (up to 50 lines)
+                    echo "$diff_output" | tail -n +4 | head -50 | while IFS= read -r line; do
                         if [[ "$line" == +* ]]; then
                             echo -e "  ${GREEN}$line${NC}" >&2
                         elif [[ "$line" == -* ]]; then
                             echo -e "  ${RED}$line${NC}" >&2
+                        elif [[ "$line" == @@* ]]; then
+                            echo -e "  ${CYAN}$line${NC}" >&2
                         else
                             echo -e "  ${DIM}$line${NC}" >&2
                         fi
                     done
+
+                    if [ "$total_lines" -gt 54 ]; then
+                        echo -e "  ${DIM}... ($(($total_lines - 54)) líneas más)${NC}" >&2
+                    fi
+
                     rm -f "$tmp_old" "$tmp_new"
                 else
                     # Show content preview for new file
