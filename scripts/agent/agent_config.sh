@@ -28,14 +28,11 @@ CONFIG_CACHE_MTIME=""
 CONFIG_CACHE_TEMP=""
 
 # Required and optional dependencies
-AGENT_REQUIRED_DEPS=("python3" "curl")
+AGENT_REQUIRED_DEPS=("python3" "curl" "jq")
 AGENT_OPTIONAL_DEPS=("glow")
 
-# Detect jq for faster JSON parsing
-HAS_JQ=$(command -v jq &>/dev/null && echo "1" || echo "")
-
 # ============================================================================
-# JSON HELPER FUNCTIONS (jq with python fallback)
+# JSON HELPER FUNCTIONS (jq)
 # ============================================================================
 
 # Get a value from JSON string
@@ -46,13 +43,8 @@ json_get() {
     local field="$2"
     local default="${3:-}"
 
-    if [ -n "$HAS_JQ" ]; then
-        local result=$(echo "$json" | jq -r ".$field // empty" 2>/dev/null)
-        [ -n "$result" ] && echo "$result" || echo "$default"
-    else
-        local result=$(echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); v=d.get('$field'); print('' if v is None else v)" 2>/dev/null)
-        [ -n "$result" ] && echo "$result" || echo "$default"
-    fi
+    local result=$(echo "$json" | jq -r ".$field // empty" 2>/dev/null)
+    [ -n "$result" ] && echo "$result" || echo "$default"
 }
 
 # Get nested value from JSON string
@@ -62,15 +54,8 @@ json_get_nested() {
     local path="$2"
     local default="${3:-}"
 
-    if [ -n "$HAS_JQ" ]; then
-        local result=$(echo "$json" | jq -r "$path // empty" 2>/dev/null)
-        [ -n "$result" ] && echo "$result" || echo "$default"
-    else
-        # For Python, convert jq path to Python: .field.sub -> ['field']['sub']
-        local py_path=$(echo "$path" | sed "s/\./']['/g" | sed "s/^']//" | sed "s/$/']/" | sed "s/^\['/['/")
-        local result=$(echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d$py_path)" 2>/dev/null)
-        [ -n "$result" ] && echo "$result" || echo "$default"
-    fi
+    local result=$(echo "$json" | jq -r "$path // empty" 2>/dev/null)
+    [ -n "$result" ] && echo "$result" || echo "$default"
 }
 
 # Check if JSON has error field
@@ -78,11 +63,7 @@ json_get_nested() {
 json_get_error() {
     local json="$1"
 
-    if [ -n "$HAS_JQ" ]; then
-        echo "$json" | jq -r '.error // .detail // empty' 2>/dev/null
-    else
-        echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error') or d.get('detail') or '')" 2>/dev/null
-    fi
+    echo "$json" | jq -r '.error // .detail // empty' 2>/dev/null
 }
 
 # Check if JSON field equals a value
@@ -92,13 +73,8 @@ json_check() {
     local field="$2"
     local expected="$3"
 
-    if [ -n "$HAS_JQ" ]; then
-        local result=$(echo "$json" | jq -r ".$field" 2>/dev/null)
-        [ "$result" = "$expected" ]
-    else
-        local result=$(echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$field'))" 2>/dev/null)
-        [ "$result" = "$expected" ]
-    fi
+    local result=$(echo "$json" | jq -r ".$field" 2>/dev/null)
+    [ "$result" = "$expected" ]
 }
 
 # Check if JSON field is truthy
@@ -107,13 +83,8 @@ json_is_true() {
     local json="$1"
     local field="$2"
 
-    if [ -n "$HAS_JQ" ]; then
-        local result=$(echo "$json" | jq -r ".$field" 2>/dev/null)
-        [ "$result" = "true" ] || [ "$result" = "True" ]
-    else
-        local result=$(echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$field', False))" 2>/dev/null)
-        [ "$result" = "True" ] || [ "$result" = "true" ]
-    fi
+    local result=$(echo "$json" | jq -r ".$field" 2>/dev/null)
+    [ "$result" = "true" ] || [ "$result" = "True" ]
 }
 
 # Get numeric value from JSON (with default 0)
@@ -123,13 +94,8 @@ json_get_num() {
     local field="$2"
     local default="${3:-0}"
 
-    if [ -n "$HAS_JQ" ]; then
-        local result=$(echo "$json" | jq -r ".$field // $default" 2>/dev/null)
-        echo "${result:-$default}"
-    else
-        local result=$(echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$field', $default))" 2>/dev/null)
-        echo "${result:-$default}"
-    fi
+    local result=$(echo "$json" | jq -r ".$field // $default" 2>/dev/null)
+    echo "${result:-$default}"
 }
 
 # ============================================================================
@@ -170,11 +136,7 @@ get_agent_config() {
 
         CONFIG_CACHE_TEMP=$(mktemp)
 
-        if [ -n "$HAS_JQ" ]; then
-            jq -r 'to_entries | .[] | "\(.key)=\(.value // "")"' "$AGENT_CONFIG_FILE" 2>/dev/null > "$CONFIG_CACHE_TEMP"
-        else
-            python3 -c "import json; d=json.load(open('$AGENT_CONFIG_FILE')); [print(f'{k}={v}' if v is not None else f'{k}=') for k,v in d.items()]" 2>/dev/null > "$CONFIG_CACHE_TEMP"
-        fi
+        jq -r 'to_entries | .[] | "\(.key)=\(.value // "")"' "$AGENT_CONFIG_FILE" 2>/dev/null > "$CONFIG_CACHE_TEMP"
 
         CONFIG_CACHE_FILE="$AGENT_CONFIG_FILE"
         CONFIG_CACHE_MTIME="$current_mtime"
@@ -191,20 +153,11 @@ set_agent_config() {
     local key=$1
     local value=$2
     if [ -f "$AGENT_CONFIG_FILE" ]; then
-        if [ -n "$HAS_JQ" ]; then
-            local tmp=$(mktemp)
-            if [ "$value" = "null" ]; then
-                jq ".$key = null" "$AGENT_CONFIG_FILE" > "$tmp" && mv "$tmp" "$AGENT_CONFIG_FILE"
-            else
-                jq ".$key = \"$value\"" "$AGENT_CONFIG_FILE" > "$tmp" && mv "$tmp" "$AGENT_CONFIG_FILE"
-            fi
+        local tmp=$(mktemp)
+        if [ "$value" = "null" ]; then
+            jq ".$key = null" "$AGENT_CONFIG_FILE" > "$tmp" && mv "$tmp" "$AGENT_CONFIG_FILE"
         else
-            python3 -c "
-import json
-config = json.load(open('$AGENT_CONFIG_FILE'))
-config['$key'] = '$value' if '$value' != 'null' else None
-json.dump(config, open('$AGENT_CONFIG_FILE', 'w'), indent=2)
-"
+            jq --arg v "$value" ".$key = \$v" "$AGENT_CONFIG_FILE" > "$tmp" && mv "$tmp" "$AGENT_CONFIG_FILE"
         fi
 
         # Invalidate cache after modification
@@ -263,28 +216,10 @@ save_project_conversation() {
         echo '{}' > "$AGENT_CONVERSATIONS_FILE"
     fi
 
-    python3 -c "
-import json
-import time
-
-conv_id = '$conversation_id'
-if not conv_id or conv_id in ('None', 'null', ''):
-    exit(0)
-
-try:
-    with open('$AGENT_CONVERSATIONS_FILE') as f:
-        data = json.load(f)
-except:
-    data = {}
-
-data['$project_id'] = {
-    'conversation_id': int(conv_id),
-    'updated_at': time.time()
-}
-
-with open('$AGENT_CONVERSATIONS_FILE', 'w') as f:
-    json.dump(data, f, indent=2)
-"
+    local tmp=$(mktemp)
+    jq --arg pid "$project_id" --argjson cid "$conversation_id" --argjson ts "$(date +%s)" \
+        '.[$pid] = {"conversation_id": $cid, "updated_at": $ts}' \
+        "$AGENT_CONVERSATIONS_FILE" > "$tmp" && mv "$tmp" "$AGENT_CONVERSATIONS_FILE"
 }
 
 # Get last conversation ID for current project
@@ -296,26 +231,23 @@ get_project_conversation() {
         return
     fi
 
-    python3 -c "
-import json
-import time
+    local ttl="${GULA_CONVERSATION_TTL:-86400}"
+    local now=$(date +%s)
+    local entry=$(jq -r --arg pid "$project_id" '.[$pid] // empty' "$AGENT_CONVERSATIONS_FILE" 2>/dev/null)
 
-try:
-    with open('$AGENT_CONVERSATIONS_FILE') as f:
-        data = json.load(f)
+    if [ -z "$entry" ]; then
+        echo ""
+        return
+    fi
 
-    entry = data.get('$project_id', {})
-    conv_id = entry.get('conversation_id')
-    updated_at = entry.get('updated_at', 0)
+    local conv_id=$(echo "$entry" | jq -r '.conversation_id // empty' 2>/dev/null)
+    local updated_at=$(echo "$entry" | jq -r '.updated_at // 0' 2>/dev/null)
 
-    # Only return if less than 24 hours old
-    if conv_id and (time.time() - updated_at) < 86400:
-        print(conv_id)
-    else:
-        print('')
-except:
-    print('')
-"
+    if [ -n "$conv_id" ] && [ $((now - ${updated_at:-0})) -lt "$ttl" ]; then
+        echo "$conv_id"
+    else
+        echo ""
+    fi
 }
 
 # Clear conversation for current project
@@ -326,21 +258,8 @@ clear_project_conversation() {
         return
     fi
 
-    python3 -c "
-import json
-
-try:
-    with open('$AGENT_CONVERSATIONS_FILE') as f:
-        data = json.load(f)
-
-    if '$project_id' in data:
-        del data['$project_id']
-
-    with open('$AGENT_CONVERSATIONS_FILE', 'w') as f:
-        json.dump(data, f, indent=2)
-except:
-    pass
-"
+    local tmp=$(mktemp)
+    jq --arg pid "$project_id" 'del(.[$pid])' "$AGENT_CONVERSATIONS_FILE" > "$tmp" && mv "$tmp" "$AGENT_CONVERSATIONS_FILE"
 }
 
 # ============================================================================
@@ -696,15 +615,16 @@ create_file_backup() {
 
     # Store metadata
     local metadata_path="$AGENT_UNDO_DIR/${filename}.${timestamp}.meta"
-    cat > "$metadata_path" <<EOF
-{
-    "original_path": "$file_path",
-    "backup_path": "$backup_path",
-    "timestamp": $timestamp,
-    "date": "$(date -r $timestamp '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -d @$timestamp '+%Y-%m-%d %H:%M:%S' 2>/dev/null)",
-    "size": $(stat -f%z "$file_path" 2>/dev/null || stat -c%s "$file_path" 2>/dev/null)
-}
-EOF
+    local file_size=$(stat -f%z "$file_path" 2>/dev/null || stat -c%s "$file_path" 2>/dev/null)
+    local date_str=$(date -r $timestamp '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -d @$timestamp '+%Y-%m-%d %H:%M:%S' 2>/dev/null)
+    jq -n \
+        --arg op "$file_path" \
+        --arg bp "$backup_path" \
+        --argjson ts "$timestamp" \
+        --arg dt "$date_str" \
+        --argjson sz "${file_size:-0}" \
+        '{original_path: $op, backup_path: $bp, timestamp: $ts, date: $dt, size: $sz}' \
+        > "$metadata_path"
 
     echo "$backup_path"
 }
@@ -854,11 +774,40 @@ cleanup_old_backups() {
         fi
     done
 
-    # Delete old backups
-    if [ ${#backups[@]} -gt 0 ]; then
+    # Delete old backups (per-file cleanup)
+    if [ ${#backups_to_delete[@]} -gt 0 ]; then
         for file in "${backups_to_delete[@]}"; do
             rm -f "$file"
         done
-        echo -e "${DIM}Limpiados ${#backups_to_delete[@]} backups antiguos${NC}"
     fi
+
+    # Global limits: max total files and max total size
+    local max_backup_files="${GULA_MAX_BACKUP_FILES:-100}"
+    local max_backup_size="${GULA_MAX_BACKUP_SIZE:-52428800}"  # 50MB
+
+    # Count all remaining backups (sorted oldest last)
+    local all_backups=($(ls -t "$AGENT_UNDO_DIR"/*.bak 2>/dev/null))
+    local total_files=${#all_backups[@]}
+
+    # Remove oldest files if exceeding file count limit
+    if [ "$total_files" -gt "$max_backup_files" ]; then
+        local i=$max_backup_files
+        while [ $i -lt $total_files ]; do
+            local old_bak="${all_backups[$i]}"
+            local old_meta="${old_bak%.bak}.meta"
+            rm -f "$old_bak" "$old_meta"
+            i=$((i + 1))
+        done
+    fi
+
+    # Remove oldest files if exceeding total size limit
+    local total_size=0
+    for bak in $(ls -t "$AGENT_UNDO_DIR"/*.bak 2>/dev/null); do
+        local bak_size=$(stat -f%z "$bak" 2>/dev/null || stat -c%s "$bak" 2>/dev/null || echo 0)
+        total_size=$((total_size + bak_size))
+        if [ "$total_size" -gt "$max_backup_size" ]; then
+            local old_meta="${bak%.bak}.meta"
+            rm -f "$bak" "$old_meta"
+        fi
+    done
 }
