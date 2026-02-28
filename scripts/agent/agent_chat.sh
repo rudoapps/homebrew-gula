@@ -4,6 +4,21 @@
 # Handles chat UI, interactive mode, and conversations
 
 # ============================================================================
+# COST / NUMBER FORMATTING HELPERS
+# ============================================================================
+
+# Format cost value with appropriate decimal places
+# Usage: format_cost "0.001234"
+format_cost() {
+    local cost="${1:-0}"
+    echo "$cost" | awk '{
+        if ($1 >= 0.01) printf "%.2f\n", $1
+        else if ($1 >= 0.001) printf "%.4f\n", $1
+        else { s = sprintf("%.6f", $1); gsub(/0+$/, "", s); gsub(/\.$/, "", s); print s }
+    }'
+}
+
+# ============================================================================
 # ERROR FORMATTING
 # ============================================================================
 
@@ -351,16 +366,7 @@ display_summary() {
     # Stats
     [ -n "$tokens" ] && [ "$tokens" != "0" ] && summary_parts="$summary_parts · ${tokens} tokens"
     if [ -n "$cost" ]; then
-        local cost_fmt=$(python3 -c "
-cost = float('${cost:-0}')
-if cost >= 0.01:
-    fmt = f'{cost:.2f}'
-elif cost >= 0.001:
-    fmt = f'{cost:.4f}'
-else:
-    fmt = f'{cost:.6f}'.rstrip('0').rstrip('.')
-print(fmt)
-" 2>/dev/null || echo "$cost")
+        local cost_fmt=$(format_cost "$cost")
         summary_parts="$summary_parts · \$$cost_fmt"
     fi
     [ -n "$elapsed" ] && [ "$elapsed" != "0" ] && summary_parts="$summary_parts · ${elapsed}s"
@@ -1047,7 +1053,7 @@ print(fmt)
             # Update total cost (protect against empty values)
             set +e
             [ -z "$msg_cost" ] && msg_cost=0
-            total_cost=$(python3 -c "print(round(${total_cost:-0} + ${msg_cost:-0}, 6))" 2>/dev/null || echo "$total_cost")
+            total_cost=$(echo "${total_cost:-0} ${msg_cost:-0}" | awk '{printf "%.6f", $1 + $2}')
             set -e
 
             # Display response (or notice if empty)
@@ -1076,15 +1082,14 @@ print(fmt)
 
             # Line 1: Session duration (formatted)
             if [ -n "$total_elapsed" ] && [ "$total_elapsed" != "0" ]; then
-                local duration_fmt=$(python3 -c "
-t = ${total_elapsed}
-if t >= 60:
-    m = int(t / 60)
-    s = int(t % 60)
-    print(f'{m}m {s}s')
-else:
-    print(f'{int(t)}s')
-" 2>/dev/null || echo "${total_elapsed}s")
+                local duration_fmt
+                if [ "${total_elapsed:-0}" -ge 60 ] 2>/dev/null; then
+                    local m=$((total_elapsed / 60))
+                    local s=$((total_elapsed % 60))
+                    duration_fmt="${m}m ${s}s"
+                else
+                    duration_fmt="${total_elapsed}s"
+                fi
                 echo -e "${DIM}│${NC}  ⏱  Duración: ${BOLD}${duration_fmt}${NC}"
             fi
 
@@ -1104,7 +1109,7 @@ else:
             # Line 3: Cost and tokens (this run)
             if [ -n "$session_tokens" ] && [ "$session_tokens" != "0" ]; then
                 [ -z "$session_cost" ] && session_cost=0
-                local session_cost_fmt=$(python3 -c "print(f'{float(${session_cost:-0}):.4f}')" 2>/dev/null || echo "0.0000")
+                local session_cost_fmt=$(printf "%.4f" "${session_cost:-0}" 2>/dev/null || echo "0.0000")
                 echo -e "${DIM}│${NC}  💰 Costo: ${BOLD}\$${session_cost_fmt}${NC}  ${DIM}(${session_tokens} tokens)${NC}"
             fi
 
