@@ -1969,7 +1969,7 @@ run_hybrid_chat() {
     local current_conv_id="$conversation_id"
     local tool_results=""
     local iteration=0
-    local max_tool_iterations=30  # Limite de seguridad (se pregunta antes de salir)
+    local max_tool_iterations="${GULA_MAX_TOOL_ITERATIONS:-30}"  # Limite de seguridad
     local start_time=$(date +%s)  # Track total elapsed time
 
     # Accumulate session costs across all HTTP calls
@@ -1984,12 +1984,7 @@ run_hybrid_chat() {
         if [ -n "$images_json" ] && [ "$images_json" != "[]" ]; then
             # Remove image paths from prompt text
             cleaned_prompt=$(remove_image_paths_from_text "$prompt")
-            local num_images
-            if [ -n "$HAS_JQ" ]; then
-                num_images=$(echo "$images_json" | jq 'length' 2>/dev/null || echo "0")
-            else
-                num_images=$(echo "$images_json" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
-            fi
+            local num_images=$(echo "$images_json" | jq 'length' 2>/dev/null || echo "0")
             if [ "$num_images" -gt 0 ]; then
                 echo -e "  ${GREEN}📎${NC} ${num_images} imagen(es) detectada(s)" >&2
             fi
@@ -2035,12 +2030,7 @@ run_hybrid_chat() {
         accumulated_session_cost=$(echo "$accumulated_session_cost + $this_session_cost" | bc 2>/dev/null || echo "$accumulated_session_cost")
 
         # Verificar si hay tool_requests
-        local tool_requests
-        if [ -n "$HAS_JQ" ]; then
-            tool_requests=$(echo "$response" | jq -c '.tool_requests // empty' 2>/dev/null)
-        else
-            tool_requests=$(echo "$response" | python3 -c "import sys,json; r=json.load(sys.stdin).get('tool_requests'); print(json.dumps(r) if r else '')" 2>/dev/null)
-        fi
+        local tool_requests=$(echo "$response" | jq -c '.tool_requests // empty' 2>/dev/null)
 
         if [ -n "$tool_requests" ] && [ "$tool_requests" != "null" ]; then
             # Ejecutar tools localmente (pass start_time for elapsed calculation)
@@ -2067,11 +2057,7 @@ run_hybrid_chat() {
             # Extract results array, line count, and user input from tool output
             local tool_output_lines=$(json_get_num "$tool_output" "tool_output_lines")
             local user_inline_input=$(json_get "$tool_output" "user_input")
-            if [ -n "$HAS_JQ" ]; then
-                tool_results=$(echo "$tool_output" | jq -c '.results' 2>/dev/null)
-            else
-                tool_results=$(echo "$tool_output" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin).get('results',[])))" 2>/dev/null)
-            fi
+            tool_results=$(echo "$tool_output" | jq -c '.results' 2>/dev/null)
 
             # Export line count for next send_chat_hybrid call to clear
             export GULA_TOOL_OUTPUT_LINES="$tool_output_lines"
@@ -2080,12 +2066,7 @@ run_hybrid_chat() {
             export GULA_USER_INLINE_INPUT="$user_inline_input"
 
             # Verify it's valid JSON array
-            local is_valid
-            if [ -n "$HAS_JQ" ]; then
-                is_valid=$(echo "$tool_results" | jq -r 'if type == "array" and length > 0 then "yes" else "no" end' 2>/dev/null)
-            else
-                is_valid=$(echo "$tool_results" | python3 -c "import sys,json; r=json.load(sys.stdin); print('yes' if isinstance(r, list) and len(r) > 0 else 'no')" 2>/dev/null)
-            fi
+            local is_valid=$(echo "$tool_results" | jq -r 'if type == "array" and length > 0 then "yes" else "no" end' 2>/dev/null)
             if [ "$is_valid" != "yes" ]; then
                 local debug_preview=$(echo "$tool_results" | head -c 200)
                 echo "{\"error\": \"Invalid tool results format\", \"response\": \"\", \"debug\": \"$debug_preview\"}"
@@ -2102,14 +2083,12 @@ run_hybrid_chat() {
         # Ensure values are valid numbers
         [ -z "$accumulated_session_tokens" ] && accumulated_session_tokens=0
         [ -z "$accumulated_session_cost" ] && accumulated_session_cost=0
-        echo "$response" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-data['total_elapsed'] = ${total_elapsed:-0}
-data['session_tokens'] = ${accumulated_session_tokens:-0}
-data['session_cost'] = ${accumulated_session_cost:-0}
-print(json.dumps(data))
-" 2>/dev/null || echo "$response"
+        echo "$response" | jq \
+            --argjson elapsed "${total_elapsed:-0}" \
+            --argjson tokens "${accumulated_session_tokens:-0}" \
+            --argjson cost "${accumulated_session_cost:-0}" \
+            '.total_elapsed = $elapsed | .session_tokens = $tokens | .session_cost = $cost' \
+            2>/dev/null || echo "$response"
         return 0
     done
 
