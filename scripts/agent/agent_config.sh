@@ -241,7 +241,7 @@ get_project_conversation() {
     fi
 
     local conv_id=$(echo "$entry" | jq -r '.conversation_id // empty' 2>/dev/null)
-    local updated_at=$(echo "$entry" | jq -r '.updated_at // 0' 2>/dev/null)
+    local updated_at=$(echo "$entry" | jq -r '.updated_at // 0 | floor' 2>/dev/null)
 
     if [ -n "$conv_id" ] && [ $((now - ${updated_at:-0})) -lt "$ttl" ]; then
         echo "$conv_id"
