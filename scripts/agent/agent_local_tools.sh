@@ -3,11 +3,11 @@
 # Agent Local Tools - Ejecuta herramientas localmente sobre el proyecto del usuario
 # Este modulo permite al agente operar sobre archivos y comandos en la maquina del usuario
 
-# Configuracion de limites de seguridad
-MAX_FILE_SIZE=50000          # 50KB max por archivo
-MAX_OUTPUT_LINES=200         # Maximo lineas de output
-MAX_COMMAND_TIMEOUT=30       # Timeout para comandos en segundos
-MAX_SEARCH_RESULTS=50        # Maximo resultados de busqueda
+# Configuracion de limites de seguridad (configurables via env vars)
+MAX_FILE_SIZE="${GULA_MAX_FILE_SIZE:-50000}"            # 50KB max por archivo
+MAX_OUTPUT_LINES="${GULA_MAX_OUTPUT_LINES:-200}"        # Maximo lineas de output
+MAX_COMMAND_TIMEOUT="${GULA_MAX_COMMAND_TIMEOUT:-30}"   # Timeout para comandos en segundos
+MAX_SEARCH_RESULTS="${GULA_MAX_SEARCH_RESULTS:-50}"     # Maximo resultados de busqueda
 
 # ============================================================================
 # INTERACTIVE SELECTOR (for confirmations)
@@ -261,7 +261,7 @@ detect_key_files() {
     done
 
     # Convertir a JSON array
-    printf '%s\n' "${key_files[@]}" | python3 -c "import sys, json; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))"
+    printf '%s\n' "${key_files[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))'
 }
 
 # Lee contenido de dependencias
@@ -278,16 +278,10 @@ get_dependencies_summary() {
             ;;
         node)
             if [ -f "package.json" ]; then
-                python3 -c "
-import json
-try:
-    pkg = json.load(open('package.json'))
-    deps = list(pkg.get('dependencies', {}).keys())[:20]
-    dev = list(pkg.get('devDependencies', {}).keys())[:10]
-    print('deps:', ', '.join(deps))
-    print('devDeps:', ', '.join(dev))
-except: pass
-"
+                local deps=$(jq -r '[.dependencies // {} | keys[]] | .[:20] | join(", ")' package.json 2>/dev/null)
+                local dev_deps=$(jq -r '[.devDependencies // {} | keys[]] | .[:10] | join(", ")' package.json 2>/dev/null)
+                [ -n "$deps" ] && echo "deps: $deps"
+                [ -n "$dev_deps" ] && echo "devDeps: $dev_deps"
             fi
             ;;
         flutter)
@@ -387,7 +381,7 @@ PYEOF
 # Lee un archivo del proyecto
 tool_read_file() {
     local input="$1"
-    local path=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('path', ''))")
+    local path=$(echo "$input" | jq -r '.path // ""')
 
     # Validar que no salga del directorio actual (usando realpath para resolver symlinks)
     local path_check=$(python3 -c "
@@ -458,9 +452,13 @@ except ValueError:
     # Verificar tamano
     local size=$(stat -f%z "$resolved_path" 2>/dev/null || stat -c%s "$resolved_path" 2>/dev/null)
     if [ "$size" -gt "$MAX_FILE_SIZE" ]; then
-        echo "# Archivo truncado (${size} bytes, max: ${MAX_FILE_SIZE})"
+        local remaining=$((size - MAX_FILE_SIZE))
+        echo "[TRUNCATED] File is ${size} bytes. Only first ${MAX_FILE_SIZE} bytes shown. Use read_file with line offset for the rest."
+        echo "---"
         head -c "$MAX_FILE_SIZE" "$resolved_path"
-        echo -e "\n... [truncado]"
+        echo ""
+        echo "---"
+        echo "[END_TRUNCATED: ${remaining} bytes not shown]"
     else
         cat "$resolved_path"
     fi
@@ -469,8 +467,8 @@ except ValueError:
 # Lista archivos en un directorio
 tool_list_files() {
     local input="$1"
-    local path=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('path', '.'))")
-    local pattern=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('pattern', '*'))")
+    local path=$(echo "$input" | jq -r '.path // "."')
+    local pattern=$(echo "$input" | jq -r '.pattern // "*"')
 
     # Validar que no salga del directorio actual (usando realpath para symlinks)
     local path_check=$(python3 -c "
@@ -527,8 +525,8 @@ except ValueError:
 # Busca texto en el codigo
 tool_search_code() {
     local input="$1"
-    local query=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('query', ''))")
-    local file_pattern=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('file_pattern', ''))")
+    local query=$(echo "$input" | jq -r '.query // ""')
+    local file_pattern=$(echo "$input" | jq -r '.file_pattern // ""')
 
     if [ -z "$query" ]; then
         echo "Error: Se requiere un query de busqueda"
@@ -921,7 +919,7 @@ except Exception as e:
 # Ejecuta un comando en terminal
 tool_run_command() {
     local input="$1"
-    local command=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('command', ''))")
+    local command=$(echo "$input" | jq -r '.command // ""')
 
     if [ -z "$command" ]; then
         echo "Error: Se requiere un comando"
@@ -1161,7 +1159,7 @@ tool_run_command() {
 # Obtiene informacion de git
 tool_git_info() {
     local input="$1"
-    local info_type=$(echo "$input" | python3 -c "import sys, json; print(json.load(sys.stdin).get('type', 'status'))")
+    local info_type=$(echo "$input" | jq -r '.type // "status"')
 
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
         echo "Error: No es un repositorio git"
