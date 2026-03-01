@@ -71,26 +71,21 @@ show_available_subagents() {
     fi
 
     # Parse and display subagents
-    python3 -c "
-import sys
-import json
+    local subagent_count=$(echo "$response" | jq '.subagents | length' 2>/dev/null || echo "0")
+    local parse_status=0
 
-try:
-    data = json.loads('''$response''')
-    subagents = data.get('subagents', [])
-
-    if not subagents:
-        print('  No hay subagentes disponibles.')
-    else:
-        for sa in subagents:
-            sid = sa.get('id', 'unknown')
-            desc = sa.get('description', 'Sin descripcion')[:50]
-            print(f'  \033[0;36m{sid:<16}\033[0m - {desc}')
-except Exception as e:
-    print(f'  \033[0;31mError parseando respuesta: {e}\033[0m')
-    sys.exit(1)
-"
-    local parse_status=$?
+    if [ "$subagent_count" -eq 0 ] 2>/dev/null; then
+        echo "  No hay subagentes disponibles."
+    else
+        echo "$response" | jq -r '.subagents[]? | "\(.id)\t\(.description // "Sin descripcion")"' 2>/dev/null | \
+        while IFS=$'\t' read -r sid desc; do
+            printf "  \033[0;36m%-16s\033[0m - %.50s\n" "$sid" "$desc"
+        done
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo -e "  \033[0;31mError parseando respuesta\033[0m"
+            parse_status=1
+        fi
+    fi
 
     echo ""
     if [ $parse_status -eq 0 ]; then
@@ -119,21 +114,7 @@ is_valid_subagent() {
     fi
 
     # Check if subagent_id exists in the list
-    python3 -c "
-import json
-import sys
-
-try:
-    data = json.loads('''$response''')
-    subagents = data.get('subagents', [])
-    ids = [sa.get('id') for sa in subagents]
-    if '$subagent_id' in ids:
-        sys.exit(0)
-    else:
-        sys.exit(1)
-except:
-    sys.exit(0)  # Allow if can't parse, let server validate
-"
+    echo "$response" | jq -e --arg id "$subagent_id" '.subagents[]? | select(.id == $id)' >/dev/null 2>&1
 }
 
 # ============================================================================
@@ -169,19 +150,19 @@ invoke_subagent_in_chat() {
     fi
 
     # Check for errors
-    local error=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error') or '')" 2>/dev/null)
+    local error=$(json_get_error "$response")
     if [ -n "$error" ] && [ "$error" != "None" ]; then
         echo -e "${RED}Error: $error${NC}"
         return 1
     fi
 
     # Extract response data
-    local text_response=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('response', ''))" 2>/dev/null)
-    local new_conv_id=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('conversation_id', ''))" 2>/dev/null)
-    local msg_cost=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_cost', 0))" 2>/dev/null)
-    local msg_tokens=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_tokens', 0))" 2>/dev/null)
-    local msg_elapsed=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('elapsed_time', 0))" 2>/dev/null)
-    local msg_tools=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tools_count', 0))" 2>/dev/null)
+    local text_response=$(json_get "$response" "response")
+    local new_conv_id=$(json_get "$response" "conversation_id")
+    local msg_cost=$(json_get_num "$response" "total_cost")
+    local msg_tokens=$(json_get_num "$response" "total_tokens")
+    local msg_elapsed=$(json_get_num "$response" "elapsed_time")
+    local msg_tools=$(json_get_num "$response" "tools_count")
 
     # Display response using existing display_response function
     display_response "$text_response"
