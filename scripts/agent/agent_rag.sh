@@ -8,7 +8,7 @@
 # ============================================================================
 RAG_STATUS_CACHE=""
 RAG_STATUS_TIMESTAMP=0
-RAG_CACHE_TTL=300  # 5 minutes in seconds
+RAG_CACHE_TTL="${GULA_RAG_CACHE_TTL:-300}"  # 5 minutes in seconds
 
 # ============================================================================
 # GIT REMOTE URL FUNCTIONS
@@ -24,30 +24,22 @@ get_git_remote_url() {
         return 1
     fi
 
-    # Normalize URL using Python (must match server's normalize_git_url)
-    python3 -c "
-import sys
-import re
-url = sys.argv[1].strip()
+    # Convert SSH to HTTPS: git@host:org/repo -> https://host/org/repo
+    if [[ "$url" == git@* ]]; then
+        url="${url#git@}"
+        url="https://${url%%:*}/${url#*:}"
+    fi
 
-# Convert SSH to HTTPS
-if url.startswith('git@'):
-    # git@bitbucket.org:org/repo.git -> https://bitbucket.org/org/repo
-    url = url.replace('git@', 'https://')
-    url = url.replace(':', '/', 1)
+    # Remove user@ from URL (https://user@host -> https://host)
+    url=$(echo "$url" | sed 's|https://[^@]*@|https://|')
 
-# Remove username/password from URL (e.g., https://user@host -> https://host)
-url = re.sub(r'https://[^@]+@', 'https://', url)
+    # Remove .git suffix
+    url="${url%.git}"
 
-# Remove .git suffix
-if url.endswith('.git'):
-    url = url[:-4]
+    # Remove trailing slash
+    url="${url%/}"
 
-# Remove trailing slash
-url = url.rstrip('/')
-
-print(url)
-" "$url"
+    echo "$url"
 }
 
 # ============================================================================
@@ -79,7 +71,7 @@ check_rag_index() {
     local endpoint="$api_url/rag/check"
 
     # URL encode the git_remote_url
-    local encoded_url=$(python3 -c "import urllib.parse; import sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$git_remote_url")
+    local encoded_url=$(jq -rn --arg url "$git_remote_url" '$url | @uri')
 
     # Make request to check endpoint
     local response=$(curl -s -X GET \
@@ -94,46 +86,20 @@ check_rag_index() {
     fi
 
     # Parse response and add git_remote_url for reference
-    # Use temp file to avoid heredoc quote escaping issues
-    local tmp_response=$(mktemp)
-    echo "$response" > "$tmp_response"
-    local result=$(python3 - "$tmp_response" "$git_remote_url" <<'PYEOF'
-import json
-import sys
-
-tmp_file = sys.argv[1]
-git_remote_url = sys.argv[2] if len(sys.argv) > 2 else ""
-
-with open(tmp_file) as f:
-    response_text = f.read()
-
-try:
-    data = json.loads(response_text)
-
-    # Handle error responses (list format from FastAPI)
-    if isinstance(data, list):
-        # Extract error message from list format
-        error_msg = data[0].get('message', 'Unknown error') if data else 'Empty error response'
-        print(json.dumps({
-            'has_index': False,
-            'status': 'error',
-            'message': error_msg,
-            'git_remote_url': git_remote_url
-        }))
-    else:
-        # Normal dict response
-        data['git_remote_url'] = git_remote_url
-        print(json.dumps(data))
-except Exception as e:
-    print(json.dumps({
-        'has_index': False,
-        'status': 'error',
-        'message': str(e),
-        'git_remote_url': git_remote_url
-    }))
-PYEOF
-)
-    rm -f "$tmp_response"
+    local result
+    if echo "$response" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        # Handle error responses (list format from FastAPI)
+        local error_msg=$(echo "$response" | jq -r '.[0].message // "Unknown error"' 2>/dev/null)
+        result=$(jq -n --arg msg "$error_msg" --arg url "$git_remote_url" \
+            '{has_index: false, status: "error", message: $msg, git_remote_url: $url}')
+    else
+        # Normal dict response — add git_remote_url
+        result=$(echo "$response" | jq --arg url "$git_remote_url" '. + {git_remote_url: $url}' 2>/dev/null)
+        if [ -z "$result" ]; then
+            result=$(jq -n --arg url "$git_remote_url" \
+                '{has_index: false, status: "error", message: "Invalid response", git_remote_url: $url}')
+        fi
+    fi
 
     # Cache the result
     RAG_STATUS_CACHE="$result"
@@ -150,11 +116,11 @@ PYEOF
 show_rag_status() {
     local rag_info=$(check_rag_index)
 
-    local has_index=$(echo "$rag_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('has_index', False))" 2>/dev/null)
-    local status=$(echo "$rag_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status', 'unknown'))" 2>/dev/null)
-    local git_url=$(echo "$rag_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('git_remote_url', ''))" 2>/dev/null)
-    local total_chunks=$(echo "$rag_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_chunks', 0))" 2>/dev/null)
-    local message=$(echo "$rag_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message', ''))" 2>/dev/null)
+    local has_index=$(echo "$rag_info" | jq -r '.has_index // false' 2>/dev/null)
+    local status=$(echo "$rag_info" | jq -r '.status // "unknown"' 2>/dev/null)
+    local git_url=$(echo "$rag_info" | jq -r '.git_remote_url // ""' 2>/dev/null)
+    local total_chunks=$(echo "$rag_info" | jq -r '.total_chunks // 0' 2>/dev/null)
+    local message=$(echo "$rag_info" | jq -r '.message // ""' 2>/dev/null)
 
     # Colors
     local GREEN="\033[0;32m"
@@ -209,7 +175,7 @@ show_rag_status() {
 # Returns 0 (true) if RAG is available and should be used
 should_use_rag() {
     local rag_info=$(check_rag_index)
-    local has_index=$(echo "$rag_info" | python3 -c "import sys,json; print('true' if json.load(sys.stdin).get('has_index') else 'false')" 2>/dev/null)
+    local has_index=$(echo "$rag_info" | jq -r 'if .has_index then "true" else "false" end' 2>/dev/null)
 
     [ "$has_index" = "true" ]
 }
@@ -228,7 +194,7 @@ get_rag_git_url() {
     # Call check endpoint to auto-register project if new
     # This ensures the project exists in the RAG system
     local rag_info=$(check_rag_index 2>/dev/null)
-    local status=$(echo "$rag_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status', 'unknown'))" 2>/dev/null)
+    local status=$(echo "$rag_info" | jq -r '.status // "unknown"' 2>/dev/null)
 
     # Show message if project was just registered
     if [ "$status" = "pending" ]; then
