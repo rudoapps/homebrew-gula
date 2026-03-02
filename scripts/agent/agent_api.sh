@@ -39,9 +39,16 @@ curl_with_retry() {
                 echo "$response"
                 return 0
             elif [[ "$http_code" =~ ^5 ]]; then
+                # Check if 500 is actually an auth error (server closes connection on expired token)
+                local resp_lower=$(echo "$response" | tr '[:upper:]' '[:lower:]')
+                if [[ "$resp_lower" == *"not authorized"* ]] || [[ "$resp_lower" == *"connection already closed"* ]] || \
+                   [[ "$resp_lower" == *"not authenticated"* ]]; then
+                    echo "$response"
+                    return 0  # Return as 4xx so caller handles auth
+                fi
                 # Server error (5xx) - retry
                 if [ $attempt -lt $max_retries ]; then
-                    echo "  ${YELLOW}⚠${NC} ${DIM}Error del servidor (${http_code}), reintentando en ${backoff}s...${NC}" >&2
+                    echo -e "  ${YELLOW}⚠${NC} ${DIM}Error del servidor (${http_code}), reintentando en ${backoff}s...${NC}" >&2
                     sleep $backoff
                     backoff=$((backoff * 2))
                     attempt=$((attempt + 1))
@@ -55,7 +62,7 @@ curl_with_retry() {
         else
             # curl failed (network error, timeout, DNS, etc.)
             if [ $attempt -lt $max_retries ]; then
-                echo "  ${YELLOW}⚠${NC} ${DIM}Error de conexión, reintentando en ${backoff}s...${NC}" >&2
+                echo -e "  ${YELLOW}⚠${NC} ${DIM}Error de conexión, reintentando en ${backoff}s...${NC}" >&2
                 sleep $backoff
                 backoff=$((backoff * 2))
                 attempt=$((attempt + 1))
@@ -2004,15 +2011,21 @@ run_hybrid_chat() {
             response=$(send_chat_hybrid "" "$current_conv_id" "$tool_results" "$max_iterations" "$subagent_id" "")
         fi
 
-        # Verificar error
+        # Verificar error - check both object format and array format (FastAPI)
         local error=$(json_get "$response" "error")
+        # Also check for FastAPI array error format: [{"type":"request_error","message":"..."}]
+        if [ -z "$error" ]; then
+            local array_msg=$(echo "$response" | jq -r 'if type == "array" then .[0].message // empty else empty end' 2>/dev/null)
+            [ -n "$array_msg" ] && error="$array_msg"
+        fi
         if [ -n "$error" ]; then
             # Check if it's an auth error (case insensitive patterns)
             local error_lower=$(echo "$error" | tr '[:upper:]' '[:lower:]')
             if [[ "$error_lower" == *"not authenticated"* ]] || [[ "$error_lower" == *"token"* ]] || \
                [[ "$error_lower" == *"expired"* ]] || [[ "$error_lower" == *"401"* ]] || \
                [[ "$error_lower" == *"authentication"* ]] || [[ "$error_lower" == *"unauthorized"* ]] || \
-               [[ "$error_lower" == *"not authorized"* ]] || [[ "$error_lower" == *"access denied"* ]]; then
+               [[ "$error_lower" == *"not authorized"* ]] || [[ "$error_lower" == *"access denied"* ]] || \
+               [[ "$error_lower" == *"connection already closed"* ]]; then
                 echo '{"error": "auth_expired", "message": "Tu sesion ha expirado"}'
                 return 2  # Special return code for auth errors
             fi
