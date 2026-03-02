@@ -137,7 +137,12 @@ agent_login() {
 
     if [ -z "$session_id" ]; then
         echo -e "${RED}Error: No se pudo crear la sesion de autenticacion${NC}"
-        echo -e "${RED}Respuesta: $response${NC}"
+        # Parse error message from response
+        local err_msg=$(echo "$response" | jq -r 'if type == "array" then .[0].message // empty else .error // .detail // empty end' 2>/dev/null)
+        if [ -n "$err_msg" ]; then
+            echo -e "${DIM}Servidor: $err_msg${NC}"
+        fi
+        echo -e "${YELLOW}Verifica que el servidor este disponible e intenta de nuevo.${NC}"
         return 1
     fi
 
