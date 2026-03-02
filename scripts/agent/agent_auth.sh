@@ -27,9 +27,21 @@ validate_agent_token() {
         -H "Authorization: Bearer $access_token" 2>/dev/null)
 
     local http_code=$(echo "$response" | tail -n1)
+    local body=$(echo "$response" | sed '$d')
 
+    # Explicit auth rejection
     if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
         return 1
+    fi
+
+    # Server 500 with auth-related messages (server closes connection on expired token)
+    if [ "$http_code" = "500" ]; then
+        local body_lower=$(echo "$body" | tr '[:upper:]' '[:lower:]')
+        if [[ "$body_lower" == *"connection already closed"* ]] || \
+           [[ "$body_lower" == *"not authorized"* ]] || \
+           [[ "$body_lower" == *"not authenticated"* ]]; then
+            return 1
+        fi
     fi
 
     return 0
