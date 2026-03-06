@@ -403,11 +403,38 @@ send_chat_hybrid() {
     local access_token=$(get_agent_config "access_token")
     local endpoint="$api_url/agent/chat/hybrid"
 
-    # Generar contexto del proyecto solo en el primer mensaje
+    # Generar contexto del proyecto: completo en primer mensaje, minimal en continuaciones
     local project_context=""
     local git_remote_url=""
-    if [ -z "$conversation_id" ] && [ -z "$tool_results_json" ]; then
-        project_context=$(generate_project_context)
+    if [ -z "$tool_results_json" ]; then
+        if [ -z "$conversation_id" ]; then
+            # First message: full context
+            project_context=$(generate_project_context)
+        elif [ -n "$prompt" ]; then
+            # Continuing conversation with new prompt: send minimal context (type + rules)
+            local project_type=$(detect_project_type)
+            local tmp_rules=$(mktemp)
+            for rules_file in ".claude-project" "CLAUDE.md" ".agent-rules"; do
+                if [ -f "$rules_file" ]; then
+                    head -300 "$rules_file" > "$tmp_rules" 2>/dev/null
+                    break
+                fi
+            done
+            project_context=$(python3 - "$project_type" "$(basename "$PWD")" "$tmp_rules" << 'PYEOF'
+import json, sys
+ctx = {"project_type": sys.argv[1], "project_name": sys.argv[2]}
+try:
+    with open(sys.argv[3]) as f:
+        rules = f.read().strip()
+    if rules:
+        ctx["project_rules"] = rules
+except:
+    pass
+print(json.dumps(ctx))
+PYEOF
+)
+            rm -f "$tmp_rules"
+        fi
     fi
 
     # Get git remote URL for RAG context - always send with new prompts (not tool_results)
@@ -421,38 +448,34 @@ send_chat_hybrid() {
     # Get preferred model (user-selected model override)
     local preferred_model=$(get_agent_config "preferred_model")
 
-    # Guardar datos en archivos temporales para evitar problemas de escape
-    local tmp_prompt=$(mktemp)
-    local tmp_context=$(mktemp)
-    local tmp_results=$(mktemp)
-    local tmp_subagent=$(mktemp)
-    local tmp_git_url=$(mktemp)
-    local tmp_images=$(mktemp)
-    local tmp_model=$(mktemp)
-    echo "$prompt" > "$tmp_prompt"
-    echo "$project_context" > "$tmp_context"
-    echo "$tool_results_json" > "$tmp_results"
-    echo "$subagent_id" > "$tmp_subagent"
-    echo "$git_remote_url" > "$tmp_git_url"
-    echo "$images_json" > "$tmp_images"
-    echo "$preferred_model" > "$tmp_model"
+    # Guardar datos en directorio temporal unico
+    local tmp_dir=$(mktemp -d)
+    echo "$prompt" > "$tmp_dir/prompt"
+    echo "$project_context" > "$tmp_dir/context"
+    echo "$tool_results_json" > "$tmp_dir/results"
+    echo "$subagent_id" > "$tmp_dir/subagent"
+    echo "$git_remote_url" > "$tmp_dir/git_url"
+    echo "$images_json" > "$tmp_dir/images"
+    echo "$preferred_model" > "$tmp_dir/model"
 
     # Construir payload con Python
-    local payload=$(python3 - "$tmp_prompt" "$tmp_context" "$tmp_results" "$conversation_id" "$max_iterations" "$tmp_subagent" "$tmp_git_url" "$tmp_images" "$debug_mode" "$tmp_model" << 'PYEOF'
+    local payload=$(python3 - "$tmp_dir" "$conversation_id" "$max_iterations" "$debug_mode" << 'PYEOF'
 import json
 import sys
+import os
 
 try:
-    tmp_prompt = sys.argv[1]
-    tmp_context = sys.argv[2]
-    tmp_results = sys.argv[3]
-    conv_id = sys.argv[4]
-    max_iter_str = sys.argv[5]
-    tmp_subagent = sys.argv[6]
-    tmp_git_url = sys.argv[7]
-    tmp_images = sys.argv[8] if len(sys.argv) > 8 else None
-    debug_mode = sys.argv[9] == "true" if len(sys.argv) > 9 else False
-    tmp_model = sys.argv[10] if len(sys.argv) > 10 else None
+    tmp_dir = sys.argv[1]
+    conv_id = sys.argv[2]
+    max_iter_str = sys.argv[3]
+    debug_mode = sys.argv[4] == "true" if len(sys.argv) > 4 else False
+
+    def read_tmp(name):
+        try:
+            with open(os.path.join(tmp_dir, name)) as f:
+                return f.read().strip()
+        except:
+            return ""
 
     # Parse max_iterations with fallback
     try:
@@ -463,13 +486,11 @@ try:
     data = {"max_iterations": max_iter}
 
     # Leer prompt
-    with open(tmp_prompt) as f:
-        prompt = f.read().strip()
+    prompt = read_tmp("prompt")
     if prompt:
         data["prompt"] = prompt
 
         # Detect @mentions for cross-project RAG
-        # Maps @xxx to project types: @back/@backend -> backend, @ios -> ios, etc.
         import re
         mention_mapping = {
             '@back': 'backend',
@@ -482,17 +503,14 @@ try:
             '@frontend': 'web_frontend',
             '@web': 'web_frontend',
             '@flutter': 'flutter',
-            '@mobile': 'ios',  # Default mobile to ios, could be smarter
+            '@mobile': 'ios',
         }
-        # Find first matching mention
         prompt_lower = prompt.lower()
         for mention, project_type in mention_mapping.items():
             if mention in prompt_lower:
                 data["target_project_type"] = project_type
                 if debug_mode:
                     print(f"[DEBUG] Detected mention '{mention}' -> target_project_type='{project_type}'", file=sys.stderr)
-                # Remove mention from prompt for cleaner context (optional)
-                # data["prompt"] = re.sub(re.escape(mention), '', prompt, flags=re.IGNORECASE).strip()
                 break
 
     # Agregar conversation_id si existe
@@ -500,11 +518,10 @@ try:
         try:
             data["conversation_id"] = int(conv_id)
         except ValueError:
-            pass  # Skip invalid conversation_id
+            pass
 
     # Leer contexto del proyecto
-    with open(tmp_context) as f:
-        project_ctx = f.read().strip()
+    project_ctx = read_tmp("context")
     if project_ctx:
         try:
             data["project_context"] = json.loads(project_ctx)
@@ -512,79 +529,65 @@ try:
             pass
 
     # Leer tool_results
-    with open(tmp_results) as f:
-        tool_results = f.read().strip()
+    tool_results = read_tmp("results")
     if tool_results:
         try:
             parsed_results = json.loads(tool_results)
-            if parsed_results:  # Only add if not empty
+            if parsed_results:
                 data["tool_results"] = parsed_results
         except json.JSONDecodeError as e:
-            # Log error but continue - this is the critical fix
             print(f"Warning: Failed to parse tool_results: {e}", file=sys.stderr)
 
     # Leer subagent_id
-    with open(tmp_subagent) as f:
-        subagent_id = f.read().strip()
+    subagent_id = read_tmp("subagent")
     if subagent_id:
         data["subagent_id"] = subagent_id
 
     # Leer git_remote_url para RAG
-    with open(tmp_git_url) as f:
-        git_url = f.read().strip()
+    git_url = read_tmp("git_url")
     if git_url:
         data["git_remote_url"] = git_url
 
     # Leer imagenes
-    if tmp_images:
-        with open(tmp_images) as f:
-            images_str = f.read().strip()
-        if images_str:
-            try:
-                images = json.loads(images_str)
-                if images and isinstance(images, list) and len(images) > 0:
-                    # Remove source_path (internal only) before sending
-                    for img in images:
-                        img.pop('source_path', None)
-                    data["images"] = images
-            except:
-                pass
+    images_str = read_tmp("images")
+    if images_str:
+        try:
+            images = json.loads(images_str)
+            if images and isinstance(images, list) and len(images) > 0:
+                for img in images:
+                    img.pop('source_path', None)
+                data["images"] = images
+        except:
+            pass
 
-    # Leer preferred_model (user-selected model override)
-    if tmp_model:
-        with open(tmp_model) as f:
-            model_id = f.read().strip()
-        if model_id and model_id != "null" and model_id != "auto":
-            data["preferred_model"] = model_id
-            if debug_mode:
-                print(f"[DEBUG] Using preferred_model={model_id}", file=sys.stderr)
+    # Leer preferred_model
+    model_id = read_tmp("model")
+    if model_id and model_id != "null" and model_id != "auto":
+        data["preferred_model"] = model_id
+        if debug_mode:
+            print(f"[DEBUG] Using preferred_model={model_id}", file=sys.stderr)
 
-    # Debug: show what we're sending
+    # Debug
     if debug_mode and data.get("target_project_type"):
         print(f"[DEBUG] Sending target_project_type={data['target_project_type']}", file=sys.stderr)
 
-    # Check for inline user input (typed during tool execution)
-    import os
+    # Check for inline user input
     user_inline_input = os.environ.get('GULA_USER_INLINE_INPUT', '').strip()
     if user_inline_input:
-        # Add as additional context for the agent
         data["user_context"] = user_inline_input
         if debug_mode:
             print(f"[DEBUG] Including user inline input: {user_inline_input[:50]}", file=sys.stderr)
-        # Clear the env var so it's not sent again
         os.environ['GULA_USER_INLINE_INPUT'] = ''
 
-    # Ensure we always output valid JSON
     print(json.dumps(data))
 
 except Exception as e:
-    # Fallback: output minimal valid payload to prevent 422 errors
     print(f"Error building payload: {e}", file=sys.stderr)
     fallback = {"max_iterations": 10, "error": str(e)}
     print(json.dumps(fallback))
 PYEOF
 )
-    rm -f "$tmp_prompt" "$tmp_context" "$tmp_results" "$tmp_subagent" "$tmp_git_url" "$tmp_images" "$tmp_model"
+    rm -rf "$tmp_dir"
 
     # Validate payload is not empty
     if [ -z "$payload" ]; then

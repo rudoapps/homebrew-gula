@@ -212,10 +212,10 @@ detect_project_type() {
 
 # Genera arbol de archivos comprimido (excluye directorios comunes)
 generate_file_tree() {
-    local max_depth="${1:-4}"
-    local max_files="${2:-100}"
+    local max_depth="${1:-5}"
+    local max_files="${2:-200}"
 
-    find . -maxdepth "$max_depth" -type f \
+    find . -maxdepth "$max_depth" \( -type f -o -type d \) \
         -not -path "*/\.*" \
         -not -path "*/node_modules/*" \
         -not -path "*/__pycache__/*" \
@@ -228,6 +228,7 @@ generate_file_tree() {
         -not -path "*/Pods/*" \
         -not -path "*/.dart_tool/*" \
         -not -path "*/DerivedData/*" \
+        -not -path "*/.gradle/*" \
         -not -name "*.pyc" \
         -not -name "*.class" \
         -not -name "*.o" \
@@ -235,6 +236,8 @@ generate_file_tree() {
         -not -name "package-lock.json" \
         -not -name "yarn.lock" \
         -not -name "Podfile.lock" \
+        -not -name "*.pbxproj" \
+        -not -name "*.xcscheme" \
         2>/dev/null | sort | head -"$max_files"
 }
 
@@ -246,8 +249,8 @@ detect_key_files() {
         "requirements.txt" "pyproject.toml" "setup.py"
         "package.json" "tsconfig.json"
         "pubspec.yaml"
-        "build.gradle" "build.gradle.kts" "settings.gradle"
-        "Package.swift" "Podfile"
+        "build.gradle" "build.gradle.kts" "settings.gradle" "settings.gradle.kts"
+        "Package.swift" "Podfile" "Podfile.lock"
         "Cargo.toml"
         "go.mod"
         "Makefile" "Dockerfile" "docker-compose.yml"
@@ -260,6 +263,40 @@ detect_key_files() {
         fi
     done
 
+    # Detect project-type specific entry points
+    local project_type=$(detect_project_type)
+    case "$project_type" in
+        ios)
+            # Find Swift entry points and key iOS files
+            for f in $(find . -maxdepth 3 -name "AppDelegate.swift" -o -name "SceneDelegate.swift" -o -name "App.swift" -o -name "*App.swift" -o -name "Info.plist" 2>/dev/null | head -5); do
+                key_files+=("$f")
+            done
+            # Find xcodeproj
+            for f in $(find . -maxdepth 2 -name "*.xcodeproj" -o -name "*.xcworkspace" 2>/dev/null | head -2); do
+                key_files+=("$f")
+            done
+            ;;
+        android)
+            # Find Android entry points
+            for f in $(find . -maxdepth 5 -name "AndroidManifest.xml" -o -name "MainActivity.kt" -o -name "MainApplication.kt" 2>/dev/null | head -3); do
+                key_files+=("$f")
+            done
+            ;;
+        flutter)
+            [ -f "lib/main.dart" ] && key_files+=("lib/main.dart")
+            ;;
+        python)
+            for f in "main.py" "app.py" "manage.py" "wsgi.py" "asgi.py"; do
+                [ -f "$f" ] && key_files+=("$f")
+            done
+            ;;
+        node)
+            for f in "index.ts" "index.js" "src/index.ts" "src/index.js" "src/app.ts" "src/app.js"; do
+                [ -f "$f" ] && key_files+=("$f")
+            done
+            ;;
+    esac
+
     # Convertir a JSON array
     printf '%s\n' "${key_files[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))'
 }
@@ -271,22 +308,56 @@ get_dependencies_summary() {
     case "$project_type" in
         python)
             if [ -f "requirements.txt" ]; then
-                head -30 requirements.txt
+                head -60 requirements.txt
             elif [ -f "pyproject.toml" ]; then
-                grep -A 50 "dependencies" pyproject.toml 2>/dev/null | head -30
+                grep -A 80 "dependencies" pyproject.toml 2>/dev/null | head -60
             fi
             ;;
         node)
             if [ -f "package.json" ]; then
-                local deps=$(jq -r '[.dependencies // {} | keys[]] | .[:20] | join(", ")' package.json 2>/dev/null)
-                local dev_deps=$(jq -r '[.devDependencies // {} | keys[]] | .[:10] | join(", ")' package.json 2>/dev/null)
+                local deps=$(jq -r '[.dependencies // {} | to_entries[] | "\(.key)@\(.value)"] | .[:40] | join(", ")' package.json 2>/dev/null)
+                local dev_deps=$(jq -r '[.devDependencies // {} | to_entries[] | "\(.key)@\(.value)"] | .[:20] | join(", ")' package.json 2>/dev/null)
                 [ -n "$deps" ] && echo "deps: $deps"
                 [ -n "$dev_deps" ] && echo "devDeps: $dev_deps"
             fi
             ;;
         flutter)
             if [ -f "pubspec.yaml" ]; then
-                grep -A 30 "dependencies:" pubspec.yaml 2>/dev/null | head -30
+                grep -A 50 "dependencies:" pubspec.yaml 2>/dev/null | head -50
+            fi
+            ;;
+        ios)
+            # SPM dependencies
+            if [ -f "Package.swift" ]; then
+                echo "=== Swift Package Manager ==="
+                grep -E '\.package\(|\.product\(' Package.swift 2>/dev/null | head -20
+            fi
+            # CocoaPods dependencies
+            if [ -f "Podfile" ]; then
+                echo "=== CocoaPods ==="
+                grep -E "^\s*pod\s+" Podfile 2>/dev/null | head -30
+            fi
+            # Xcode project SPM dependencies (Package.resolved)
+            local resolved=$(find . -name "Package.resolved" -maxdepth 3 2>/dev/null | head -1)
+            if [ -n "$resolved" ] && [ -f "$resolved" ]; then
+                echo "=== Resolved Packages ==="
+                jq -r '.pins[]? | "\(.identity) @ \(.state?.version // .state?.branch // "unknown")"' "$resolved" 2>/dev/null | head -30 || \
+                jq -r '.object?.pins[]? | "\(.package) @ \(.state?.version // .state?.branch // "unknown")"' "$resolved" 2>/dev/null | head -30
+            fi
+            ;;
+        android)
+            if [ -f "build.gradle" ]; then
+                echo "=== Gradle Dependencies ==="
+                grep -E "implementation|api\s|kapt|ksp|annotationProcessor" build.gradle 2>/dev/null | head -30
+            elif [ -f "build.gradle.kts" ]; then
+                echo "=== Gradle Dependencies ==="
+                grep -E "implementation|api\(|kapt|ksp|annotationProcessor" build.gradle.kts 2>/dev/null | head -30
+            fi
+            # Also check app/build.gradle
+            if [ -f "app/build.gradle" ]; then
+                grep -E "implementation|api\s|kapt|ksp" app/build.gradle 2>/dev/null | head -30
+            elif [ -f "app/build.gradle.kts" ]; then
+                grep -E "implementation|api\(|kapt|ksp" app/build.gradle.kts 2>/dev/null | head -30
             fi
             ;;
         *)
@@ -299,60 +370,51 @@ get_dependencies_summary() {
 generate_project_context() {
     local project_type=$(detect_project_type)
     local project_name=$(basename "$PWD")
-    local file_tree=$(generate_file_tree)
-    local key_files=$(detect_key_files)
     local git_branch=$(git branch --show-current 2>/dev/null || echo "")
-    local git_status=$(git status --short 2>/dev/null | head -20 || echo "")
-    local dependencies=$(get_dependencies_summary "$project_type")
 
-    # Read project rules file if exists (.claude-project, CLAUDE.md, or .agent-rules)
+    # Run independent operations in parallel using subshells
+    local tmp_dir=$(mktemp -d)
+    (generate_file_tree > "$tmp_dir/tree") &
+    (git status --short 2>/dev/null | head -30 > "$tmp_dir/git") &
+    (get_dependencies_summary "$project_type" > "$tmp_dir/deps") &
+    (detect_key_files > "$tmp_dir/keys") &
+
+    # Read project rules
     local project_rules=""
     for rules_file in ".claude-project" "CLAUDE.md" ".agent-rules"; do
         if [ -f "$rules_file" ]; then
-            project_rules=$(cat "$rules_file" 2>/dev/null | head -200)
+            project_rules=$(head -300 "$rules_file" 2>/dev/null)
             break
         fi
     done
+    echo "$project_rules" > "$tmp_dir/rules"
 
-    # Use temp files to avoid heredoc quote escaping issues
-    local tmp_file_tree=$(mktemp)
-    local tmp_git_status=$(mktemp)
-    local tmp_dependencies=$(mktemp)
-    local tmp_project_rules=$(mktemp)
+    # Wait for all parallel operations
+    wait
 
-    echo "$file_tree" > "$tmp_file_tree"
-    echo "$git_status" > "$tmp_git_status"
-    echo "$dependencies" > "$tmp_dependencies"
-    echo "$project_rules" > "$tmp_project_rules"
-
-    python3 - "$project_type" "$project_name" "$PWD" "$git_branch" "$key_files" \
-        "$tmp_file_tree" "$tmp_git_status" "$tmp_dependencies" "$tmp_project_rules" << 'PYEOF'
+    # Build JSON with Python reading from single tmp dir
+    python3 - "$project_type" "$project_name" "$PWD" "$git_branch" "$tmp_dir" << 'PYEOF'
 import json
 import sys
+import os
 
 project_type = sys.argv[1]
 project_name = sys.argv[2]
 root_path = sys.argv[3]
 git_branch = sys.argv[4]
-key_files_json = sys.argv[5]
-tmp_file_tree = sys.argv[6]
-tmp_git_status = sys.argv[7]
-tmp_dependencies = sys.argv[8]
-tmp_project_rules = sys.argv[9]
+tmp_dir = sys.argv[5]
 
-# Read content from temp files
-with open(tmp_file_tree) as f:
-    file_tree = f.read().strip()
-with open(tmp_git_status) as f:
-    git_status = f.read().strip()
-with open(tmp_dependencies) as f:
-    dependencies = f.read().strip()
-with open(tmp_project_rules) as f:
-    project_rules = f.read().strip()
+def read_tmp(name):
+    try:
+        with open(os.path.join(tmp_dir, name)) as f:
+            return f.read().strip()
+    except:
+        return ""
 
 # Parse key_files JSON
+key_files_raw = read_tmp("keys")
 try:
-    key_files = json.loads(key_files_json) if key_files_json else []
+    key_files = json.loads(key_files_raw) if key_files_raw else []
 except:
     key_files = []
 
@@ -360,18 +422,18 @@ context = {
     "project_type": project_type,
     "project_name": project_name,
     "root_path": root_path,
-    "file_tree": file_tree,
+    "file_tree": read_tmp("tree"),
     "git_branch": git_branch,
-    "git_status": git_status,
+    "git_status": read_tmp("git"),
     "key_files": key_files,
-    "dependencies": dependencies,
-    "project_rules": project_rules
+    "dependencies": read_tmp("deps"),
+    "project_rules": read_tmp("rules"),
 }
 
 print(json.dumps(context))
 PYEOF
 
-    rm -f "$tmp_file_tree" "$tmp_git_status" "$tmp_dependencies" "$tmp_project_rules"
+    rm -rf "$tmp_dir"
 }
 
 # ============================================================================
