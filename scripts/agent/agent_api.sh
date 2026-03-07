@@ -420,11 +420,11 @@ send_chat_hybrid() {
                     break
                 fi
             done
-            project_context=$(python3 - "$project_type" "$(basename "$PWD")" "$tmp_rules" << 'PYEOF'
+            project_context=$(python3 - "$project_type" "$(basename "$PWD")" "$PWD" "$tmp_rules" << 'PYEOF'
 import json, sys
-ctx = {"project_type": sys.argv[1], "project_name": sys.argv[2]}
+ctx = {"project_type": sys.argv[1], "project_name": sys.argv[2], "root_path": sys.argv[3]}
 try:
-    with open(sys.argv[3]) as f:
+    with open(sys.argv[4]) as f:
         rules = f.read().strip()
     if rules:
         ctx["project_rules"] = rules
