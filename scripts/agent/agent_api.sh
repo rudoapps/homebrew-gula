@@ -1268,6 +1268,8 @@ proc = subprocess.Popen(
 event_type = None
 texts = []
 streaming_text = False  # Track if we're in text streaming mode
+header_shown = False  # Track if Agent header was already printed
+rendered_chars = 0  # Track how many chars of text have been rendered (for incremental streaming)
 rag_indicator_for_header = ""  # RAG indicator to show in Agent header
 result = {
     "conversation_id": None,
@@ -1417,24 +1419,42 @@ try:
                 content = parsed.get("content", "")
                 msg_model = parsed.get("model", "")
                 if content:
-                    # First text chunk - clear tool output if needed, update spinner
+                    # First text chunk - show header and start streaming
                     if not streaming_text:
                         streaming_text = True
                         result["msg_model"] = msg_model
+                        spinner.stop()
 
-                        # Clear previous tool output lines before showing response
+                        # Clear previous tool output lines
                         if tool_lines_to_clear > 0:
-                            spinner.stop()
-                            # Move cursor up and clear each line
                             for _ in range(tool_lines_to_clear):
                                 sys.stderr.write(f"\033[A\033[2K")
                             sys.stderr.flush()
-                            tool_lines_to_clear = 0  # Don't clear again
+                            tool_lines_to_clear = 0
 
-                        spinner.update(f"Recibiendo respuesta... {DIM}({msg_model}){NC}" if msg_model else "Recibiendo respuesta...")
+                        # Print header once
+                        model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
+                        if not header_shown:
+                            sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
+                            header_shown = True
 
-                    # Buffer text (don't display yet - will render with glow at the end)
+                    # Stream text in real-time with markdown conversion
                     texts.append(content)
+                    # Render incrementally: process complete lines
+                    full_so_far = "".join(texts)
+                    lines = full_so_far.split('\n')
+                    # Keep last incomplete line in buffer, render complete lines
+                    if len(lines) > 1:
+                        complete_lines = '\n'.join(lines[:-1])
+                        # Only render new lines we haven't shown yet
+                        new_content = complete_lines[rendered_chars:]
+                        if new_content:
+                            # Apply markdown formatting line by line
+                            formatted = markdown_to_ansi(new_content)
+                            formatted = "  " + formatted.replace("\n", "\n  ")
+                            sys.stderr.write(formatted + "\n")
+                            sys.stderr.flush()
+                            rendered_chars = len(complete_lines) + 1  # +1 for the \n
 
             elif event_type == "tool_requests":
                 tool_calls = parsed.get("tool_calls", [])
@@ -1446,25 +1466,24 @@ try:
                 result["session_cost"] = parsed.get("session_cost", 0)
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
 
-                # Clear previous tool output lines before showing new content
-                if tool_lines_to_clear > 0:
-                    spinner.stop()
-                    for _ in range(tool_lines_to_clear):
-                        sys.stderr.write(f"\033[A\033[2K")
-                    sys.stderr.flush()
-                    tool_lines_to_clear = 0
-
-                # Render buffered text before tool execution
+                # Flush any remaining buffered text before tools
                 if texts:
                     spinner.stop()
                     full_text = "".join(texts)
-                    msg_model = result.get("msg_model", "")
-                    model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
-                    sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
-                    render_hybrid(full_text)
+                    remaining = full_text[rendered_chars:]
+                    if remaining.strip():
+                        if not header_shown:
+                            msg_model = result.get("msg_model", "")
+                            model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
+                            sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
+                            header_shown = True
+                        formatted = markdown_to_ansi(remaining)
+                        formatted = "  " + formatted.replace("\n", "\n  ")
+                        sys.stderr.write(formatted + "\n")
+                        sys.stderr.flush()
+                    rendered_chars = len(full_text)
                     texts.clear()
 
-                # Add newline after text, then stop spinner
                 if streaming_text:
                     sys.stderr.write("\n")
                     sys.stderr.flush()
@@ -1480,14 +1499,20 @@ try:
                 result["max_iterations_reached"] = parsed.get("max_iterations_reached", False)
                 result["truncation_stats"] = parsed.get("truncation_stats", {})
 
-                # Render buffered text with glow
+                # Flush any remaining buffered text
                 if texts:
                     spinner.stop()
                     full_text = "".join(texts)
-                    msg_model = result.get("msg_model", "")
-                    model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
-                    sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
-                    render_hybrid(full_text)
+                    remaining = full_text[rendered_chars:]
+                    if remaining.strip():
+                        if not header_shown:
+                            msg_model = result.get("msg_model", "")
+                            model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
+                            sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
+                            header_shown = True
+                        formatted = markdown_to_ansi(remaining)
+                        formatted = "  " + formatted.replace("\n", "\n  ")
+                        sys.stderr.write(formatted)
                     sys.stderr.write("\n")
                     sys.stderr.flush()
                     texts.clear()
@@ -1661,6 +1686,7 @@ SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 TOOL_ICONS = {
     "read_file": "📖",
     "write_file": "✏️",
+    "edit_file": "✏️",
     "list_files": "📁",
     "search_code": "🔍",
     "run_command": "⌘",
@@ -1671,6 +1697,7 @@ TOOL_ICONS = {
 TOOL_VERBS = {
     "read_file": "Leyendo",
     "write_file": "Escribiendo",
+    "edit_file": "Editando",
     "list_files": "Listando",
     "search_code": "Buscando",
     "run_command": "Ejecutando",
@@ -1802,18 +1829,7 @@ total_elapsed = int(time.time()) - request_start_time
 # Track lines output for later clearing
 tool_output_lines = 0
 
-# Show initial progress bar if multiple tools
-if total_tools > 1:
-    bar_width = 30
-    filled = 0
-    empty = bar_width
-    bar = f"{CYAN}{'━' * filled}{DIM}{'─' * empty}{NC}"
-    sys.stderr.write(f"\n  {DIM}╭{'─' * 50}╮{NC}\n")
-    sys.stderr.write(f"  {DIM}│{NC} {BOLD}Ejecutando {total_tools} herramientas{NC}{' ' * (50 - 24 - len(str(total_tools)))}  {DIM}│{NC}\n")
-    sys.stderr.write(f"  {DIM}│{NC} [{bar}] {DIM}0%{NC}{' ' * (50 - 34)}  {DIM}│{NC}\n")
-    sys.stderr.write(f"  {DIM}╰{'─' * 50}╯{NC}\n")
-    sys.stderr.flush()
-    tool_output_lines += 4
+# No initial progress bar - tools show inline
 
 for idx, tc in enumerate(tool_requests, 1):
     tc_id = tc["id"]
@@ -1832,6 +1848,11 @@ for idx, tc in enumerate(tool_requests, 1):
         detail = filename or path
         action_msg = f"{verb} {filename}"
     elif tc_name == "write_file":
+        path = tc_input.get("path", "")
+        filename = os.path.basename(path) if path else ""
+        detail = filename or path
+        action_msg = f"{verb} {filename}"
+    elif tc_name == "edit_file":
         path = tc_input.get("path", "")
         filename = os.path.basename(path) if path else ""
         detail = filename or path
@@ -1933,21 +1954,7 @@ for idx, tc in enumerate(tool_requests, 1):
         "result": output
     })
 
-    # Update progress bar if multiple tools
-    if total_tools > 1:
-        bar_width = 30
-        progress_pct = (idx / total_tools) * 100
-        filled = int((idx / total_tools) * bar_width)
-        empty = bar_width - filled
-        bar = f"{GREEN}{'━' * filled}{DIM}{'─' * empty}{NC}"
-
-        # Move cursor up to overwrite progress bar (4 lines up)
-        sys.stderr.write(f"\033[4A")
-        sys.stderr.write(f"\r  {DIM}╭{'─' * 50}╮{NC}\n")
-        sys.stderr.write(f"  {DIM}│{NC} {BOLD}Ejecutando {total_tools} herramientas{NC}{' ' * (50 - 24 - len(str(total_tools)))}  {DIM}│{NC}\n")
-        sys.stderr.write(f"  {DIM}│{NC} [{bar}] {BOLD}{progress_pct:.0f}%{NC}{' ' * (50 - 35 - len(f'{progress_pct:.0f}'))}  {DIM}│{NC}\n")
-        sys.stderr.write(f"  {DIM}╰{'─' * 50}╯{NC}\n")
-        sys.stderr.flush()
+    # No progress bar - tools display inline
 
 # Output results with metadata
 output_data = {

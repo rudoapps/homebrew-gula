@@ -978,6 +978,292 @@ except Exception as e:
     fi
 }
 
+# Edita un archivo con search & replace (similar a Claude Code Edit)
+tool_edit_file() {
+    local input_file="$1"
+
+    # Read path, old_string, new_string from input file using Python
+    local path
+    path=$(python3 -c "
+import json
+with open('$input_file', 'r') as f:
+    data = json.load(f)
+print(data.get('path', ''))
+" 2>/dev/null)
+
+    if [ -z "$path" ]; then
+        echo "Error: Se requiere una ruta de archivo"
+        return 1
+    fi
+
+    # Validar que no salga del directorio actual (mismo patrón que write_file)
+    local path_check=$(python3 -c "
+import os
+import sys
+path = '$path'
+cwd = os.getcwd()
+
+# Validar contra null bytes
+if '\\x00' in path or '\\0' in path:
+    print('ERROR:Path contiene null bytes (ataque detectado)')
+    sys.exit(1)
+
+try:
+    if os.path.exists(path):
+        real_path = os.path.realpath(path)
+    else:
+        print('ERROR:El archivo no existe: ' + path)
+        sys.exit(1)
+except Exception as e:
+    print('ERROR:Path inválido: ' + str(e))
+    sys.exit(1)
+
+# Verificar que está dentro del directorio actual usando commonpath
+try:
+    common = os.path.commonpath([cwd, real_path])
+    if common == cwd:
+        print('OK:' + real_path)
+    else:
+        print('ERROR:Path fuera del proyecto: ' + real_path)
+except ValueError:
+    print('ERROR:Path fuera del proyecto (diferentes unidades): ' + real_path)
+")
+
+    if [[ "$path_check" == ERROR:* ]]; then
+        audit_log "EDIT_BLOCKED" "Path fuera del proyecto: $path"
+        echo "Error: ${path_check#ERROR:}"
+        return 1
+    fi
+
+    # Usar la ruta resuelta
+    local resolved_path="${path_check#OK:}"
+
+    # Ejecutar search & replace y generar diff con Python
+    local edit_result
+    edit_result=$(python3 - "$input_file" "$resolved_path" << 'PYEOF'
+import json
+import sys
+import os
+import difflib
+
+input_file = sys.argv[1]
+resolved_path = sys.argv[2]
+
+BOLD = "\033[1m"
+DIM = "\033[2m"
+NC = "\033[0m"
+CYAN = "\033[0;36m"
+GREEN = "\033[32m"
+RED = "\033[31m"
+
+try:
+    with open(input_file, 'r') as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"ERROR:No se pudo leer input: {e}")
+    sys.exit(0)
+
+old_string = data.get('old_string', '')
+new_string = data.get('new_string', '')
+
+if not old_string:
+    print("ERROR:Se requiere old_string (texto a buscar)")
+    sys.exit(0)
+
+# Read the current file
+try:
+    with open(resolved_path, 'r') as f:
+        content = f.read()
+except Exception as e:
+    print(f"ERROR:No se pudo leer el archivo: {e}")
+    sys.exit(0)
+
+# Check that old_string exists in the file
+count = content.count(old_string)
+if count == 0:
+    print("ERROR:old_string no encontrado en el archivo. Verifica que el texto sea exacto (incluyendo espacios e indentación).")
+    sys.exit(0)
+
+if count > 1:
+    print(f"ERROR:old_string encontrado {count} veces. Proporciona más contexto para que sea único.")
+    sys.exit(0)
+
+# Perform replacement
+new_content = content.replace(old_string, new_string, 1)
+
+# Generate compact diff for display on stderr
+old_lines = content.splitlines(keepends=True)
+new_lines = new_content.splitlines(keepends=True)
+
+diff = list(difflib.unified_diff(old_lines, new_lines, fromfile=resolved_path, tofile=resolved_path, n=3))
+
+if not diff:
+    print("ERROR:old_string y new_string son idénticos. No hay cambios.")
+    sys.exit(0)
+
+# Count additions/deletions
+additions = sum(1 for l in diff if l.startswith('+') and not l.startswith('+++'))
+deletions = sum(1 for l in diff if l.startswith('-') and not l.startswith('---'))
+
+# Print diff to stderr
+sys.stderr.write(f"\n{DIM}───────────────────────────────────────────────────────────────{NC}\n")
+sys.stderr.write(f" {BOLD}{data.get('path', resolved_path)}{NC}\n")
+sys.stderr.write(f" {GREEN}+{additions}{NC} {RED}-{deletions}{NC}\n")
+sys.stderr.write(f"{DIM}───────────────────────────────────────────────────────────────{NC}\n")
+
+for line in diff[2:]:  # skip --- and +++ headers
+    line_clean = line.rstrip('\n')
+    if line.startswith('@@'):
+        sys.stderr.write(f"{DIM}{line_clean}{NC}\n")
+    elif line.startswith('+'):
+        sys.stderr.write(f"{GREEN}+  {line_clean[1:]}{NC}\n")
+    elif line.startswith('-'):
+        sys.stderr.write(f"{RED}-  {line_clean[1:]}{NC}\n")
+    else:
+        sys.stderr.write(f"{DIM}   {line_clean[1:]}{NC}\n")
+
+sys.stderr.write(f"{DIM}───────────────────────────────────────────────────────────────{NC}\n\n")
+
+# Output: NEEDS_APPROVAL or READY, followed by new content length
+print(f"READY:{len(new_content)}")
+
+PYEOF
+)
+
+    # Check for errors from Python
+    if [[ "$edit_result" == ERROR:* ]]; then
+        echo "Error: ${edit_result#ERROR:}"
+        return 1
+    fi
+
+    if [[ "$edit_result" != READY:* ]]; then
+        echo "Error: Resultado inesperado del procesamiento"
+        return 1
+    fi
+
+    local new_content_len="${edit_result#READY:}"
+
+    # =========================================================================
+    # ARCHIVOS SENSIBLES QUE REQUIEREN APROBACIÓN (mismo patrón que write_file)
+    # =========================================================================
+    local needs_approval=false
+    local risk_reason=""
+    local filename=$(basename "$path")
+
+    local sensitive_patterns=(
+        ".env|Archivo de variables de entorno"
+        ".env.local|Archivo de variables de entorno local"
+        ".env.production|Archivo de variables de producción"
+        "credentials|Archivo de credenciales"
+        "secrets|Archivo de secretos"
+        ".ssh|Configuración SSH"
+        ".aws|Configuración AWS"
+        ".gitignore|Configuración de Git ignore"
+        ".gitattributes|Atributos de Git"
+        "package.json|Configuración de Node.js"
+        "Podfile|Dependencias de iOS"
+        "Gemfile|Dependencias de Ruby"
+        "requirements.txt|Dependencias de Python"
+        "pyproject.toml|Configuración de Python"
+        "Dockerfile|Configuración de Docker"
+        "docker-compose|Configuración de Docker Compose"
+        ".yml|Archivo YAML de configuración"
+        ".yaml|Archivo YAML de configuración"
+        "config.|Archivo de configuración"
+        "settings.|Archivo de configuración"
+    )
+
+    for entry in "${sensitive_patterns[@]}"; do
+        local pattern="${entry%%|*}"
+        local reason="${entry#*|}"
+        if [[ "$path" == *"$pattern"* ]] || [[ "$filename" == *"$pattern"* ]]; then
+            needs_approval=true
+            risk_reason="$reason"
+            break
+        fi
+    done
+
+    # Check global preview_mode setting
+    local preview_mode=$(get_agent_config "preview_mode")
+    if [ "$preview_mode" = "true" ] && [ "$needs_approval" = false ]; then
+        needs_approval=true
+        risk_reason="Preview mode activado"
+    fi
+
+    # Si requiere aprobación, preguntar al usuario
+    if [ "$needs_approval" = true ]; then
+        echo "" >&2
+        echo -e "${DIM}┌─${NC} ${CYAN}Confirmar edición${NC} ${DIM}─────────────────────────────┐${NC}" >&2
+        echo -e "${DIM}│${NC}" >&2
+        echo -e "${DIM}│${NC}  ${BOLD}$path${NC}" >&2
+        echo -e "${DIM}│${NC}  ${DIM}$risk_reason · search & replace${NC}" >&2
+        echo -e "${DIM}│${NC}" >&2
+        echo -e "${DIM}└────────────────────────────────────────────────┘${NC}" >&2
+        echo "" >&2
+
+        local approval=""
+        approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Rechazar" < /dev/tty)
+
+        if [[ "$approval" != "Permitir" ]]; then
+            echo -e "  ${RED}✗${NC} ${DIM}Edición rechazada${NC}" >&2
+            echo "" >&2
+            echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO permitir esta edición. No intentes editar este archivo de nuevo. Pregunta al usuario qué quiere hacer."
+            return 1
+        fi
+
+        echo -e "  ${GREEN}✓${NC} ${DIM}Edición permitida${NC}" >&2
+        echo "" >&2
+    fi
+
+    # Create backup before editing
+    local backup_path=$(create_file_backup "$resolved_path")
+    if [ -n "$backup_path" ]; then
+        echo -e "${DIM}💾 Backup creado: $(basename "$backup_path")${NC}" >&2
+    fi
+
+    # Perform the actual replacement and write the file
+    local write_result
+    write_result=$(python3 - "$input_file" "$resolved_path" << 'PYEOF'
+import json
+import sys
+
+input_file = sys.argv[1]
+resolved_path = sys.argv[2]
+
+try:
+    with open(input_file, 'r') as f:
+        data = json.load(f)
+
+    old_string = data.get('old_string', '')
+    new_string = data.get('new_string', '')
+
+    with open(resolved_path, 'r') as f:
+        content = f.read()
+
+    new_content = content.replace(old_string, new_string, 1)
+
+    with open(resolved_path, 'w') as f:
+        f.write(new_content)
+
+    print(f"OK:{len(new_content)}")
+except Exception as e:
+    print(f"ERROR:{e}")
+PYEOF
+)
+
+    if [[ "$write_result" == ERROR:* ]]; then
+        echo "Error escribiendo archivo: ${write_result#ERROR:}"
+        return 1
+    fi
+
+    local written_len="${write_result#OK:}"
+
+    # Audit log
+    audit_log "EDIT_FILE" "$path ($written_len bytes, search & replace)"
+
+    echo "Archivo editado: $path ($written_len bytes)"
+}
+
 # Ejecuta un comando en terminal
 tool_run_command() {
     local input="$1"
@@ -1253,10 +1539,12 @@ execute_tool_locally() {
     local tool_name="$1"
     local input_file="$2"
 
-    # For write_file, pass file path directly (avoids content mangling)
+    # For write_file and edit_file, pass file path directly (avoids content mangling)
     # For other tools, read content from file
     if [ "$tool_name" = "write_file" ]; then
         tool_write_file "$input_file"
+    elif [ "$tool_name" = "edit_file" ]; then
+        tool_edit_file "$input_file"
     else
         # Read tool input from file for other tools
         local tool_input

@@ -1074,51 +1074,42 @@ print(fmt)
                 set -e
             fi
 
-            # Display enhanced summary box - disable errexit to prevent crashes on formatting
+            # Display compact summary - single line
             set +e
-            echo ""
-            echo -e "${DIM}┌─${NC} ${BOLD}Resumen${NC} ${DIM}──────────────────────────────────────────────────${NC}"
-            echo -e "${DIM}│${NC}"
+            local summary_parts=""
 
-            # Line 1: Session duration (formatted)
+            # Duration
             if [ -n "$total_elapsed" ] && [ "$total_elapsed" != "0" ]; then
-                local duration_fmt
                 if [ "${total_elapsed:-0}" -ge 60 ] 2>/dev/null; then
                     local m=$((total_elapsed / 60))
                     local s=$((total_elapsed % 60))
-                    duration_fmt="${m}m ${s}s"
+                    summary_parts="${m}m${s}s"
                 else
-                    duration_fmt="${total_elapsed}s"
-                fi
-                echo -e "${DIM}│${NC}  ⏱  Duración: ${BOLD}${duration_fmt}${NC}"
-            fi
-
-            # Line 2: Tools executed (with breakdown by type)
-            local tools_count=${msg_tools:-0}
-            if [ "$tools_count" != "0" ] && [ "$tools_count" != "" ]; then
-                # Get tool details from response if available
-                local tool_breakdown=$(json_get "$response" "tool_breakdown" 2>/dev/null || echo "")
-                if [ -n "$tool_breakdown" ] && [ "$tool_breakdown" != "null" ]; then
-                    echo -e "${DIM}│${NC}  🔧 Herramientas: ${BOLD}${tools_count}${NC}"
-                    echo -e "${DIM}│${NC}     ${DIM}${tool_breakdown}${NC}"
-                else
-                    echo -e "${DIM}│${NC}  🔧 Herramientas: ${BOLD}${tools_count}${NC}"
+                    summary_parts="${total_elapsed}s"
                 fi
             fi
 
-            # Line 3: Cost and tokens (this run)
+            # Cost and tokens
             if [ -n "$session_tokens" ] && [ "$session_tokens" != "0" ]; then
                 [ -z "$session_cost" ] && session_cost=0
-                local session_cost_fmt=$(printf "%.4f" "${session_cost:-0}" 2>/dev/null || echo "0.0000")
-                echo -e "${DIM}│${NC}  💰 Costo: ${BOLD}\$${session_cost_fmt}${NC}  ${DIM}(${session_tokens} tokens)${NC}"
+                local session_cost_fmt=$(format_cost "${session_cost:-0}")
+                [ -n "$summary_parts" ] && summary_parts="$summary_parts · "
+                summary_parts="${summary_parts}\$${session_cost_fmt} · ${session_tokens} tokens"
             fi
 
-            echo -e "${DIM}└────────────────────────────────────────────────────────────────${NC}"
+            # Tools count
+            local tools_count=${msg_tools:-0}
+            if [ "$tools_count" != "0" ] && [ "$tools_count" != "" ]; then
+                [ -n "$summary_parts" ] && summary_parts="$summary_parts · "
+                summary_parts="${summary_parts}${tools_count} tools"
+            fi
+
+            echo ""
+            echo -e "  ${DIM}${summary_parts}${NC}"
             echo ""
             set -e
 
-            # Show status bar (RAG + Presupuesto) after each response
-            # Disable errexit for status bar - these are non-critical
+            # Show compact status bar
             set +e
             local status_parts=""
             local rag_git_url=$(get_rag_git_url 2>/dev/null || echo "")
@@ -1127,21 +1118,19 @@ print(fmt)
                 local rag_status=$(json_get "$rag_response" "status" 2>/dev/null || echo "")
                 case "$rag_status" in
                     "ready") status_parts="${GREEN}●${NC} RAG" ;;
-                    "pending") status_parts="${YELLOW}○${NC} RAG ${DIM}pendiente${NC}" ;;
-                    "indexing") status_parts="${CYAN}◐${NC} RAG ${DIM}indexando${NC}" ;;
-                    *) status_parts="${DIM}○ RAG${NC}" ;;
+                    "pending") status_parts="${YELLOW}○${NC} RAG" ;;
+                    "indexing") status_parts="${CYAN}◐${NC} RAG" ;;
                 esac
-            else
-                status_parts="${DIM}○ RAG${NC}"
             fi
             local quota_str=$(get_quota_status_inline 2>/dev/null || echo "")
             if [ -n "$quota_str" ]; then
-                status_parts="$status_parts  │  $quota_str"
+                [ -n "$status_parts" ] && status_parts="$status_parts  "
+                status_parts="$status_parts$quota_str"
             fi
             set -e
-            echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
-            echo -e " $status_parts"
-            echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
+            if [ -n "$status_parts" ]; then
+                echo -e "  ${DIM}${status_parts}${NC}"
+            fi
 
             # Check if max iterations was reached (server-side)
             if [ "$max_iter_reached" = "True" ] || [ "$max_iter_reached" = "true" ]; then
