@@ -209,17 +209,25 @@ SHOW_CURSOR = "\033[?25h"
 CLEAR_LINE = "\033[2K"
 MOVE_UP = "\033[A"
 
+# Use /dev/tty for keyboard input (stdin may be redirected)
+try:
+    tty_file = open('/dev/tty', 'r')
+except OSError:
+    # Fallback: no TTY available, return first option
+    print(sys.argv[2] if len(sys.argv) > 2 else "")
+    sys.exit(0)
+
 def get_key():
     """Read a single keypress."""
-    fd = sys.stdin.fileno()
+    fd = tty_file.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        ch = sys.stdin.read(1)
+        ch = tty_file.read(1)
         if ch == '\x1b':  # Escape sequence
-            ch2 = sys.stdin.read(1)
+            ch2 = tty_file.read(1)
             if ch2 == '[':
-                ch3 = sys.stdin.read(1)
+                ch3 = tty_file.read(1)
                 if ch3 == 'A': return 'up'
                 if ch3 == 'B': return 'down'
             return 'esc'
@@ -287,6 +295,7 @@ try:
 finally:
     sys.stderr.write(SHOW_CURSOR)
     sys.stderr.flush()
+    tty_file.close()
 
 # Output selected option
 print(options[selected_idx])
