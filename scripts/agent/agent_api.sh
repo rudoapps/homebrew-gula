@@ -1828,8 +1828,9 @@ total_elapsed = int(time.time()) - request_start_time
 
 # Track lines output for later clearing
 tool_output_lines = 0
-
-# No initial progress bar - tools show inline
+tool_type_counts = {}
+failed_tools = []
+batch_start_time = time.time()
 
 for idx, tc in enumerate(tool_requests, 1):
     tc_id = tc["id"]
@@ -1880,13 +1881,13 @@ for idx, tc in enumerate(tool_requests, 1):
         detail = str(tc_input)[:40]
         action_msg = f"{verb} {tc_name}"
 
-    # Start spinner with action message and progress indicator
-    spinner = ToolSpinner()
-    progress_indicator = f"{DIM}({idx}/{total_tools}){NC}" if total_tools > 1 else ""
-    spinner.start(f"🔧 {progress_indicator} {icon} {action_msg}")
-
     # Track start time for this tool
     tool_start_time = time.time()
+
+    # Show spinner with current tool (replaces in-place)
+    spinner = ToolSpinner()
+    progress_indicator = f"({idx}/{total_tools}) " if total_tools > 1 else ""
+    spinner.start(f"{progress_indicator}{icon} {action_msg}")
 
     # Write input to temp file
     import tempfile
@@ -1895,17 +1896,15 @@ for idx, tc in enumerate(tool_requests, 1):
         input_file = tf.name
 
     try:
-        # Pass file path instead of content to avoid bash command substitution issues
         cmd = f'source "{agent_script_dir}/agent_local_tools.sh" && execute_tool_locally "{tc_name}" "{input_file}"'
-        # Stop spinner BEFORE running command that might need user input
         spinner.stop()
         result = subprocess.run(
             ["bash", "-c", cmd],
-            stdout=subprocess.PIPE,  # Capture stdout only
-            stderr=None,  # Let stderr pass through (for prompts)
-            stdin=sys.stdin,  # Allow user input
+            stdout=subprocess.PIPE,
+            stderr=None,
+            stdin=sys.stdin,
             text=True,
-            timeout=120,  # More time for user interaction
+            timeout=120,
             env={**os.environ, "AGENT_SCRIPT_DIR": agent_script_dir}
         )
         output = result.stdout or "Sin resultado"
@@ -1919,33 +1918,37 @@ for idx, tc in enumerate(tool_requests, 1):
     finally:
         os.unlink(input_file)
 
-    # Calculate elapsed time for this tool
     tool_elapsed = time.time() - tool_start_time
 
     # Truncate long output
     if len(output) > 10000:
         output = output[:10000] + "\n... [truncado]"
 
-    # Format preview - truncate at word boundary
-    preview = output[:80].replace("\n", " ").strip()
-    if len(output) > 80:
-        # Find last space to truncate at word boundary
-        last_space = preview.rfind(" ", 0, 60)
-        if last_space > 30:
-            preview = preview[:last_space] + "..."
-        else:
-            preview = preview[:60] + "..."
+    # Track tool types for summary and errors for inline display
+    tool_type_counts[tc_name] = tool_type_counts.get(tc_name, 0) + 1
+    if not success:
+        failed_tools.append(f"{RED}✗ {verb} {detail}{NC}")
 
-    # Print result with verb for clearer action summary
-    status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
-    elapsed_str = f"{DIM}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
-    # Single line: status + verb + detail + time
-    sys.stderr.write(f"  {status_icon} {verb:<12} {detail} {elapsed_str}\n")
-    tool_output_lines += 1
-    # Preview line only if there's meaningful output
-    if preview and len(preview) > 3 and preview != "Sin resultado":
-        sys.stderr.write(f"    {DIM}→ {preview}{NC}\n")
+    # Only show individual lines for write/edit operations and errors
+    if tc_name in ("write_file", "edit_file"):
+        status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
+        elapsed_str = f" {DIM}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
+        sys.stderr.write(f"  {status_icon} {verb:<12} {detail}{elapsed_str}\n")
         tool_output_lines += 1
+    elif tc_name == "run_command":
+        status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
+        elapsed_str = f" {DIM}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
+        sys.stderr.write(f"  {status_icon} {verb:<12} {detail}{elapsed_str}\n")
+        tool_output_lines += 1
+        if not success:
+            # Show error preview for failed commands
+            preview = output[:80].replace("\n", " ").strip()
+            sys.stderr.write(f"    {DIM}→ {preview}{NC}\n")
+            tool_output_lines += 1
+    elif not success:
+        sys.stderr.write(f"  {RED}✗ {verb:<12} {detail}{NC}\n")
+        tool_output_lines += 1
+
     sys.stderr.flush()
 
     results.append({
@@ -1954,7 +1957,27 @@ for idx, tc in enumerate(tool_requests, 1):
         "result": output
     })
 
-    # No progress bar - tools display inline
+# Show compact summary for read/search-only batches
+read_search_only = all(tc["name"] in ("read_file", "search_code", "list_files", "git_info") for tc in tool_requests)
+batch_elapsed = time.time() - batch_start_time
+
+if read_search_only and total_tools > 0:
+    # Compact summary: "✓ 8 tools (4 lecturas, 3 búsquedas) · 2.1s"
+    parts = []
+    verb_map = {"read_file": "lectura", "search_code": "búsqueda", "list_files": "listado", "git_info": "git"}
+    plural_map = {"read_file": "lecturas", "search_code": "búsquedas", "list_files": "listados", "git_info": "git"}
+    for tool_name, count in tool_type_counts.items():
+        label = plural_map.get(tool_name, tool_name) if count > 1 else verb_map.get(tool_name, tool_name)
+        parts.append(f"{count} {label}")
+    summary = ", ".join(parts)
+    status = f"{GREEN}✓{NC}" if not failed_tools else f"{YELLOW}⚠{NC}"
+    sys.stderr.write(f"  {status} {summary} {DIM}· {batch_elapsed:.1f}s{NC}\n")
+    tool_output_lines += 1
+    # Show any failed tools
+    for fail_line in failed_tools:
+        sys.stderr.write(f"  {fail_line}\n")
+        tool_output_lines += 1
+    sys.stderr.flush()
 
 # Output results with metadata
 output_data = {
