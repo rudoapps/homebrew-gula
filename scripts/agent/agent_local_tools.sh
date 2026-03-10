@@ -3,6 +3,12 @@
 # Agent Local Tools - Ejecuta herramientas localmente sobre el proyecto del usuario
 # Este modulo permite al agente operar sobre archivos y comandos en la maquina del usuario
 
+# Load agent_config.sh for get_agent_config, create_file_backup, etc.
+AGENT_SCRIPT_DIR="${AGENT_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+if [ -f "$AGENT_SCRIPT_DIR/agent_config.sh" ]; then
+    source "$AGENT_SCRIPT_DIR/agent_config.sh"
+fi
+
 # Configuracion de limites de seguridad (configurables via env vars)
 MAX_FILE_SIZE="${GULA_MAX_FILE_SIZE:-50000}"            # 50KB max por archivo
 MAX_OUTPUT_LINES="${GULA_MAX_OUTPUT_LINES:-200}"        # Maximo lineas de output
