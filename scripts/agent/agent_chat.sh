@@ -210,8 +210,16 @@ CLEAR_LINE = "\033[2K"
 MOVE_UP = "\033[A"
 
 # Use /dev/tty for keyboard input (stdin may be redirected)
+import select
 try:
     tty_file = open('/dev/tty', 'r')
+    # Drain any buffered input (leftover enter key, etc.)
+    fd = tty_file.fileno()
+    old = termios.tcgetattr(fd)
+    tty.setraw(fd)
+    while select.select([tty_file], [], [], 0)[0]:
+        tty_file.read(1)
+    termios.tcsetattr(fd, termios.TCSADRAIN, old)
 except OSError:
     # Fallback: no TTY available, return first option
     print(sys.argv[2] if len(sys.argv) > 2 else "")

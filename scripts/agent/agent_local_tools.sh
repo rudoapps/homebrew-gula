@@ -51,15 +51,22 @@ if not options:
     sys.exit(1)
 
 # Open /dev/tty directly for interactive input
+import tty
+import termios
+import select
 try:
     tty_file = open('/dev/tty', 'r')
+    # Drain any buffered input (leftover enter key, etc.)
+    fd = tty_file.fileno()
+    old_drain = termios.tcgetattr(fd)
+    tty.setraw(fd)
+    while select.select([tty_file], [], [], 0)[0]:
+        tty_file.read(1)
+    termios.tcsetattr(fd, termios.TCSADRAIN, old_drain)
 except Exception as e:
     sys.stderr.write(f"{RED}Error: No se puede abrir terminal: {e}{NC}\n")
     print("Rechazar")
     sys.exit(1)
-
-import tty
-import termios
 
 # Check if we can use raw mode for arrow keys
 use_arrow_keys = True
