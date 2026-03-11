@@ -1197,6 +1197,11 @@ print(fmt)
 
 # Agent chat - main entry point
 agent_chat() {
+    # Session-scoped auto-approve flag file (cleaned up on exit)
+    export GULA_AUTO_APPROVE_FILE="/tmp/gula_auto_approve_$$"
+    rm -f "$GULA_AUTO_APPROVE_FILE"
+    trap 'rm -f "$GULA_AUTO_APPROVE_FILE"' EXIT
+
     init_agent_config
 
     # Check dependencies on first run

@@ -756,8 +756,8 @@ except ValueError:
         risk_reason="Preview mode activado"
     fi
 
-    # Si requiere aprobación, preguntar al usuario
-    if [ "$needs_approval" = true ]; then
+    # Si requiere aprobación, preguntar al usuario (salvo auto-approve activo)
+    if [ "$needs_approval" = true ] && [ ! -f "${GULA_AUTO_APPROVE_FILE:-/dev/null/no}" ]; then
         echo "" >&2
         echo -e "${DIM}┌─${NC} ${CYAN}Confirmar escritura${NC} ${DIM}───────────────────────────┐${NC}" >&2
         echo -e "${DIM}│${NC}" >&2
@@ -772,11 +772,9 @@ except ValueError:
         while true; do
             # Show selector
             if [ -f "$resolved_path" ]; then
-                # File exists - show option to see diff
-                approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Ver cambios" "Rechazar" < /dev/tty)
+                approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Permitir siempre" "Ver cambios" "Rechazar" < /dev/tty)
             else
-                # New file - no diff to show
-                approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Ver contenido" "Rechazar" < /dev/tty)
+                approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Permitir siempre" "Ver contenido" "Rechazar" < /dev/tty)
             fi
 
             if [ "$approval" = "Ver cambios" ] || [ "$approval" = "Ver contenido" ]; then
@@ -849,8 +847,12 @@ if len(content.split('\n')) > 20:
             break
         done
 
-        # SEGURIDAD: Solo permitir si explícitamente se aprueba
-        if [[ "$approval" != "Permitir" ]]; then
+        # Handle approval result
+        if [[ "$approval" == "Permitir siempre" ]]; then
+            touch "${GULA_AUTO_APPROVE_FILE}"
+            echo -e "  ${GREEN}✓${NC} ${DIM}Auto-aprobación activada para esta sesión${NC}" >&2
+            echo "" >&2
+        elif [[ "$approval" != "Permitir" ]]; then
             echo -e "  ${RED}✗${NC} ${DIM}Escritura rechazada${NC}" >&2
             echo "" >&2
             echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO permitir esta escritura. No intentes escribir este archivo de nuevo. Pregunta al usuario qué quiere hacer."
@@ -1203,8 +1205,8 @@ PYEOF
         risk_reason="Preview mode activado"
     fi
 
-    # Si requiere aprobación, preguntar al usuario
-    if [ "$needs_approval" = true ]; then
+    # Si requiere aprobación, preguntar al usuario (salvo auto-approve activo)
+    if [ "$needs_approval" = true ] && [ ! -f "${GULA_AUTO_APPROVE_FILE:-/dev/null/no}" ]; then
         echo "" >&2
         echo -e "${DIM}┌─${NC} ${CYAN}Confirmar edición${NC} ${DIM}─────────────────────────────┐${NC}" >&2
         echo -e "${DIM}│${NC}" >&2
@@ -1215,17 +1217,21 @@ PYEOF
         echo "" >&2
 
         local approval=""
-        approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Rechazar" < /dev/tty)
+        approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Permitir siempre" "Rechazar" < /dev/tty)
 
-        if [[ "$approval" != "Permitir" ]]; then
+        if [[ "$approval" == "Permitir siempre" ]]; then
+            touch "${GULA_AUTO_APPROVE_FILE}"
+            echo -e "  ${GREEN}✓${NC} ${DIM}Auto-aprobación activada para esta sesión${NC}" >&2
+            echo "" >&2
+        elif [[ "$approval" != "Permitir" ]]; then
             echo -e "  ${RED}✗${NC} ${DIM}Edición rechazada${NC}" >&2
             echo "" >&2
             echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO permitir esta edición. No intentes editar este archivo de nuevo. Pregunta al usuario qué quiere hacer."
             return 1
+        else
+            echo -e "  ${GREEN}✓${NC} ${DIM}Edición permitida${NC}" >&2
+            echo "" >&2
         fi
-
-        echo -e "  ${GREEN}✓${NC} ${DIM}Edición permitida${NC}" >&2
-        echo "" >&2
     fi
 
     # Create backup before editing
@@ -1400,10 +1406,10 @@ tool_run_command() {
         fi
     done
 
-    # Si requiere aprobación, verificar whitelist o preguntar al usuario
+    # Si requiere aprobación, verificar whitelist, auto-approve, o preguntar al usuario
     if [ "$needs_approval" = true ]; then
-        if [ "$is_whitelisted" = true ]; then
-            echo -e "${DIM}› auto-aprobado (whitelist)${NC}" >&2
+        if [ "$is_whitelisted" = true ] || [ -f "${GULA_AUTO_APPROVE_FILE:-/dev/null/no}" ]; then
+            echo -e "${DIM}› auto-aprobado${NC}" >&2
         else
             echo "" >&2
             echo -e "${DIM}┌─${NC} ${CYAN}Confirmar ejecución${NC} ${DIM}───────────────────────────┐${NC}" >&2
