@@ -1420,50 +1420,23 @@ tool_run_command() {
             echo -e "${DIM}└────────────────────────────────────────────────┘${NC}" >&2
             echo "" >&2
 
-            # Input de tecla simple (gum no funciona bien con subprocess)
             local approval=""
+            approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Permitir siempre" "Rechazar" < /dev/tty)
 
-            echo -e "  ${GREEN}[e]${NC} Ejecutar   ${YELLOW}[s]${NC} Siempre   ${RED}[c]${NC} Cancelar" >&2
-            echo "" >&2
-            echo -n "  › " >&2
-
-            local key
-            if read -n 1 key < /dev/tty 2>/dev/null; then
+            if [[ "$approval" == "Permitir siempre" ]]; then
+                touch "${GULA_AUTO_APPROVE_DIR}/run_command"
+                echo -e "  ${GREEN}✓${NC} ${DIM}Comandos auto-aprobados para esta sesión${NC}" >&2
                 echo "" >&2
-                case "$key" in
-                    e|E) approval="Ejecutar" ;;
-                    s|S) approval="Ejecutar siempre" ;;
-                    *) approval="Cancelar" ;;
-                esac
+            elif [[ "$approval" == "Permitir" ]]; then
+                echo -e "  ${GREEN}✓${NC} ${DIM}Ejecutando...${NC}" >&2
+                echo "" >&2
             else
-                # Si falla la lectura, cancelar por seguridad
-                echo "" >&2
-                echo -e "${RED}Error: No se pudo leer input${NC}" >&2
-                approval="Cancelar"
-            fi
-
-            # SEGURIDAD: Si approval está vacío o no es válido, SIEMPRE cancelar
-            if [[ -z "$approval" ]] || [[ "$approval" == "Cancelar" ]]; then
                 audit_log "COMMAND_REJECTED" "Usuario rechazó: $command"
-                echo -e "${DIM}Comando rechazado${NC}" >&2
-                # Mensaje claro para el agente (stdout)
-                echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO ejecutar este comando. No intentes ejecutarlo de nuevo. Pregunta al usuario qué quiere hacer."
-                return 1
-            elif [[ "$approval" == "Ejecutar siempre" ]]; then
-                # Añadir patrón a whitelist
-                mkdir -p "$(dirname "$whitelist_file")"
-                local safe_pattern=$(echo "$command" | sed 's/[.[\*^$()+?{|]/\\&/g')
-                echo "^${safe_pattern}$" >> "$whitelist_file"
-                echo -e "${GREEN}✓${NC} ${DIM}Añadido a whitelist${NC}" >&2
-            elif [[ "$approval" != "Ejecutar" ]]; then
-                # Cualquier otro valor = cancelar
-                echo -e "${DIM}Comando rechazado${NC}" >&2
+                echo -e "  ${RED}✗${NC} ${DIM}Comando rechazado${NC}" >&2
+                echo "" >&2
                 echo "[USUARIO_RECHAZÓ] El usuario ha decidido NO ejecutar este comando. No intentes ejecutarlo de nuevo. Pregunta al usuario qué quiere hacer."
                 return 1
             fi
-
-            echo -e "${GREEN}✓${NC} ${DIM}Ejecutando...${NC}" >&2
-            echo "" >&2
         fi
     fi
 
