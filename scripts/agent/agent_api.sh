@@ -976,6 +976,52 @@ def strip_ansi(text):
     """Remove ANSI escape codes from text."""
     return re.sub(r'\x1b\[[0-9;]*m', '', text)
 
+def get_terminal_width():
+    """Get current terminal width, default 80."""
+    try:
+        return os.get_terminal_size().columns
+    except:
+        return 80
+
+def wrap_ansi_text(text, indent=2):
+    """Wrap text to terminal width, preserving ANSI codes and indentation."""
+    width = get_terminal_width() - indent  # Account for leading indent
+    if width < 40:
+        width = 40
+
+    lines = text.split('\n')
+    wrapped = []
+    for line in lines:
+        clean = strip_ansi(line)
+        # Don't wrap code blocks, tables, short lines, or lines with special chars
+        if len(clean) <= width or clean.startswith('┌') or clean.startswith('│') or clean.startswith('└') or clean.startswith('```'):
+            wrapped.append(line)
+            continue
+
+        # Simple word wrap preserving ANSI codes
+        # Build character map: for each visible char, track its position in the original string
+        words = line.split(' ')
+        current_line = ''
+        current_visible_len = 0
+
+        for i, word in enumerate(words):
+            word_visible_len = len(strip_ansi(word))
+            separator = ' ' if current_line else ''
+            sep_len = 1 if current_line else 0
+
+            if current_visible_len + sep_len + word_visible_len > width and current_line:
+                wrapped.append(current_line)
+                current_line = word
+                current_visible_len = word_visible_len
+            else:
+                current_line += separator + word
+                current_visible_len += sep_len + word_visible_len
+
+        if current_line:
+            wrapped.append(current_line)
+
+    return '\n'.join(wrapped)
+
 def markdown_to_ansi(text, use_streaming_formatter=False):
     """Convert basic markdown to ANSI terminal codes."""
 
@@ -1078,7 +1124,7 @@ def render_table_with_glow(table_text):
 
     try:
         result = subprocess.run(
-            [glow_path, '-s', 'dark', '-w', '100', '-'],
+            [glow_path, '-s', 'dark', '-w', str(get_terminal_width() - 4), '-'],
             input=table_text,
             capture_output=True,
             text=True,
@@ -1152,8 +1198,9 @@ def render_hybrid(text):
             # Use markdown_to_ansi for non-table content
             final_output.append(markdown_to_ansi(content))
 
-    # Combine and add indentation
+    # Combine, wrap to terminal width, and add indentation
     formatted = '\n'.join(final_output)
+    formatted = wrap_ansi_text(formatted)
     formatted = "  " + formatted.replace("\n", "\n  ")
     sys.stderr.write(formatted)
     sys.stderr.flush()
@@ -1449,8 +1496,9 @@ try:
                         # Only render new lines we haven't shown yet
                         new_content = complete_lines[rendered_chars:]
                         if new_content:
-                            # Apply markdown formatting line by line
+                            # Apply markdown formatting and word wrap
                             formatted = markdown_to_ansi(new_content)
+                            formatted = wrap_ansi_text(formatted)
                             formatted = "  " + formatted.replace("\n", "\n  ")
                             sys.stderr.write(formatted + "\n")
                             sys.stderr.flush()
@@ -1478,6 +1526,7 @@ try:
                             sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
                             header_shown = True
                         formatted = markdown_to_ansi(remaining)
+                        formatted = wrap_ansi_text(formatted)
                         formatted = "  " + formatted.replace("\n", "\n  ")
                         sys.stderr.write(formatted + "\n")
                         sys.stderr.flush()
@@ -1511,6 +1560,7 @@ try:
                             sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
                             header_shown = True
                         formatted = markdown_to_ansi(remaining)
+                        formatted = wrap_ansi_text(formatted)
                         formatted = "  " + formatted.replace("\n", "\n  ")
                         sys.stderr.write(formatted)
                     sys.stderr.write("\n")
