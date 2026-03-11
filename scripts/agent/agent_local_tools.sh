@@ -756,8 +756,8 @@ except ValueError:
         risk_reason="Preview mode activado"
     fi
 
-    # Si requiere aprobación, preguntar al usuario (salvo auto-approve activo)
-    if [ "$needs_approval" = true ] && [ ! -f "${GULA_AUTO_APPROVE_FILE:-/dev/null/no}" ]; then
+    # Si requiere aprobación, preguntar al usuario (salvo auto-approve activo para write_file)
+    if [ "$needs_approval" = true ] && [ ! -f "${GULA_AUTO_APPROVE_DIR:-/dev/null}/write_file" ]; then
         echo "" >&2
         echo -e "${DIM}┌─${NC} ${CYAN}Confirmar escritura${NC} ${DIM}───────────────────────────┐${NC}" >&2
         echo -e "${DIM}│${NC}" >&2
@@ -849,8 +849,8 @@ if len(content.split('\n')) > 20:
 
         # Handle approval result
         if [[ "$approval" == "Permitir siempre" ]]; then
-            touch "${GULA_AUTO_APPROVE_FILE}"
-            echo -e "  ${GREEN}✓${NC} ${DIM}Auto-aprobación activada para esta sesión${NC}" >&2
+            touch "${GULA_AUTO_APPROVE_DIR}/write_file"
+            echo -e "  ${GREEN}✓${NC} ${DIM}Escrituras auto-aprobadas para esta sesión${NC}" >&2
             echo "" >&2
         elif [[ "$approval" != "Permitir" ]]; then
             echo -e "  ${RED}✗${NC} ${DIM}Escritura rechazada${NC}" >&2
@@ -1205,8 +1205,8 @@ PYEOF
         risk_reason="Preview mode activado"
     fi
 
-    # Si requiere aprobación, preguntar al usuario (salvo auto-approve activo)
-    if [ "$needs_approval" = true ] && [ ! -f "${GULA_AUTO_APPROVE_FILE:-/dev/null/no}" ]; then
+    # Si requiere aprobación, preguntar al usuario (salvo auto-approve activo para edit_file)
+    if [ "$needs_approval" = true ] && [ ! -f "${GULA_AUTO_APPROVE_DIR:-/dev/null}/edit_file" ]; then
         echo "" >&2
         echo -e "${DIM}┌─${NC} ${CYAN}Confirmar edición${NC} ${DIM}─────────────────────────────┐${NC}" >&2
         echo -e "${DIM}│${NC}" >&2
@@ -1220,8 +1220,8 @@ PYEOF
         approval=$(tool_interactive_select "¿Qué deseas hacer?" "Permitir" "Permitir siempre" "Rechazar" < /dev/tty)
 
         if [[ "$approval" == "Permitir siempre" ]]; then
-            touch "${GULA_AUTO_APPROVE_FILE}"
-            echo -e "  ${GREEN}✓${NC} ${DIM}Auto-aprobación activada para esta sesión${NC}" >&2
+            touch "${GULA_AUTO_APPROVE_DIR}/edit_file"
+            echo -e "  ${GREEN}✓${NC} ${DIM}Ediciones auto-aprobadas para esta sesión${NC}" >&2
             echo "" >&2
         elif [[ "$approval" != "Permitir" ]]; then
             echo -e "  ${RED}✗${NC} ${DIM}Edición rechazada${NC}" >&2
@@ -1408,7 +1408,7 @@ tool_run_command() {
 
     # Si requiere aprobación, verificar whitelist, auto-approve, o preguntar al usuario
     if [ "$needs_approval" = true ]; then
-        if [ "$is_whitelisted" = true ] || [ -f "${GULA_AUTO_APPROVE_FILE:-/dev/null/no}" ]; then
+        if [ "$is_whitelisted" = true ] || [ -f "${GULA_AUTO_APPROVE_DIR:-/dev/null}/run_command" ]; then
             echo -e "${DIM}› auto-aprobado${NC}" >&2
         else
             echo "" >&2
