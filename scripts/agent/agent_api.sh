@@ -629,6 +629,8 @@ GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
 BLUE = "\033[0;34m"
 CYAN = "\033[0;36m"
+WHITE_BRIGHT = "\033[1;37m"  # Agent response text
+TOOL_COLOR = "\033[0;90m"    # Dark gray for tool activity
 
 # Cursor control
 HIDE_CURSOR = "\033[?25l"
@@ -1426,7 +1428,7 @@ try:
                 project_label = f" @{search_project}" if search_project else ""
 
                 spinner.stop()
-                sys.stderr.write(f"  {CYAN}🔍 Buscando{project_label}:{NC} {DIM}\"{search_query}...\"{NC}\n")
+                sys.stderr.write(f"  {TOOL_COLOR}🔍 Buscando{project_label}: \"{search_query}...\"{NC}\n")
                 spinner.start("Buscando en codebase...")
 
             elif event_type == "rag_context":
@@ -1446,9 +1448,9 @@ try:
                 # Show results count
                 spinner.stop()
                 if rag_chunks > 0:
-                    sys.stderr.write(f"  {GREEN}✓{NC} Encontrados {rag_chunks} chunks relevantes\n")
+                    sys.stderr.write(f"  {GREEN}✓{NC} {TOOL_COLOR}Encontrados {rag_chunks} chunks relevantes{NC}\n")
                 else:
-                    sys.stderr.write(f"  {YELLOW}○{NC} No se encontraron chunks relevantes\n")
+                    sys.stderr.write(f"  {YELLOW}○{NC} {TOOL_COLOR}No se encontraron chunks relevantes{NC}\n")
                 spinner.start("Procesando respuesta...")
 
             elif event_type == "delegation":
@@ -1458,8 +1460,8 @@ try:
                 if len(parsed.get("task", "")) > 80:
                     task_preview += "..."
                 spinner.stop()
-                sys.stderr.write(f"  {CYAN}👤 Delegando a subagente:{NC} {BOLD}{subagent_id}{NC}\n")
-                sys.stderr.write(f"  {DIM}Tarea: {task_preview}{NC}\n")
+                sys.stderr.write(f"  {TOOL_COLOR}👤 Delegando a subagente: {NC}{BOLD}{subagent_id}{NC}\n")
+                sys.stderr.write(f"  {TOOL_COLOR}Tarea: {task_preview}{NC}\n")
                 spinner.start(f"Subagente {subagent_id} trabajando...")
 
             elif event_type == "text":
@@ -1482,7 +1484,7 @@ try:
                         # Print header once
                         model_tag = f" {DIM}({msg_model}){NC}" if msg_model else ""
                         if not header_shown:
-                            sys.stderr.write(f"\n  {BOLD}{YELLOW}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
+                            sys.stderr.write(f"\n  {BOLD}{GREEN}Agent:{NC}{model_tag}{rag_indicator_for_header}\n\n")
                             header_shown = True
 
                     # Stream text in real-time with markdown conversion
@@ -1844,7 +1846,7 @@ class ToolSpinner:
         while self.running:
             frame = SPINNER[self.frame % len(SPINNER)]
             elapsed = time.time() - self.start_time
-            line = f"{CURSOR_START}{CLEAR_LINE}    {CYAN}{frame}{NC} {self.message} {DIM}({elapsed:.1f}s){NC}"
+            line = f"{CURSOR_START}{CLEAR_LINE}    {TOOL_COLOR}{frame} {self.message} ({elapsed:.1f}s){NC}"
             sys.stderr.write(line)
             sys.stderr.flush()
             self.frame += 1
@@ -1982,21 +1984,21 @@ for idx, tc in enumerate(tool_requests, 1):
     # Only show individual lines for write/edit operations and errors
     if tc_name in ("write_file", "edit_file"):
         status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
-        elapsed_str = f" {DIM}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
-        sys.stderr.write(f"  {status_icon} {verb:<12} {detail}{elapsed_str}\n")
+        elapsed_str = f" {TOOL_COLOR}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
+        sys.stderr.write(f"  {status_icon} {TOOL_COLOR}{verb:<12} {detail}{NC}{elapsed_str}\n")
         tool_output_lines += 1
     elif tc_name == "run_command":
         status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
-        elapsed_str = f" {DIM}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
-        sys.stderr.write(f"  {status_icon} {verb:<12} {detail}{elapsed_str}\n")
+        elapsed_str = f" {TOOL_COLOR}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
+        sys.stderr.write(f"  {status_icon} {TOOL_COLOR}{verb:<12} {detail}{NC}{elapsed_str}\n")
         tool_output_lines += 1
         if not success:
             # Show error preview for failed commands
             preview = output[:80].replace("\n", " ").strip()
-            sys.stderr.write(f"    {DIM}→ {preview}{NC}\n")
+            sys.stderr.write(f"    {TOOL_COLOR}→ {preview}{NC}\n")
             tool_output_lines += 1
     elif not success:
-        sys.stderr.write(f"  {RED}✗ {verb:<12} {detail}{NC}\n")
+        sys.stderr.write(f"  {RED}✗ {TOOL_COLOR}{verb:<12} {detail}{NC}\n")
         tool_output_lines += 1
 
     sys.stderr.flush()
@@ -2021,7 +2023,7 @@ if read_search_only and total_tools > 0:
         parts.append(f"{count} {label}")
     summary = ", ".join(parts)
     status = f"{GREEN}✓{NC}" if not failed_tools else f"{YELLOW}⚠{NC}"
-    sys.stderr.write(f"  {status} {summary} {DIM}· {batch_elapsed:.1f}s{NC}\n")
+    sys.stderr.write(f"  {status} {TOOL_COLOR}{summary} · {batch_elapsed:.1f}s{NC}\n")
     tool_output_lines += 1
     # Show any failed tools
     for fail_line in failed_tools:
