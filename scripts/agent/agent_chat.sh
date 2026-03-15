@@ -654,6 +654,66 @@ print(fmt)
                 echo ""
                 continue
                 ;;
+            /undo)
+                # Show backups and restore most recent
+                list_file_backups
+                echo -e "${DIM}Usa /undo <n> para restaurar un backup específico${NC}"
+                echo ""
+                continue
+                ;;
+            /undo\ *)
+                local undo_num="${user_input#/undo }"
+                if [[ "$undo_num" =~ ^[0-9]+$ ]]; then
+                    restore_from_backup "$undo_num"
+                else
+                    echo -e "${RED}Uso: /undo <número>${NC}"
+                fi
+                echo ""
+                continue
+                ;;
+            /diff)
+                # Show diff of all files modified in session (using backups)
+                if [ ! -d "$AGENT_UNDO_DIR" ]; then
+                    echo -e "${DIM}No hay cambios en esta sesión${NC}"
+                    echo ""
+                    continue
+                fi
+                local has_diffs=false
+                local seen_files=""
+                for meta in $(ls -t "$AGENT_UNDO_DIR"/*.meta 2>/dev/null); do
+                    local orig=$(python3 -c "import json; print(json.load(open('$meta'))['original_path'])" 2>/dev/null)
+                    # Skip if already shown this file (show only oldest backup vs current)
+                    if [[ "$seen_files" == *"|$orig|"* ]]; then
+                        continue
+                    fi
+                    seen_files="${seen_files}|$orig|"
+                    local bak="${meta%.meta}.bak"
+                    if [ -f "$orig" ] && [ -f "$bak" ]; then
+                        local diff_output=$(diff -u "$bak" "$orig" 2>/dev/null)
+                        if [ -n "$diff_output" ]; then
+                            has_diffs=true
+                            local added=$(echo "$diff_output" | grep -c "^+" || true)
+                            local removed=$(echo "$diff_output" | grep -c "^-" || true)
+                            echo -e "  ${BOLD}$(basename "$orig")${NC} ${GREEN}+$added${NC} ${RED}-$removed${NC}"
+                            echo "$diff_output" | tail -n +4 | head -30 | while IFS= read -r line; do
+                                if [[ "$line" == +* ]]; then
+                                    echo -e "  ${GREEN}$line${NC}"
+                                elif [[ "$line" == -* ]]; then
+                                    echo -e "  ${RED}$line${NC}"
+                                else
+                                    echo -e "  ${DIM}$line${NC}"
+                                fi
+                            done
+                            echo ""
+                        fi
+                    fi
+                done
+                if [ "$has_diffs" = false ]; then
+                    echo -e "${DIM}No hay cambios en esta sesión${NC}"
+                fi
+                echo ""
+                continue
+                ;;
             /help)
                 echo ""
                 echo -e "${BOLD}Comandos disponibles:${NC}"
@@ -662,7 +722,9 @@ print(fmt)
                 echo -e "  ${YELLOW}/resume <id>${NC}       - Retomar conversacion por ID"
                 echo -e "  ${YELLOW}/cost${NC}              - Ver costo acumulado de la sesion"
                 echo -e "  ${YELLOW}/presupuesto${NC}       - Ver limite y uso mensual"
-                echo -e "  ${YELLOW}/copy${NC}             - Copiar ultima respuesta al clipboard"
+                echo -e "  ${YELLOW}/copy${NC}              - Copiar ultima respuesta al clipboard"
+                echo -e "  ${YELLOW}/undo${NC}              - Ver/restaurar backups de archivos"
+                echo -e "  ${YELLOW}/diff${NC}              - Ver cambios del agente en esta sesion"
                 echo -e "  ${YELLOW}/clear${NC}             - Limpiar pantalla"
                 echo -e "  ${YELLOW}/help${NC}              - Mostrar esta ayuda"
                 echo -e "  ${YELLOW}/debug${NC}             - Activar/desactivar modo debug"
@@ -684,6 +746,10 @@ print(fmt)
                 echo -e "  ${YELLOW}/refactor <archivo>${NC} - Sugerir refactorizaciones (refactor)"
                 echo -e "  ${YELLOW}/document <archivo>${NC} - Generar documentacion (documenter)"
                 echo -e "  ${YELLOW}/debug <error>${NC}      - Ayudar a debuggear (debugger)"
+                echo ""
+                echo -e "${BOLD}Referencias a archivos:${NC}"
+                echo -e "  - Usa ${YELLOW}@archivo.swift${NC} para adjuntar un archivo al mensaje"
+                echo -e "    ${DIM}refactoriza @HealthContainer.swift${NC}"
                 echo ""
                 echo -e "${BOLD}Entrada multi-linea:${NC}"
                 echo -e "  - Escribe \\ al final de una linea para continuar"
@@ -923,6 +989,46 @@ print(fmt)
                 continue
                 ;;
         esac
+
+        # Expand @file references: attach file contents to the prompt
+        local expanded_input="$user_input"
+        local file_attachments=""
+        # Match @path patterns (not @mentions which would be just a word)
+        while [[ "$expanded_input" =~ @([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+) ]]; do
+            local ref="${BASH_REMATCH[1]}"
+            local resolved=""
+            # Try as-is, then relative to PWD
+            if [ -f "$ref" ]; then
+                resolved="$ref"
+            elif [ -f "$PWD/$ref" ]; then
+                resolved="$PWD/$ref"
+            else
+                # Try fuzzy find in project
+                resolved=$(find . -maxdepth 5 -name "$(basename "$ref")" -type f 2>/dev/null | head -1)
+            fi
+            if [ -n "$resolved" ] && [ -f "$resolved" ]; then
+                local content=$(head -200 "$resolved")
+                local linecount=$(wc -l < "$resolved" | tr -d ' ')
+                file_attachments="${file_attachments}
+
+--- ${resolved} (${linecount} líneas) ---
+${content}"
+                if [ "$linecount" -gt 200 ]; then
+                    file_attachments="${file_attachments}
+... (truncado, ${linecount} líneas total)"
+                fi
+                echo -e "  ${DIM}📎 $(basename "$resolved")${NC}" >&2
+            else
+                echo -e "  ${YELLOW}⚠ No se encontró: $ref${NC}" >&2
+            fi
+            # Remove the @ref from the match to avoid infinite loop
+            expanded_input="${expanded_input/@${ref}/}"
+        done
+        if [ -n "$file_attachments" ]; then
+            user_input="${user_input}
+
+[Archivos adjuntos por el usuario:]${file_attachments}"
+        fi
 
         # Send message with continuation loop
         local current_prompt="$user_input"
