@@ -109,8 +109,23 @@ if not use_arrow_keys:
 
 tty_fd = tty_file.fileno()
 
+# Save original terminal settings to restore on any exit (including signals)
+_original_tty_settings = termios.tcgetattr(tty_fd)
+
+import signal, atexit
+
+def _restore_terminal():
+    try:
+        termios.tcsetattr(tty_fd, termios.TCSADRAIN, _original_tty_settings)
+        sys.stderr.write(SHOW_CURSOR)
+        sys.stderr.flush()
+    except:
+        pass
+
+atexit.register(_restore_terminal)
+signal.signal(signal.SIGTERM, lambda *_: (_restore_terminal(), sys.exit(1)))
+
 def get_key():
-    old_settings = termios.tcgetattr(tty_fd)
     try:
         tty.setraw(tty_fd)
         ch = tty_file.read(1)
@@ -125,7 +140,7 @@ def get_key():
         if ch == '\x03': return 'ctrl-c'
         return ch
     finally:
-        termios.tcsetattr(tty_fd, termios.TCSADRAIN, old_settings)
+        termios.tcsetattr(tty_fd, termios.TCSADRAIN, _original_tty_settings)
 
 def render(first_render=False):
     if not first_render:

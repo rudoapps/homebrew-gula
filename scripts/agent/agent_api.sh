@@ -1962,13 +1962,18 @@ for idx, tc in enumerate(tool_requests, 1):
         output = result.stdout or "Sin resultado"
         success = result.returncode == 0 and not output.startswith("Error:")
     except subprocess.TimeoutExpired:
-        output = "Error: Timeout ejecutando tool (60s)"
+        output = "Error: Timeout ejecutando tool (120s)"
         success = False
     except Exception as e:
         output = f"Error: {str(e)}"
         success = False
     finally:
         os.unlink(input_file)
+        # Reset terminal settings in case a subprocess left it in raw mode
+        # (e.g., tool_interactive_select timeout during approval dialogs)
+        os.system('stty sane 2>/dev/null')
+        sys.stderr.write(SHOW_CURSOR)
+        sys.stderr.flush()
 
     tool_elapsed = time.time() - tool_start_time
 

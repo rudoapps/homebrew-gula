@@ -225,10 +225,24 @@ except OSError:
     print(sys.argv[2] if len(sys.argv) > 2 else "")
     sys.exit(0)
 
+_original_settings = termios.tcgetattr(tty_file.fileno())
+
+import signal, atexit
+
+def _restore_terminal():
+    try:
+        termios.tcsetattr(tty_file.fileno(), termios.TCSADRAIN, _original_settings)
+        sys.stderr.write(SHOW_CURSOR)
+        sys.stderr.flush()
+    except:
+        pass
+
+atexit.register(_restore_terminal)
+signal.signal(signal.SIGTERM, lambda *_: (_restore_terminal(), sys.exit(1)))
+
 def get_key():
     """Read a single keypress."""
     fd = tty_file.fileno()
-    old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
         ch = tty_file.read(1)
@@ -243,7 +257,7 @@ def get_key():
         if ch == '\x03': return 'ctrl-c'  # Ctrl+C
         return ch
     finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        termios.tcsetattr(fd, termios.TCSADRAIN, _original_settings)
 
 def render(prompt, options, selected_idx, first_render=False):
     """Render the selector."""
