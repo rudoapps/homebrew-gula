@@ -1727,6 +1727,7 @@ GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
 BLUE = "\033[0;34m"
 CYAN = "\033[0;36m"
+TOOL_COLOR = "\033[0;90m"    # Dark gray for tool activity
 
 HIDE_CURSOR = "\033[?25l"
 SHOW_CURSOR = "\033[?25h"
