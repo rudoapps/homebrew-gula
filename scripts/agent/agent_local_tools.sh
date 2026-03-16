@@ -617,22 +617,29 @@ tool_search_code() {
     local input="$1"
     local query=$(echo "$input" | jq -r '.query // ""')
     local file_pattern=$(echo "$input" | jq -r '.file_pattern // ""')
+    local context_lines=$(echo "$input" | jq -r '.context_lines // "3"')
 
     if [ -z "$query" ]; then
         echo "Error: Se requiere un query de busqueda"
         return 1
     fi
 
-    audit_log "SEARCH" "query='$query' pattern='$file_pattern'"
+    audit_log "SEARCH" "query='$query' pattern='$file_pattern' context=$context_lines"
 
-    local grep_opts="-rn --color=never"
+    local grep_opts="-rn -E --color=never"
+
+    # Add context lines for better understanding of matches
+    if [ "$context_lines" != "0" ]; then
+        grep_opts="$grep_opts -C $context_lines"
+    fi
 
     if [ -n "$file_pattern" ]; then
         grep_opts="$grep_opts --include=$file_pattern"
     fi
 
     # Excluir directorios comunes
-    grep $grep_opts \
+    local result
+    result=$(grep $grep_opts \
         --exclude-dir=node_modules \
         --exclude-dir=__pycache__ \
         --exclude-dir=venv \
@@ -641,7 +648,16 @@ tool_search_code() {
         --exclude-dir=build \
         --exclude-dir=dist \
         --exclude-dir=Pods \
-        "$query" . 2>/dev/null | head -"$MAX_SEARCH_RESULTS"
+        --exclude-dir=.build \
+        --exclude-dir=DerivedData \
+        "$query" . 2>/dev/null | head -"$MAX_SEARCH_RESULTS")
+
+    if [ -z "$result" ]; then
+        echo "Sin resultado"
+        return 0
+    fi
+
+    echo "$result"
 }
 
 # Escribe contenido a un archivo
