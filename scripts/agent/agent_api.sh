@@ -1103,7 +1103,10 @@ def markdown_to_ansi(text, use_streaming_formatter=False):
     text = re.sub(r'\*\*([^*]+)\*\*', f'{BOLD}\\1{NC}', text)
     text = re.sub(r'__([^_]+)__', f'{BOLD}\\1{NC}', text)
 
-    # Bullet points (- item or • item) - add color to bullet
+    # Bullet points (- item or • item) - add color and spacing
+    # Add blank line before top-level bullets that follow non-blank, non-bullet lines
+    text = re.sub(r'(?<=\S)\n([-•] )', r'\n\n\1', text)
+    # Render bullets with colored marker
     text = re.sub(r'^(\s*)[-•] (.+)$', f'\\1{CYAN}•{NC} \\2', text, flags=re.MULTILINE)
 
     # Horizontal rules (---) - dim line
