@@ -1103,11 +1103,18 @@ def markdown_to_ansi(text, use_streaming_formatter=False):
     text = re.sub(r'\*\*([^*]+)\*\*', f'{BOLD}\\1{NC}', text)
     text = re.sub(r'__([^_]+)__', f'{BOLD}\\1{NC}', text)
 
-    # Bullet points (- item or • item) - add color and spacing
+    # Numbered lists - add blank line before items for breathing room
+    text = re.sub(r'(?<=\S)\n(\d+\.\s)', r'\n\n\1', text)
+    # Style numbered items bold
+    text = re.sub(r'^(\d+\.)\s(.+)$', f'{BOLD}\\1{NC} \\2', text, flags=re.MULTILINE)
+
+    # Bullet points - visual hierarchy by indent level
     # Add blank line before top-level bullets that follow non-blank, non-bullet lines
     text = re.sub(r'(?<=\S)\n([-•] )', r'\n\n\1', text)
-    # Render bullets with colored marker
-    text = re.sub(r'^(\s*)[-•] (.+)$', f'\\1{CYAN}•{NC} \\2', text, flags=re.MULTILINE)
+    # Top-level bullets: cyan dot
+    text = re.sub(r'^[-•] (.+)$', f'{CYAN}•{NC} \\1', text, flags=re.MULTILINE)
+    # Sub-bullets (indented): dim arrow, clean indent
+    text = re.sub(r'^(\s+)[-•] (.+)$', f'  {DIM}→{NC} \\2', text, flags=re.MULTILINE)
 
     # Horizontal rules (---) - dim line
     text = re.sub(r'^-{3,}$', f'{DIM}───────────────────────────────{NC}', text, flags=re.MULTILINE)
