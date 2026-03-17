@@ -1724,6 +1724,8 @@ import sys
 import os
 import time
 import threading
+import concurrent.futures
+import tempfile
 
 # ============================================================================
 # UI Configuration
@@ -1872,42 +1874,55 @@ class ToolSpinner:
         return time.time() - self.start_time if self.start_time else 0
 
 # ============================================================================
-# Main processing
+# Read file cache (persisted across subprocess calls via JSON file)
 # ============================================================================
 
-tmp_file = sys.argv[1]
-agent_script_dir = sys.argv[2]
-request_start_time = int(sys.argv[3]) if len(sys.argv) > 3 else int(time.time())
+PARALLEL_SAFE_TOOLS = {"read_file", "search_code", "list_files", "git_info"}
+SEQUENTIAL_TOOLS = {"write_file", "edit_file", "run_command"}
 
-with open(tmp_file) as f:
-    tool_requests = json.load(f)
+def _get_cache_path():
+    """Get session-specific cache file path."""
+    approve_dir = os.environ.get("GULA_AUTO_APPROVE_DIR", "")
+    if approve_dir:
+        return os.path.join(approve_dir, "read_file_cache.json")
+    return None
 
-results = []
-total_tools = len(tool_requests)
-aborted = False
+def _load_cache():
+    """Load read_file cache from disk."""
+    cache_path = _get_cache_path()
+    if cache_path and os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
 
-# Calculate total elapsed time
-total_elapsed = int(time.time()) - request_start_time
+def _save_cache(cache):
+    """Save read_file cache to disk."""
+    cache_path = _get_cache_path()
+    if cache_path:
+        try:
+            with open(cache_path, "w") as f:
+                json.dump(cache, f)
+        except IOError:
+            pass
 
-# Track lines output for later clearing
-tool_output_lines = 0
-tool_type_counts = {}
-failed_tools = []
-batch_start_time = time.time()
+def _invalidate_cache_path(cache, path):
+    """Remove a path from cache (called when write_file/edit_file modifies it)."""
+    # Normalize path for matching
+    abs_path = os.path.abspath(path)
+    keys_to_remove = [k for k in cache if os.path.abspath(k) == abs_path]
+    for k in keys_to_remove:
+        del cache[k]
 
-for idx, tc in enumerate(tool_requests, 1):
-    tc_id = tc["id"]
-    tc_name = tc["name"]
-    tc_input = tc["input"]
-
-    # Get icon, verb, and format detail
+def _get_tool_detail(tc_name, tc_input):
+    """Extract display detail and action message for a tool call."""
     icon = TOOL_ICONS.get(tc_name, "⚡")
     verb = TOOL_VERBS.get(tc_name, tc_name)
 
-    # Format the detail based on tool type
     if tc_name == "read_file":
         path = tc_input.get("path", "")
-        # Show only filename for cleaner display
         filename = os.path.basename(path) if path else ""
         detail = filename or path
         action_msg = f"{verb} {filename}"
@@ -1932,7 +1947,6 @@ for idx, tc in enumerate(tool_requests, 1):
         action_msg = f'{verb} "{query}"'
     elif tc_name == "run_command":
         cmd = tc_input.get("command", "")
-        # Extract command name for cleaner display
         cmd_name = cmd.split()[0] if cmd else ""
         detail = cmd[:40] + "..." if len(cmd) > 40 else cmd
         action_msg = f"{verb} {cmd_name}"
@@ -1944,16 +1958,173 @@ for idx, tc in enumerate(tool_requests, 1):
         detail = str(tc_input)[:40]
         action_msg = f"{verb} {tc_name}"
 
+    return icon, verb, detail, action_msg
+
+def _execute_tool(tc_name, tc_input, agent_script_dir, cache=None):
+    """Execute a single tool and return (output, success). For parallel-safe tools only."""
+    # Check read_file cache
+    if tc_name == "read_file" and cache is not None:
+        path = tc_input.get("path", "")
+        if path in cache:
+            return cache[path], True
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
+        tf.write(json.dumps(tc_input))
+        input_file = tf.name
+
+    try:
+        cmd = f'source "{agent_script_dir}/agent_local_tools.sh" && execute_tool_locally "{tc_name}" "{input_file}"'
+        tool_timeout = 120
+        result = subprocess.run(
+            ["bash", "-c", cmd],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=tool_timeout,
+            env={**os.environ, "AGENT_SCRIPT_DIR": agent_script_dir}
+        )
+        output = result.stdout or "Sin resultado"
+        success = result.returncode == 0 and not output.startswith("Error:")
+    except subprocess.TimeoutExpired:
+        output = "Error: Timeout ejecutando tool (120s)"
+        success = False
+    except Exception as e:
+        output = f"Error: {str(e)}"
+        success = False
+    finally:
+        os.unlink(input_file)
+
+    # Truncate long output
+    if len(output) > 10000:
+        output = output[:10000] + "\n... [truncado]"
+
+    # Update read_file cache on success
+    if tc_name == "read_file" and success and cache is not None:
+        path = tc_input.get("path", "")
+        if path:
+            cache[path] = output
+
+    return output, success
+
+# ============================================================================
+# Main processing
+# ============================================================================
+
+tmp_file = sys.argv[1]
+agent_script_dir = sys.argv[2]
+request_start_time = int(sys.argv[3]) if len(sys.argv) > 3 else int(time.time())
+
+with open(tmp_file) as f:
+    tool_requests = json.load(f)
+
+# Results indexed by original position
+results = [None] * len(tool_requests)
+total_tools = len(tool_requests)
+aborted = False
+
+# Calculate total elapsed time
+total_elapsed = int(time.time()) - request_start_time
+
+# Track lines output for later clearing
+tool_output_lines = 0
+tool_type_counts = {}
+failed_tools = []
+batch_start_time = time.time()
+
+# Load read_file cache
+read_cache = _load_cache()
+
+# Separate into parallel-safe and sequential groups, preserving original indices
+parallel_tasks = []  # list of (original_index, tc)
+sequential_tasks = []  # list of (original_index, tc)
+
+for idx, tc in enumerate(tool_requests):
+    if tc["name"] in PARALLEL_SAFE_TOOLS:
+        parallel_tasks.append((idx, tc))
+    else:
+        sequential_tasks.append((idx, tc))
+
+# --- Execute parallel-safe tools concurrently ---
+if parallel_tasks:
+    parallel_count = len(parallel_tasks)
+    spinner = ToolSpinner()
+    spinner.start(f"Ejecutando {parallel_count} herramientas en paralelo...")
+
+    def _run_parallel_tool(item):
+        orig_idx, tc = item
+        tc_name = tc["name"]
+        tc_input = tc["input"]
+        output, success = _execute_tool(tc_name, tc_input, agent_script_dir, cache=read_cache)
+        return orig_idx, tc, output, success
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(parallel_count, 8)) as executor:
+        futures = {executor.submit(_run_parallel_tool, item): item for item in parallel_tasks}
+        for future in concurrent.futures.as_completed(futures):
+            orig_idx, tc, output, success = future.result()
+            tc_name = tc["name"]
+            tc_input = tc["input"]
+            icon, verb, detail, action_msg = _get_tool_detail(tc_name, tc_input)
+
+            # Track tool types
+            tool_type_counts[tc_name] = tool_type_counts.get(tc_name, 0) + 1
+            if not success:
+                failed_tools.append(f"{RED}✗ {verb} {detail}{NC}")
+
+            results[orig_idx] = {
+                "tool_call_id": tc["id"],
+                "tool_name": tc_name,
+                "result": output
+            }
+
+    spinner.stop()
+
+    # Show compact summary for the parallel batch
+    parallel_elapsed = time.time() - batch_start_time
+    parts = []
+    verb_map = {"read_file": "lectura", "search_code": "búsqueda", "list_files": "listado", "git_info": "git"}
+    plural_map = {"read_file": "lecturas", "search_code": "búsquedas", "list_files": "listados", "git_info": "git"}
+    # Count only parallel tools for this summary
+    parallel_type_counts = {}
+    for _, tc in parallel_tasks:
+        n = tc["name"]
+        parallel_type_counts[n] = parallel_type_counts.get(n, 0) + 1
+    for tool_name, count in parallel_type_counts.items():
+        label = plural_map.get(tool_name, tool_name) if count > 1 else verb_map.get(tool_name, tool_name)
+        parts.append(f"{count} {label}")
+    summary = ", ".join(parts)
+    has_parallel_errors = any(
+        results[orig_idx] and results[orig_idx]["result"].startswith("Error:")
+        for orig_idx, _ in parallel_tasks
+        if results[orig_idx]
+    )
+    status = f"{GREEN}✓{NC}" if not has_parallel_errors else f"{YELLOW}⚠{NC}"
+    sys.stderr.write(f"  {status} {TOOL_COLOR}{summary} · {parallel_elapsed:.1f}s{NC}\n")
+    tool_output_lines += 1
+    # Show any failed parallel tools
+    for fail_line in failed_tools:
+        sys.stderr.write(f"  {fail_line}\n")
+        tool_output_lines += 1
+    sys.stderr.flush()
+
+# --- Execute sequential tools one by one ---
+seq_start_idx = len(parallel_tasks)  # for progress display
+for seq_num, (orig_idx, tc) in enumerate(sequential_tasks, 1):
+    tc_id = tc["id"]
+    tc_name = tc["name"]
+    tc_input = tc["input"]
+
+    icon, verb, detail, action_msg = _get_tool_detail(tc_name, tc_input)
+
     # Track start time for this tool
     tool_start_time = time.time()
 
-    # Show spinner with current tool (replaces in-place)
+    # Show spinner with current tool
     spinner = ToolSpinner()
-    progress_indicator = f"({idx}/{total_tools}) " if total_tools > 1 else ""
+    progress_indicator = f"({seq_start_idx + seq_num}/{total_tools}) " if total_tools > 1 else ""
     spinner.start(f"{progress_indicator}{icon} {action_msg}")
 
     # Write input to temp file
-    import tempfile
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
         tf.write(json.dumps(tc_input))
         input_file = tf.name
@@ -1983,7 +2154,6 @@ for idx, tc in enumerate(tool_requests, 1):
     finally:
         os.unlink(input_file)
         # Reset terminal settings on /dev/tty in case subprocess left it in raw mode
-        # tool_interactive_select opens /dev/tty directly, so stty must target it
         os.system('stty sane < /dev/tty 2>/dev/null')
         sys.stderr.write(SHOW_CURSOR)
         sys.stderr.flush()
@@ -1994,12 +2164,18 @@ for idx, tc in enumerate(tool_requests, 1):
     if len(output) > 10000:
         output = output[:10000] + "\n... [truncado]"
 
+    # Invalidate read cache when write_file or edit_file modifies a path
+    if tc_name in ("write_file", "edit_file") and success:
+        modified_path = tc_input.get("path", "")
+        if modified_path:
+            _invalidate_cache_path(read_cache, modified_path)
+
     # Track tool types for summary and errors for inline display
     tool_type_counts[tc_name] = tool_type_counts.get(tc_name, 0) + 1
     if not success:
         failed_tools.append(f"{RED}✗ {verb} {detail}{NC}")
 
-    # Only show individual lines for write/edit operations and errors
+    # Show individual lines for write/edit operations and errors
     if tc_name in ("write_file", "edit_file"):
         status_icon = f"{GREEN}✓{NC}" if success else f"{RED}✗{NC}"
         elapsed_str = f" {TOOL_COLOR}({tool_elapsed:.1f}s){NC}" if tool_elapsed > 0.5 else ""
@@ -2021,39 +2197,23 @@ for idx, tc in enumerate(tool_requests, 1):
 
     sys.stderr.flush()
 
-    results.append({
+    results[orig_idx] = {
         "tool_call_id": tc_id,
         "tool_name": tc_name,
         "result": output
-    })
+    }
 
-# Show compact summary for read/search-only batches
-read_search_only = all(tc["name"] in ("read_file", "search_code", "list_files", "git_info") for tc in tool_requests)
-batch_elapsed = time.time() - batch_start_time
+# Save cache for next invocation
+_save_cache(read_cache)
 
-if read_search_only and total_tools > 0:
-    # Compact summary: "✓ 8 tools (4 lecturas, 3 búsquedas) · 2.1s"
-    parts = []
-    verb_map = {"read_file": "lectura", "search_code": "búsqueda", "list_files": "listado", "git_info": "git"}
-    plural_map = {"read_file": "lecturas", "search_code": "búsquedas", "list_files": "listados", "git_info": "git"}
-    for tool_name, count in tool_type_counts.items():
-        label = plural_map.get(tool_name, tool_name) if count > 1 else verb_map.get(tool_name, tool_name)
-        parts.append(f"{count} {label}")
-    summary = ", ".join(parts)
-    status = f"{GREEN}✓{NC}" if not failed_tools else f"{YELLOW}⚠{NC}"
-    sys.stderr.write(f"  {status} {TOOL_COLOR}{summary} · {batch_elapsed:.1f}s{NC}\n")
-    tool_output_lines += 1
-    # Show any failed tools
-    for fail_line in failed_tools:
-        sys.stderr.write(f"  {fail_line}\n")
-        tool_output_lines += 1
-    sys.stderr.flush()
+# Convert results list (filter out any None entries, though there shouldn't be any)
+final_results = [r for r in results if r is not None]
 
 # Output results with metadata
 output_data = {
-    "results": results,
+    "results": final_results,
     "aborted": aborted,
-    "completed_tools": len(results),
+    "completed_tools": len(final_results),
     "total_tools": total_tools,
     "tool_output_lines": tool_output_lines,
 }

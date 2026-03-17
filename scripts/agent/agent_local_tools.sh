@@ -545,12 +545,12 @@ except ValueError:
         local remaining=$((size - MAX_FILE_SIZE))
         echo "[TRUNCATED] File is ${size} bytes. Only first ${MAX_FILE_SIZE} bytes shown. Use read_file with line offset for the rest."
         echo "---"
-        head -c "$MAX_FILE_SIZE" "$resolved_path"
+        head -c "$MAX_FILE_SIZE" "$resolved_path" | cat -n
         echo ""
         echo "---"
         echo "[END_TRUNCATED: ${remaining} bytes not shown]"
     else
-        cat "$resolved_path"
+        cat -n "$resolved_path"
     fi
 }
 
