@@ -1961,13 +1961,15 @@ for idx, tc in enumerate(tool_requests, 1):
     try:
         cmd = f'source "{agent_script_dir}/agent_local_tools.sh" && execute_tool_locally "{tc_name}" "{input_file}"'
         spinner.stop()
+        # Interactive tools (write/edit/run) may wait for user confirmation — longer timeout
+        tool_timeout = 600 if tc_name in ("write_file", "edit_file", "run_command") else 120
         result = subprocess.run(
             ["bash", "-c", cmd],
             stdout=subprocess.PIPE,
             stderr=None,
             stdin=sys.stdin,
             text=True,
-            timeout=120,
+            timeout=tool_timeout,
             env={**os.environ, "AGENT_SCRIPT_DIR": agent_script_dir}
         )
         output = result.stdout or "Sin resultado"
@@ -1980,9 +1982,9 @@ for idx, tc in enumerate(tool_requests, 1):
         success = False
     finally:
         os.unlink(input_file)
-        # Reset terminal settings in case a subprocess left it in raw mode
-        # (e.g., tool_interactive_select timeout during approval dialogs)
-        os.system('stty sane 2>/dev/null')
+        # Reset terminal settings on /dev/tty in case subprocess left it in raw mode
+        # tool_interactive_select opens /dev/tty directly, so stty must target it
+        os.system('stty sane < /dev/tty 2>/dev/null')
         sys.stderr.write(SHOW_CURSOR)
         sys.stderr.flush()
 
