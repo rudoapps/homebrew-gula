@@ -957,10 +957,10 @@ except Exception as e:
         local deletions=$(diff "$tmp_old" "$tmp_new" 2>/dev/null | grep -c "^<" || echo "0")
 
         # Header del diff estilo Claude Code
-        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
-        echo -e " ${BOLD}$path${NC}" >&2
-        echo -e " ${GREEN}+${additions}${NC} ${RED}-${deletions}${NC}" >&2
-        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
+        local filename
+        filename=$(basename "$path")
+        echo -e "  ${BOLD}⏺ Update${NC}${DIM}(${filename})${NC}" >&2
+        echo -e "  ${DIM}⎿${NC}  ${GREEN}+${additions}${NC} ${RED}-${deletions}${NC} líneas" >&2
 
         # Colores para diff
         local FG_GREEN='\033[32m'   # Texto verde
@@ -990,16 +990,16 @@ except Exception as e:
 
         rm -f "$tmp_old"  # Solo eliminar tmp_old, tmp_new es el archivo real
 
-        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
         echo "" >&2
         echo "Archivo modificado: $path ($content_len bytes)"
     else
         # Para archivos nuevos, mostrar preview (leer del archivo recién creado)
         local line_count=$(wc -l < "$resolved_path" | tr -d ' ')
+        local filename
+        filename=$(basename "$path")
         echo "" >&2
-        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
-        echo -e " ${BOLD}$path${NC} ${DIM}(nuevo)${NC}" >&2
-        echo -e " ${GREEN}+${line_count} líneas${NC}" >&2
+        echo -e "  ${BOLD}⏺ Create${NC}${DIM}(${filename})${NC}" >&2
+        echo -e "  ${DIM}⎿${NC}  ${GREEN}+${line_count} líneas${NC}" >&2
         echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
 
         # Mostrar primeras líneas del archivo nuevo
@@ -1018,7 +1018,6 @@ except Exception as e:
             echo -e "${DIM}  ... +${remaining} líneas más${NC}" >&2
         fi
 
-        echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}" >&2
         echo "" >&2
         echo "Archivo creado: $path ($content_len bytes)"
     fi
@@ -1310,6 +1309,79 @@ PYEOF
 
     # Audit log
     audit_log "EDIT_FILE" "$path ($written_len bytes, search & replace)"
+
+    # Show diff for the edit (old_string → new_string)
+    local old_string new_string
+    read -r old_string new_string <<< "$(python3 -c "
+import json
+with open('$input_file', 'r') as f:
+    data = json.load(f)
+old = data.get('old_string', '')
+new = data.get('new_string', '')
+old_lines = old.count(chr(10))
+new_lines = new.count(chr(10))
+print(old_lines, new_lines)
+")"
+    local old_line_count="${old_string:-0}"
+    local new_line_count="${new_string:-0}"
+    local added=$((new_line_count - old_line_count > 0 ? new_line_count - old_line_count : 0))
+    local removed=$((old_line_count - new_line_count > 0 ? old_line_count - new_line_count : 0))
+    # Ensure at least 1 for changed lines
+    if [ "$added" -eq 0 ] && [ "$removed" -eq 0 ]; then
+        added=1
+        removed=1
+    fi
+
+    local filename
+    filename=$(basename "$path")
+
+    echo "" >&2
+    echo -e "  ${BOLD}⏺ Update${NC}${DIM}(${filename})${NC}" >&2
+    echo -e "  ${DIM}⎿${NC}  ${GREEN}+${added}${NC} ${RED}-${removed}${NC} líneas" >&2
+
+    # Show the actual diff content (old → new)
+    python3 - "$input_file" << 'PYEOF' >&2
+import json, sys, os
+
+DIM = "\033[2m"
+GREEN = "\033[32m"
+RED = "\033[31m"
+NC = "\033[0m"
+
+with open(sys.argv[1], 'r') as f:
+    data = json.load(f)
+
+old_string = data.get('old_string', '')
+new_string = data.get('new_string', '')
+
+old_lines = old_string.split('\n')
+new_lines = new_string.split('\n')
+
+# Show max 20 lines of diff
+max_lines = 20
+shown = 0
+
+for line in old_lines:
+    if shown >= max_lines:
+        remaining = len(old_lines) - shown + len(new_lines)
+        print(f"  {DIM}  ... {remaining} líneas más{NC}")
+        break
+    display = line[:100]
+    print(f"  {RED}-  {display}{NC}")
+    shown += 1
+
+for line in new_lines:
+    if shown >= max_lines:
+        remaining = len(new_lines) - (shown - len(old_lines))
+        if remaining > 0:
+            print(f"  {DIM}  ... {remaining} líneas más{NC}")
+        break
+    display = line[:100]
+    print(f"  {GREEN}+  {display}{NC}")
+    shown += 1
+PYEOF
+
+    echo "" >&2
 
     echo "Archivo editado: $path ($written_len bytes)"
 }
