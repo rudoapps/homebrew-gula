@@ -607,6 +607,9 @@ PYEOF
     local tmp_payload=$(mktemp)
     echo "$payload" > "$tmp_payload"
 
+    # Pass terminal width to Python subprocess
+    export COLUMNS=$(tput cols 2>/dev/null || echo 80)
+
     # Llamar al endpoint y procesar SSE con UI mejorada
     python3 - "$endpoint" "$access_token" "$tmp_payload" << 'PYEOF'
 import sys
@@ -980,6 +983,22 @@ def strip_ansi(text):
 
 def get_terminal_width():
     """Get current terminal width, default 80."""
+    # First try COLUMNS env var (most reliable in subprocesses)
+    try:
+        cols = int(os.environ.get("COLUMNS", 0))
+        if cols > 0:
+            return cols
+    except (ValueError, TypeError):
+        pass
+    # Try /dev/tty for actual terminal width
+    try:
+        import fcntl, termios, struct
+        with open('/dev/tty', 'r') as tty:
+            result = fcntl.ioctl(tty.fileno(), termios.TIOCGWINSZ, b'\x00' * 8)
+            return struct.unpack('HHHH', result)[1]
+    except:
+        pass
+    # Fallback to os.get_terminal_size
     try:
         return os.get_terminal_size().columns
     except:
@@ -2048,8 +2067,19 @@ for idx, tc in enumerate(tool_requests):
 # --- Execute parallel-safe tools concurrently ---
 if parallel_tasks:
     parallel_count = len(parallel_tasks)
+
+    # Show what tools are about to run (detailed feedback)
+    tool_descriptions = []
+    for _, tc in parallel_tasks:
+        icon, verb, detail, action_msg = _get_tool_detail(tc["name"], tc["input"])
+        tool_descriptions.append(f"{icon} {action_msg}")
+
     spinner = ToolSpinner()
-    spinner.start(f"Ejecutando {parallel_count} herramientas en paralelo...")
+    # Show first 3 tool descriptions in spinner
+    desc_preview = " · ".join(tool_descriptions[:3])
+    if len(tool_descriptions) > 3:
+        desc_preview += f" · +{len(tool_descriptions) - 3} más"
+    spinner.start(desc_preview)
 
     def _run_parallel_tool(item):
         orig_idx, tc = item
@@ -2079,28 +2109,25 @@ if parallel_tasks:
 
     spinner.stop()
 
-    # Show compact summary for the parallel batch
+    # Show compact summary with tool details
     parallel_elapsed = time.time() - batch_start_time
-    parts = []
-    verb_map = {"read_file": "lectura", "search_code": "búsqueda", "list_files": "listado", "git_info": "git"}
-    plural_map = {"read_file": "lecturas", "search_code": "búsquedas", "list_files": "listados", "git_info": "git"}
-    # Count only parallel tools for this summary
-    parallel_type_counts = {}
-    for _, tc in parallel_tasks:
-        n = tc["name"]
-        parallel_type_counts[n] = parallel_type_counts.get(n, 0) + 1
-    for tool_name, count in parallel_type_counts.items():
-        label = plural_map.get(tool_name, tool_name) if count > 1 else verb_map.get(tool_name, tool_name)
-        parts.append(f"{count} {label}")
-    summary = ", ".join(parts)
     has_parallel_errors = any(
         results[orig_idx] and results[orig_idx]["result"].startswith("Error:")
         for orig_idx, _ in parallel_tasks
         if results[orig_idx]
     )
     status = f"{GREEN}✓{NC}" if not has_parallel_errors else f"{YELLOW}⚠{NC}"
-    sys.stderr.write(f"  {status} {TOOL_COLOR}{summary} · {parallel_elapsed:.1f}s{NC}\n")
+
+    # Show each tool with its detail on one line
+    for _, tc in parallel_tasks:
+        icon, verb, detail, action_msg = _get_tool_detail(tc["name"], tc["input"])
+        sys.stderr.write(f"  {status} {TOOL_COLOR}{icon} {action_msg}{NC}\n")
+        tool_output_lines += 1
+
+    # Show timing
+    sys.stderr.write(f"  {TOOL_COLOR}  ⎿ {parallel_count} herramientas en {parallel_elapsed:.1f}s{NC}\n")
     tool_output_lines += 1
+
     # Show any failed parallel tools
     for fail_line in failed_tools:
         sys.stderr.write(f"  {fail_line}\n")
