@@ -70,53 +70,73 @@ show_formatted_error() {
 read_multiline_input() {
     local lines=()
     local line=""
-    local is_first_line=true
 
-    while true; do
-        # Show prompt
-        if [ "$is_first_line" = true ]; then
-            echo -ne "${CYAN}›${NC} " >&2
-        else
+    # Show prompt
+    echo -ne "${CYAN}›${NC} " >&2
+
+    # Read first line with readline support
+    if ! IFS= read -e -r line; then
+        echo ""
+        return
+    fi
+
+    # Empty first line - return empty
+    if [ -z "$line" ]; then
+        echo ""
+        return
+    fi
+
+    # Check for backslash continuation on first line
+    if [[ "$line" == *"\\" ]]; then
+        line="${line%\\}"
+        lines+=("$line")
+        # Explicit multi-line mode with backslash
+        while true; do
             echo -ne "${DIM}  ...${NC} " >&2
-        fi
-
-        # Read input with readline support (-e enables readline editing)
-        if ! IFS= read -e -r line; then
-            # EOF - return what we have
-            break
-        fi
-
-        # Check for backslash continuation
-        if [[ "$line" == *"\\" ]]; then
-            # Remove trailing backslash and continue
-            line="${line%\\}"
-            lines+=("$line")
-            is_first_line=false
-            continue
-        fi
-
-        # Check for empty line (submit signal in multi-line mode)
-        if [ -z "$line" ]; then
-            if [ ${#lines[@]} -gt 0 ]; then
-                # We have content and got empty line - submit
+            if ! IFS= read -e -r line; then
                 break
-            else
-                # Empty input on first line - return empty
-                echo ""
-                return
             fi
-        fi
-
-        # Add line to buffer
+            if [ -z "$line" ]; then
+                break
+            fi
+            if [[ "$line" == *"\\" ]]; then
+                line="${line%\\}"
+                lines+=("$line")
+                continue
+            fi
+            lines+=("$line")
+            break
+        done
+    else
         lines+=("$line")
 
-        # For single line input (first line, no continuation), submit immediately
-        if [ "$is_first_line" = true ]; then
-            break
+        # Paste detection: check if more data is available on stdin immediately.
+        # Pasted text arrives all at once, so data is buffered.
+        # Typed text won't have anything in the buffer after Enter.
+        local extra_lines
+        extra_lines=$(python3 -c "
+import sys, select
+lines = []
+while select.select([sys.stdin], [], [], 0.05)[0]:
+    line = sys.stdin.readline()
+    if not line:
+        break
+    lines.append(line.rstrip('\n').replace('\x1b[200~','').replace('\x1b[201~',''))
+for l in lines:
+    print(l)
+" 2>/dev/null)
+        if [ -n "$extra_lines" ]; then
+            while IFS= read -r line; do
+                lines+=("$line")
+            done <<< "$extra_lines"
         fi
 
-        is_first_line=false
-    done
+        # If we captured multiple lines (paste detected), show them
+        if [ ${#lines[@]} -gt 1 ]; then
+            local paste_count=$((${#lines[@]} - 1))
+            echo -e "${DIM}  ... (+${paste_count} líneas pegadas)${NC}" >&2
+        fi
+    fi
 
     # Join lines with newlines
     local result=""
