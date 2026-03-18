@@ -502,6 +502,9 @@ agent_chat_interactive() {
     local total_cost=0
     local last_response=""  # Store last response for /copy command
 
+    # Export terminal width for subprocesses (subshells lose tty access)
+    export COLUMNS=$(stty size < /dev/tty 2>/dev/null | awk '{print $2}' || tput cols 2>/dev/null || echo 80)
+
     # Try to recover last conversation for this project
     local saved_conv_id=$(get_project_conversation)
 
@@ -554,6 +557,9 @@ agent_chat_interactive() {
     echo -e "${DIM}───────────────────────────────────────────────────────────────${NC}"
 
     while true; do
+        # Refresh terminal width on each iteration (handles resizes)
+        export COLUMNS=$(stty size < /dev/tty 2>/dev/null | awk '{print $2}' || echo "${COLUMNS:-80}")
+
         # Read multi-line input
         local user_input
         user_input=$(read_multiline_input)

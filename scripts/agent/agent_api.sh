@@ -608,7 +608,8 @@ PYEOF
     echo "$payload" > "$tmp_payload"
 
     # Pass terminal width to Python subprocess
-    export COLUMNS=$(tput cols 2>/dev/null || echo 80)
+    # Must use /dev/tty since we're likely in a subshell where stdout is captured
+    export COLUMNS=$(stty size < /dev/tty 2>/dev/null | awk '{print $2}' || tput cols 2>/dev/null || echo 80)
 
     # Llamar al endpoint y procesar SSE con UI mejorada
     python3 - "$endpoint" "$access_token" "$tmp_payload" << 'PYEOF'
