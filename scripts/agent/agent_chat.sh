@@ -241,23 +241,18 @@ atexit.register(_restore_terminal)
 signal.signal(signal.SIGTERM, lambda *_: (_restore_terminal(), sys.exit(1)))
 
 def get_key():
-    """Read a single keypress."""
-    fd = tty_file.fileno()
-    try:
-        tty.setraw(fd)
-        ch = tty_file.read(1)
-        if ch == '\x1b':  # Escape sequence
-            ch2 = tty_file.read(1)
-            if ch2 == '[':
-                ch3 = tty_file.read(1)
-                if ch3 == 'A': return 'up'
-                if ch3 == 'B': return 'down'
-            return 'esc'
-        if ch in ('\r', '\n'): return 'enter'
-        if ch == '\x03': return 'ctrl-c'  # Ctrl+C
-        return ch
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, _original_settings)
+    """Read a single keypress. Terminal must already be in raw mode."""
+    ch = tty_file.read(1)
+    if ch == '\x1b':  # Escape sequence
+        ch2 = tty_file.read(1)
+        if ch2 == '[':
+            ch3 = tty_file.read(1)
+            if ch3 == 'A': return 'up'
+            if ch3 == 'B': return 'down'
+        return 'esc'
+    if ch in ('\r', '\n'): return 'enter'
+    if ch == '\x03': return 'ctrl-c'  # Ctrl+C
+    return ch
 
 def render(prompt, options, selected_idx, first_render=False):
     """Render the selector."""
@@ -294,6 +289,9 @@ sys.stderr.write(HIDE_CURSOR)
 sys.stderr.flush()
 
 try:
+    # Set raw mode ONCE for the entire selection loop
+    tty.setraw(tty_file.fileno())
+
     render(prompt, options, selected_idx, first_render=True)
 
     while True:
@@ -308,19 +306,21 @@ try:
         elif key == 'enter':
             break
         elif key in ('esc', 'ctrl-c', 'q'):
-            # Return empty on cancel
-            sys.stderr.write(SHOW_CURSOR)
-            sys.stderr.flush()
-            print("")
-            sys.exit(0)
+            selected_idx = -1
+            break
 
 finally:
+    # Restore terminal settings ONCE at the end
+    termios.tcsetattr(tty_file.fileno(), termios.TCSADRAIN, _original_settings)
     sys.stderr.write(SHOW_CURSOR)
     sys.stderr.flush()
     tty_file.close()
 
 # Output selected option
-print(options[selected_idx])
+if selected_idx >= 0 and selected_idx < len(options):
+    print(options[selected_idx])
+else:
+    print("")
 PYEOF
 }
 

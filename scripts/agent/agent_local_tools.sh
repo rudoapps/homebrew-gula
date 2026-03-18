@@ -125,23 +125,6 @@ def _restore_terminal():
 atexit.register(_restore_terminal)
 signal.signal(signal.SIGTERM, lambda *_: (_restore_terminal(), sys.exit(1)))
 
-def get_key():
-    try:
-        tty.setraw(tty_fd)
-        ch = tty_file.read(1)
-        if ch == '\x1b':
-            ch2 = tty_file.read(1)
-            if ch2 == '[':
-                ch3 = tty_file.read(1)
-                if ch3 == 'A': return 'up'
-                if ch3 == 'B': return 'down'
-            return 'esc'
-        if ch in ('\r', '\n'): return 'enter'
-        if ch == '\x03': return 'ctrl-c'
-        return ch
-    finally:
-        termios.tcsetattr(tty_fd, termios.TCSADRAIN, _original_tty_settings)
-
 def render(first_render=False):
     if not first_render:
         for _ in range(len(options) + 1):
@@ -168,32 +151,44 @@ sys.stderr.write(HIDE_CURSOR)
 sys.stderr.flush()
 
 try:
+    # Set raw mode ONCE for the entire selection loop (avoids losing keypresses
+    # during raw↔cooked transitions that caused the "press twice" bug)
+    tty.setraw(tty_fd)
+
     render(first_render=True)
 
     while True:
-        key = get_key()
-
-        if key == 'up':
-            selected_idx = (selected_idx - 1) % len(options)
-            render()
-        elif key == 'down':
-            selected_idx = (selected_idx + 1) % len(options)
-            render()
-        elif key == 'enter':
+        ch = tty_file.read(1)
+        if ch == '\x1b':
+            ch2 = tty_file.read(1)
+            if ch2 == '[':
+                ch3 = tty_file.read(1)
+                if ch3 == 'A':  # up
+                    selected_idx = (selected_idx - 1) % len(options)
+                    render()
+                elif ch3 == 'B':  # down
+                    selected_idx = (selected_idx + 1) % len(options)
+                    render()
+            # esc - reject
+            else:
+                break
+        elif ch in ('\r', '\n'):  # enter
             break
-        elif key in ('esc', 'ctrl-c', 'q'):
-            sys.stderr.write(SHOW_CURSOR)
-            sys.stderr.flush()
-            tty_file.close()
-            print("Rechazar")
-            sys.exit(0)
+        elif ch == '\x03' or ch == 'q':  # ctrl-c or q
+            selected_idx = -1
+            break
 
 finally:
+    # Restore terminal settings ONCE at the end
+    termios.tcsetattr(tty_fd, termios.TCSADRAIN, _original_tty_settings)
     sys.stderr.write(SHOW_CURSOR)
     sys.stderr.flush()
     tty_file.close()
 
-print(options[selected_idx])
+if selected_idx >= 0 and selected_idx < len(options):
+    print(options[selected_idx])
+else:
+    print("Rechazar")
 PYEOF
 }
 
