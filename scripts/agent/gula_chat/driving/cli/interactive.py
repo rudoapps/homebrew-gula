@@ -6,10 +6,15 @@ import asyncio
 import subprocess
 from typing import List, Optional
 
-from ...application.services.chat_service import ChatService
-from ...application.services.tool_orchestrator import ToolOrchestrator
-from ...application.ports.driven.config_port import ConfigPort
+from ...application.ports.driven.api_client_port import ApiClientPort
 from ...application.ports.driven.clipboard_port import ClipboardPort
+from ...application.ports.driven.config_port import ConfigPort
+from ...application.services.auth_service import AuthService
+from ...application.services.chat_service import ChatService
+from ...application.services.subagent_service import SubagentService
+from ...application.services.tool_orchestrator import ToolOrchestrator
+from ...driven.context.project_context_builder import ProjectContextBuilder
+from ...driven.images.image_detector import ImageDetector
 from ...domain.entities.sse_event import (
     SSEEvent,
     StartedEvent,
@@ -22,7 +27,12 @@ from ..ui.console import get_console
 from ..ui.header import SessionHeader
 from ..ui.renderer import SSERenderer
 from ..ui.tool_display import ToolDisplay
-from .commands import SlashCommandRegistry
+from .commands import (
+    SlashCommandRegistry,
+    format_models_display,
+    format_quota_display,
+    format_subagents_display,
+)
 from .input_handler import InputHandler
 
 
@@ -56,7 +66,11 @@ class InteractiveHandler:
         chat_service: Service for sending messages and streaming responses.
         config_port: Configuration port for settings access.
         clipboard_port: Clipboard port for copy operations.
+        auth_service: Authentication service for obtaining valid tokens.
+        api_client: API client for backend calls (quota, models, etc.).
+        subagent_service: Service for subagent listing and invocation.
         tool_orchestrator: Orchestrator for local tool execution.
+        project_context_builder: Builder for project context metadata.
     """
 
     def __init__(
@@ -64,13 +78,22 @@ class InteractiveHandler:
         chat_service: ChatService,
         config_port: ConfigPort,
         clipboard_port: ClipboardPort,
+        auth_service: AuthService,
+        api_client: ApiClientPort,
+        subagent_service: SubagentService,
         tool_orchestrator: Optional[ToolOrchestrator] = None,
+        project_context_builder: Optional[ProjectContextBuilder] = None,
     ) -> None:
         self._chat_service = chat_service
         self._config_port = config_port
         self._clipboard_port = clipboard_port
+        self._auth_service = auth_service
+        self._api_client = api_client
+        self._subagent_service = subagent_service
         self._tool_orchestrator = tool_orchestrator
+        self._context_builder = project_context_builder or ProjectContextBuilder()
         self._tool_display = ToolDisplay()
+        self._image_detector = ImageDetector()
         self._console = get_console()
 
         # Session state
@@ -79,6 +102,7 @@ class InteractiveHandler:
         self._last_response: str = ""
         self._turn_count: int = 0
         self._project_name: str = _detect_project_name()
+        self._is_first_message: bool = True
 
         # Sub-components
         self._input_handler = InputHandler()
@@ -86,6 +110,9 @@ class InteractiveHandler:
         self._commands = SlashCommandRegistry(
             config_port=config_port,
             clipboard_port=clipboard_port,
+            auth_service=auth_service,
+            api_client=api_client,
+            subagent_service=subagent_service,
             get_last_response=lambda: self._last_response,
             get_total_cost=lambda: self._total_cost,
             get_conversation_id=lambda: self._conversation_id,
@@ -144,7 +171,9 @@ class InteractiveHandler:
                 # Handle command actions
                 if cmd_result.action == "new_conversation":
                     self._conversation_id = None
+                    self._is_first_message = True
                     self._config_port.clear_project_conversation()
+                    self._context_builder.rebuild()
                     self._header.show_new_conversation()
 
                 elif cmd_result.action == "resume_conversation":
@@ -155,6 +184,21 @@ class InteractiveHandler:
                         )
                         self._header.show_resumed_conversation(
                             self._conversation_id
+                        )
+
+                elif cmd_result.action == "fetch_quota":
+                    await self._handle_fetch_quota()
+
+                elif cmd_result.action == "list_models":
+                    await self._handle_list_models()
+
+                elif cmd_result.action == "list_subagents":
+                    await self._handle_list_subagents()
+
+                elif cmd_result.action == "invoke_subagent":
+                    if cmd_result.action_data:
+                        await self._handle_invoke_subagent(
+                            cmd_result.action_data
                         )
 
                 continue
@@ -171,7 +215,28 @@ class InteractiveHandler:
         Args:
             prompt: The user's message (with @file refs already expanded).
         """
-        current_prompt: Optional[str] = prompt
+        # Detect and encode images referenced in the prompt
+        cleaned_prompt, image_attachments = self._image_detector.detect_images(prompt)
+        images_payload = None
+        if image_attachments:
+            num = len(image_attachments)
+            self._console.print(
+                f"  [green]{num} imagen(es) detectada(s)[/green]"
+            )
+            images_payload = [
+                {"data": img.data, "media_type": img.media_type}
+                for img in image_attachments
+            ]
+
+        # Build project context: full on first message, minimal on continuations
+        project_context = None
+        if self._is_first_message:
+            project_context = self._context_builder.build()
+            self._is_first_message = False
+        else:
+            project_context = self._context_builder.build_minimal()
+
+        current_prompt: Optional[str] = cleaned_prompt
         current_tool_results = None
 
         while True:
@@ -185,6 +250,8 @@ class InteractiveHandler:
                     prompt=current_prompt,
                     conversation_id=self._conversation_id,
                     tool_results=current_tool_results,
+                    project_context=project_context,
+                    images=images_payload,
                 ):
                     # Track conversation ID
                     if isinstance(event, StartedEvent) and event.conversation_id:
@@ -253,9 +320,11 @@ class InteractiveHandler:
                     self._tool_orchestrator.request_abort()
                     return
 
-                # Loop: send tool results back, no new prompt
+                # Loop: send tool results back, no new prompt, images, or context
                 current_prompt = None
                 current_tool_results = tool_results
+                images_payload = None
+                project_context = None
                 self._console.print()
                 continue
 
@@ -272,6 +341,110 @@ class InteractiveHandler:
             # No more tool requests or turn is complete
             if turn_complete or not pending_tool_event:
                 break
+
+        self._console.print()
+
+    async def _handle_fetch_quota(self) -> None:
+        """Fetch and display quota information from the API."""
+        try:
+            config = await self._auth_service.ensure_valid_token()
+            data = await self._api_client.get_quota(
+                api_url=config.api_url,
+                access_token=config.access_token,
+            )
+            output = format_quota_display(data, self._total_cost)
+            self._console.print(output)
+        except Exception as exc:
+            self._console.print(f"  [red]Error al obtener quota: {exc}[/red]")
+            self._console.print()
+
+    async def _handle_list_models(self) -> None:
+        """Fetch and display available models from the API."""
+        try:
+            config = await self._auth_service.ensure_valid_token()
+            data = await self._api_client.get_models(
+                api_url=config.api_url,
+                access_token=config.access_token,
+            )
+            models = data if isinstance(data, list) else data.get("models", [])
+            default_model = data.get("default_model", "") if isinstance(data, dict) else ""
+            current = self._config_port.get_config().preferred_model or "auto"
+            output = format_models_display(models, current, default_model)
+            self._console.print(output)
+        except Exception as exc:
+            self._console.print(f"  [red]Error al obtener modelos: {exc}[/red]")
+            self._console.print()
+
+    async def _handle_list_subagents(self) -> None:
+        """Fetch and display available subagents from the API."""
+        try:
+            subagents = await self._subagent_service.list_subagents()
+            output = format_subagents_display(subagents)
+            self._console.print(output)
+        except Exception as exc:
+            self._console.print(
+                f"  [red]Error al obtener subagentes: {exc}[/red]"
+            )
+            self._console.print()
+
+    async def _handle_invoke_subagent(self, action_data: str) -> None:
+        """Invoke a subagent and stream the response.
+
+        Args:
+            action_data: String in the format "subagent_id\\nprompt".
+        """
+        parts = action_data.split("\n", maxsplit=1)
+        if len(parts) < 2:
+            self._console.print("  [red]Datos de subagente invalidos.[/red]")
+            return
+
+        subagent_id = parts[0]
+        prompt = parts[1]
+
+        self._console.print()
+        self._console.print(
+            f"  [cyan][Subagente: {subagent_id}][/cyan]"
+        )
+        self._console.print()
+
+        renderer = SSERenderer()
+        text_chunks: List[str] = []
+
+        try:
+            async for event in self._subagent_service.invoke(
+                subagent_id=subagent_id,
+                prompt=prompt,
+                conversation_id=self._conversation_id,
+            ):
+                if isinstance(event, StartedEvent) and event.conversation_id:
+                    self._conversation_id = event.conversation_id
+                    self._config_port.set_project_conversation(
+                        event.conversation_id
+                    )
+
+                if isinstance(event, CompleteEvent):
+                    if event.total_cost > 0:
+                        self._total_cost = event.total_cost
+                    elif event.session_cost > 0:
+                        self._total_cost += event.session_cost
+                    self._turn_count += 1
+
+                if isinstance(event, TextEvent) and event.content:
+                    text_chunks.append(event.content)
+
+                renderer.render(event)
+
+        except KeyboardInterrupt:
+            renderer.finalize()
+            self._console.print()
+            self._console.print("  [dim]Subagente cancelado[/dim]")
+            self._console.print()
+            return
+        finally:
+            renderer.finalize()
+
+        if text_chunks:
+            self._last_response = "".join(text_chunks)
 
         self._console.print()
 

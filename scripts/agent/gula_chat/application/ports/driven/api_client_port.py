@@ -97,3 +97,16 @@ class ApiClientPort(ABC):
             List of conversation summary dicts.
         """
         ...
+
+    @abstractmethod
+    async def get_subagents(
+        self,
+        api_url: str,
+        access_token: str,
+    ) -> Dict[str, Any]:
+        """Fetch available subagents.
+
+        Returns:
+            Dict with a 'subagents' key containing a list of subagent dicts.
+        """
+        ...

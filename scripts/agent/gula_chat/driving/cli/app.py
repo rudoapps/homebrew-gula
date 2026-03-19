@@ -51,7 +51,11 @@ class App:
             chat_service=self._container.chat_service,
             config_port=self._container.config_port,
             clipboard_port=self._container.clipboard_port,
+            auth_service=self._container.auth_service,
+            api_client=self._container.api_client,
+            subagent_service=self._container.subagent_service,
             tool_orchestrator=self._container.tool_orchestrator,
+            project_context_builder=self._container.project_context_builder,
         )
         return handler.run()
 

@@ -203,3 +203,17 @@ class HttpxApiClient(ApiClientPort):
             )
             response.raise_for_status()
             return response.json()
+
+    async def get_subagents(
+        self,
+        api_url: str,
+        access_token: str,
+    ) -> Dict[str, Any]:
+        """Fetch available subagents."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{api_url}/agent/subagents",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            response.raise_for_status()
+            return response.json()

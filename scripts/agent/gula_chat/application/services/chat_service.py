@@ -41,6 +41,7 @@ class ChatService:
         images: Optional[List[Dict[str, str]]] = None,
         model: Optional[str] = None,
         max_iterations: int = 10,
+        subagent_id: Optional[str] = None,
     ) -> AsyncGenerator[SSEEvent, None]:
         """Send a message and yield SSE events as they stream back.
 
@@ -52,6 +53,7 @@ class ChatService:
             images: List of image dicts with 'data' and 'media_type' keys.
             model: Override model ID, or None for default/auto.
             max_iterations: Maximum agent iterations.
+            subagent_id: Subagent ID for delegating to a specific subagent.
 
         Yields:
             SSEEvent instances as they arrive from the server.
@@ -75,6 +77,7 @@ class ChatService:
             images=images,
             model=effective_model,
             max_iterations=max_iterations,
+            subagent_id=subagent_id,
         )
 
         # Step 3: Stream with 401 retry

@@ -8,10 +8,12 @@ from .application.ports.driven.config_port import ConfigPort
 from .application.ports.driven.tool_executor_port import ToolExecutorPort
 from .application.services.auth_service import AuthService
 from .application.services.chat_service import ChatService
+from .application.services.subagent_service import SubagentService
 from .application.services.tool_orchestrator import ToolOrchestrator
 from .driven.api.httpx_client import HttpxApiClient
 from .driven.clipboard.macos_clipboard_adapter import MacOSClipboardAdapter
 from .driven.config.json_config_adapter import JsonConfigAdapter
+from .driven.context.project_context_builder import ProjectContextBuilder
 from .driven.tools.file_backup import FileBackup
 from .driven.tools.local_executor import LocalToolExecutor
 from .driven.tools.path_validator import PathValidator
@@ -32,6 +34,7 @@ class Container:
     def __init__(self, debug: bool = False) -> None:
         # ── Driven adapters (infrastructure) ────────────────────────────
         self._config_adapter = JsonConfigAdapter()
+        self._project_context_builder = ProjectContextBuilder()
         self._api_client = HttpxApiClient(debug=debug)
         self._clipboard_adapter = MacOSClipboardAdapter()
 
@@ -61,6 +64,11 @@ class Container:
             executor=self._tool_executor,
             progress=self._tool_display,
         )
+        self._subagent_service = SubagentService(
+            auth_service=self._auth_service,
+            api_client=self._api_client,
+            chat_service=self._chat_service,
+        )
 
     # ── Public accessors for the driving layer ──────────────────────────
 
@@ -85,6 +93,10 @@ class Container:
         return self._chat_service
 
     @property
+    def subagent_service(self) -> SubagentService:
+        return self._subagent_service
+
+    @property
     def tool_orchestrator(self) -> ToolOrchestrator:
         return self._tool_orchestrator
 
@@ -99,6 +111,10 @@ class Container:
     @property
     def file_backup(self) -> FileBackup:
         return self._file_backup
+
+    @property
+    def project_context_builder(self) -> ProjectContextBuilder:
+        return self._project_context_builder
 
     @property
     def tool_display(self) -> ToolDisplay:
