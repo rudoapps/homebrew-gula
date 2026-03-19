@@ -51,6 +51,7 @@ class App:
             chat_service=self._container.chat_service,
             config_port=self._container.config_port,
             clipboard_port=self._container.clipboard_port,
+            tool_orchestrator=self._container.tool_orchestrator,
         )
         return handler.run()
 

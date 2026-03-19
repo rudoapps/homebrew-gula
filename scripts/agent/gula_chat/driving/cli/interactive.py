@@ -7,16 +7,21 @@ import subprocess
 from typing import List, Optional
 
 from ...application.services.chat_service import ChatService
+from ...application.services.tool_orchestrator import ToolOrchestrator
 from ...application.ports.driven.config_port import ConfigPort
 from ...application.ports.driven.clipboard_port import ClipboardPort
 from ...domain.entities.sse_event import (
+    SSEEvent,
     StartedEvent,
     CompleteEvent,
+    ErrorEvent,
+    TextEvent,
     ToolRequestsEvent,
 )
 from ..ui.console import get_console
 from ..ui.header import SessionHeader
 from ..ui.renderer import SSERenderer
+from ..ui.tool_display import ToolDisplay
 from .commands import SlashCommandRegistry
 from .input_handler import InputHandler
 
@@ -45,12 +50,13 @@ class InteractiveHandler:
 
     Manages the loop of: read input -> check slash commands ->
     expand @files -> send to chat_service -> render SSE events ->
-    handle tool_requests (Phase 3 stub) -> repeat.
+    execute tool_requests -> send results back -> repeat until complete.
 
     Args:
         chat_service: Service for sending messages and streaming responses.
         config_port: Configuration port for settings access.
         clipboard_port: Clipboard port for copy operations.
+        tool_orchestrator: Orchestrator for local tool execution.
     """
 
     def __init__(
@@ -58,10 +64,13 @@ class InteractiveHandler:
         chat_service: ChatService,
         config_port: ConfigPort,
         clipboard_port: ClipboardPort,
+        tool_orchestrator: Optional[ToolOrchestrator] = None,
     ) -> None:
         self._chat_service = chat_service
         self._config_port = config_port
         self._clipboard_port = clipboard_port
+        self._tool_orchestrator = tool_orchestrator
+        self._tool_display = ToolDisplay()
         self._console = get_console()
 
         # Session state
@@ -154,64 +163,116 @@ class InteractiveHandler:
             await self._send_message(user_input)
 
     async def _send_message(self, prompt: str) -> None:
-        """Send a message to the agent and render the streamed response.
+        """Send a message and handle the full tool execution loop.
+
+        The loop continues sending tool_results back to the server until
+        a CompleteEvent or ErrorEvent is received (no more tool requests).
 
         Args:
             prompt: The user's message (with @file refs already expanded).
         """
-        renderer = SSERenderer()
-        self._last_response = ""
-        text_chunks: List[str] = []
+        current_prompt: Optional[str] = prompt
+        current_tool_results = None
 
-        try:
-            async for event in self._chat_service.send_message(
-                prompt=prompt,
-                conversation_id=self._conversation_id,
-            ):
-                # Track conversation ID
-                if isinstance(event, StartedEvent) and event.conversation_id:
-                    self._conversation_id = event.conversation_id
-                    self._config_port.set_project_conversation(
-                        event.conversation_id
-                    )
+        while True:
+            renderer = SSERenderer()
+            text_chunks: List[str] = []
+            pending_tool_event: Optional[ToolRequestsEvent] = None
+            turn_complete = False
 
-                # Track cost from complete events
-                if isinstance(event, CompleteEvent):
-                    if event.total_cost > 0:
-                        self._total_cost = event.total_cost
-                    elif event.session_cost > 0:
-                        self._total_cost += event.session_cost
-                    self._turn_count += 1
+            try:
+                async for event in self._chat_service.send_message(
+                    prompt=current_prompt,
+                    conversation_id=self._conversation_id,
+                    tool_results=current_tool_results,
+                ):
+                    # Track conversation ID
+                    if isinstance(event, StartedEvent) and event.conversation_id:
+                        self._conversation_id = event.conversation_id
+                        self._config_port.set_project_conversation(
+                            event.conversation_id
+                        )
 
-                # Accumulate text for /copy
-                from ...domain.entities.sse_event import TextEvent
-                if isinstance(event, TextEvent) and event.content:
-                    text_chunks.append(event.content)
+                    # Track cost from complete events
+                    if isinstance(event, CompleteEvent):
+                        if event.total_cost > 0:
+                            self._total_cost = event.total_cost
+                        elif event.session_cost > 0:
+                            self._total_cost += event.session_cost
+                        self._turn_count += 1
+                        turn_complete = True
 
-                # Phase 3 stub: tool requests are displayed but not executed
-                if isinstance(event, ToolRequestsEvent) and event.tool_calls:
+                    # Accumulate text for /copy
+                    if isinstance(event, TextEvent) and event.content:
+                        text_chunks.append(event.content)
+
+                    # Handle tool requests
+                    if isinstance(event, ToolRequestsEvent) and event.tool_calls:
+                        if event.conversation_id:
+                            self._conversation_id = event.conversation_id
+                        pending_tool_event = event
+                        renderer.render(event)
+                        continue
+
+                    # Handle errors as terminal
+                    if isinstance(event, ErrorEvent):
+                        renderer.render(event)
+                        turn_complete = True
+                        continue
+
                     renderer.render(event)
-                    self._console.print()
-                    self._console.print(
-                        "  [warning]Ejecucion de herramientas no disponible "
-                        "aun (Phase 3)[/warning]"
+
+            except KeyboardInterrupt:
+                renderer.finalize()
+                self._console.print()
+                self._console.print("  [dim]Mensaje cancelado[/dim]")
+                self._console.print()
+                if self._tool_orchestrator:
+                    self._tool_orchestrator.request_abort()
+                return
+
+            finally:
+                renderer.finalize()
+
+            # Accumulate text for /copy
+            if text_chunks:
+                self._last_response = "".join(text_chunks)
+
+            # If we got a tool request event and have an orchestrator, execute tools
+            if pending_tool_event and self._tool_orchestrator:
+                self._console.print()
+
+                try:
+                    tool_results = await self._tool_orchestrator.execute_all(
+                        pending_tool_event.tool_calls
                     )
+                except KeyboardInterrupt:
                     self._console.print()
-                    continue
+                    self._console.print("  [dim]Ejecucion de herramientas cancelada[/dim]")
+                    self._console.print()
+                    self._tool_orchestrator.request_abort()
+                    return
 
-                renderer.render(event)
+                # Loop: send tool results back, no new prompt
+                current_prompt = None
+                current_tool_results = tool_results
+                self._console.print()
+                continue
 
-        except KeyboardInterrupt:
-            renderer.finalize()
-            self._console.print()
-            self._console.print("  [dim]Mensaje cancelado[/dim]")
-            self._console.print()
-            return
+            elif pending_tool_event and not self._tool_orchestrator:
+                # No orchestrator — show Phase 3 stub message
+                self._console.print()
+                self._console.print(
+                    "  [warning]Ejecucion de herramientas no disponible "
+                    "(tool_orchestrator no configurado)[/warning]"
+                )
+                self._console.print()
+                break
 
-        finally:
-            renderer.finalize()
+            # No more tool requests or turn is complete
+            if turn_complete or not pending_tool_event:
+                break
 
-        self._last_response = "".join(text_chunks)
         self._console.print()
 
     def _show_exit_summary(self) -> None:
