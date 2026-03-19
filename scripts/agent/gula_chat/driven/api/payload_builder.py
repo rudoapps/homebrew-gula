@@ -71,10 +71,9 @@ def build_chat_payload(
     if tool_results:
         payload["tool_results"] = [
             {
-                "id": tr.id,
-                "name": tr.name,
-                "output": tr.output,
-                "success": tr.success,
+                "tool_call_id": tr.id,
+                "tool_name": tr.name,
+                "result": tr.output,
             }
             for tr in tool_results
         ]

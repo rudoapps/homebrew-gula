@@ -42,4 +42,4 @@ class AppConfig:
     @property
     def chat_endpoint(self) -> str:
         """Return the full chat SSE endpoint URL."""
-        return f"{self.api_url}/agent/chat"
+        return f"{self.api_url}/agent/chat/hybrid"
