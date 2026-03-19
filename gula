@@ -460,8 +460,7 @@ fi
 # Manejar comando 'ai' — cliente Python
 if [[ "$COMMAND" == "ai" ]]; then
   shift  # Remove 'ai' from args
-  GULA_CHAT_DIR="${GULA_HOME:-$(cd "$(dirname "$0")" && pwd)}/scripts/agent"
-  PYTHONPATH="$GULA_CHAT_DIR" exec python3 -m gula_chat "$@"
+  PYTHONPATH="${scripts_dir}/agent" exec python3 -m gula_chat "$@"
 fi
 
 # Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
