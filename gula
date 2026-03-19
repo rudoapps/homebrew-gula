@@ -183,7 +183,7 @@ show_help() {
   echo ""
   echo -e "${BOLD}COMANDOS PRINCIPALES:${NC}"
   echo ""
-  echo -e "${BOLD}  ai${NC}       Inicia TUI rica para el agente AI (Go + Bubble Tea)"
+  echo -e "${BOLD}  ai${NC}       Inicia el agente AI (modo Python)"
   echo -e "${BOLD}  chat${NC}     Inicia conversacion con el agente AI (modo bash)"
   echo -e "${BOLD}  login${NC}    Inicia sesion en el agente AI"
   echo -e "${BOLD}  setup${NC}    Instala dependencias del agente AI"
@@ -259,7 +259,8 @@ show_help() {
   echo -e "${BOLD}  Usar el agente AI:${NC}"
   echo "  gula setup                                      # Instalar dependencias del agente"
   echo "  gula login                                      # Iniciar sesion"
-  echo "  gula ai                                         # TUI rica (Go + Bubble Tea)"
+  echo "  gula ai                                         # Agente AI (modo Python)"
+  echo "  gula ai \"Hola\"                                  # Mensaje unico (Python)"
   echo "  gula chat                                       # Modo interactivo (bash)"
   echo "  gula chat \"Hola\"                                # Mensaje unico"
   echo "  gula chat --continue                            # Continuar ultima conversacion"
@@ -454,6 +455,13 @@ fi
 VALIDATE_STAGED="false"
 if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
   VALIDATE_STAGED="true"
+fi
+
+# Manejar comando 'ai' — cliente Python
+if [[ "$COMMAND" == "ai" ]]; then
+  shift  # Remove 'ai' from args
+  GULA_CHAT_DIR="${GULA_HOME:-$(cd "$(dirname "$0")" && pwd)}/scripts/agent"
+  PYTHONPATH="$GULA_CHAT_DIR" exec python3 -m gula_chat "$@"
 fi
 
 # Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
@@ -689,7 +697,7 @@ elif [ "$COMMAND" == "validate" ]; then
 elif [ "$COMMAND" == "install-hook" ]; then
   install_validation_hook
 else
-  echo "Comando no reconocido. Uso: $0 {chat|login|setup|logout|whoami|install|list|template|create|branches|status|validate|help} [opciones]"
+  echo "Comando no reconocido. Uso: $0 {ai|chat|login|setup|logout|whoami|install|list|template|create|branches|status|validate|help} [opciones]"
   echo "Usa '$0 --help' para obtener ayuda detallada."
   exit 1
 fi
