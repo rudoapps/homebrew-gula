@@ -1,0 +1,99 @@
+"""Port (interface) for the agent API client."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
+from ....domain.entities.sse_event import SSEEvent
+from ....domain.entities.config import AuthTokens
+
+
+class ApiClientPort(ABC):
+    """Abstract interface for communicating with the agent API.
+
+    Implementations handle HTTP transport, SSE parsing, and retry logic.
+    """
+
+    @abstractmethod
+    async def send_chat(
+        self,
+        endpoint: str,
+        access_token: str,
+        payload: Dict[str, Any],
+    ) -> AsyncGenerator[SSEEvent, None]:
+        """Send a chat request and yield SSE events as they stream in.
+
+        Args:
+            endpoint: Full URL of the chat SSE endpoint.
+            access_token: Bearer token for authorization.
+            payload: JSON-serializable chat payload.
+
+        Yields:
+            Typed SSEEvent instances as they arrive from the server.
+
+        Raises:
+            ConnectionError: If the server cannot be reached after retries.
+            AuthenticationError: If the server returns 401.
+        """
+        yield  # pragma: no cover — abstract generator
+        return  # type: ignore[misc]
+
+    @abstractmethod
+    async def refresh_token(
+        self,
+        api_url: str,
+        refresh_token: str,
+    ) -> AuthTokens:
+        """Exchange a refresh token for new access + refresh tokens.
+
+        Args:
+            api_url: Base API URL.
+            refresh_token: The current refresh token.
+
+        Returns:
+            New AuthTokens pair.
+
+        Raises:
+            AuthenticationError: If the refresh token is invalid/expired.
+        """
+        ...
+
+    @abstractmethod
+    async def get_quota(
+        self,
+        api_url: str,
+        access_token: str,
+    ) -> Dict[str, Any]:
+        """Fetch the user's current quota/usage information.
+
+        Returns:
+            Dict with quota details (monthly_limit, current_cost, etc.).
+        """
+        ...
+
+    @abstractmethod
+    async def get_models(
+        self,
+        api_url: str,
+        access_token: str,
+    ) -> List[Dict[str, Any]]:
+        """Fetch available models.
+
+        Returns:
+            List of model information dicts.
+        """
+        ...
+
+    @abstractmethod
+    async def get_conversations(
+        self,
+        api_url: str,
+        access_token: str,
+    ) -> List[Dict[str, Any]]:
+        """Fetch the user's conversation history.
+
+        Returns:
+            List of conversation summary dicts.
+        """
+        ...
