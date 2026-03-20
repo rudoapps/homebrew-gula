@@ -436,16 +436,22 @@ class LocalToolExecutor(ToolExecutorPort):
         with open(resolved, "r", encoding="utf-8", errors="replace") as f:
             current = f.read()
 
-        # Check that old_string exists
+        # Check that old_string exists (try exact match first, then normalized)
         count = current.count(old_string)
         if count == 0:
-            raise ValueError(
-                f"old_string no encontrado en {path}. "
-                f"Verifica que el texto coincida exactamente."
-            )
-
-        # Apply replacement
-        new_content = current.replace(old_string, new_string, 1)
+            # Try normalizing leading whitespace (tabs vs spaces)
+            match_result = _fuzzy_find_and_replace(current, old_string, new_string)
+            if match_result is not None:
+                new_content = match_result
+                count = 1
+            else:
+                raise ValueError(
+                    f"old_string no encontrado en {path}. "
+                    f"Verifica que el texto coincida exactamente."
+                )
+        else:
+            # Apply exact replacement
+            new_content = current.replace(old_string, new_string, 1)
 
         # Calculate diff stats
         old_lines = old_string.count("\n") + 1
@@ -634,6 +640,137 @@ class LocalToolExecutor(ToolExecutorPort):
 
 class ToolDeniedError(Exception):
     """Raised when a tool operation is denied (security or user rejection)."""
+
+
+def _adapt_indentation(
+    original_lines: List[str],
+    old_lines: List[str],
+    new_lines: List[str],
+) -> str:
+    """Adapt new_lines indentation to match original file style.
+
+    Detects whether the original file uses tabs or spaces and converts
+    the new_string accordingly, preserving relative indentation.
+    """
+    if not original_lines or not old_lines or not new_lines:
+        return "\n".join(new_lines)
+
+    # Detect if the original uses tabs by checking all non-empty lines
+    uses_tabs = any(line.startswith("\t") for line in original_lines if line.strip())
+
+    if uses_tabs:
+        # Original file uses tabs — convert spaces in new_string to tabs
+        # First, figure out how many spaces = 1 tab by looking at old_string
+        # (the LLM-sent version, which uses spaces instead of tabs)
+        old_first = next((l for l in old_lines if l.strip()), "")
+        orig_first = next((l for l in original_lines if l.strip()), "")
+
+        # Count tabs in original vs spaces in old
+        orig_tabs = len(orig_first) - len(orig_first.lstrip("\t"))
+        old_spaces = len(old_first) - len(old_first.lstrip(" "))
+
+        if orig_tabs > 0 and old_spaces > 0:
+            spaces_per_tab = old_spaces // orig_tabs
+        else:
+            spaces_per_tab = 4  # sensible default
+
+        adapted = []
+        for line in new_lines:
+            if not line.strip():
+                adapted.append(line)
+                continue
+            # Count leading spaces and convert to tabs
+            stripped = line.lstrip(" ")
+            num_spaces = len(line) - len(stripped)
+            num_tabs = num_spaces // spaces_per_tab
+            remainder = num_spaces % spaces_per_tab
+            adapted.append("\t" * num_tabs + " " * remainder + stripped)
+        return "\n".join(adapted)
+
+    # Original uses spaces — just adjust indent level difference
+    orig_first = next((l for l in original_lines if l.strip()), "")
+    old_first = next((l for l in old_lines if l.strip()), "")
+
+    orig_indent = len(orig_first) - len(orig_first.lstrip())
+    old_indent = len(old_first) - len(old_first.lstrip())
+    indent_diff = orig_indent - old_indent
+
+    if indent_diff == 0:
+        return "\n".join(new_lines)
+
+    adapted = []
+    for line in new_lines:
+        if not line.strip():
+            adapted.append(line)
+        elif indent_diff > 0:
+            adapted.append(" " * indent_diff + line)
+        else:
+            remove = abs(indent_diff)
+            if line[:remove].strip() == "":
+                adapted.append(line[remove:])
+            else:
+                adapted.append(line)
+    return "\n".join(adapted)
+
+
+def _fuzzy_find_and_replace(
+    content: str, old_string: str, new_string: str
+) -> Optional[str]:
+    """Try to find old_string with normalized whitespace and apply replacement.
+
+    Handles common LLM mistakes:
+      - Tabs vs spaces mismatch
+      - Trailing whitespace differences
+      - Leading whitespace differences on each line
+    """
+    import re
+
+    # Strategy 1: Normalize tabs/spaces in both and find the match
+    def normalize_indent(text: str) -> str:
+        lines = text.split("\n")
+        return "\n".join(line.expandtabs(4) for line in lines)
+
+    norm_content = normalize_indent(content)
+    norm_old = normalize_indent(old_string)
+
+    if norm_content.count(norm_old) == 1:
+        # Find the position in normalized content
+        pos = norm_content.find(norm_old)
+        # Map back to original: find the corresponding lines
+        norm_before = norm_content[:pos]
+        start_line = norm_before.count("\n")
+        old_line_count = old_string.count("\n") + 1
+
+        content_lines = content.split("\n")
+        original_old_lines = content_lines[start_line:start_line + old_line_count]
+        original_old = "\n".join(original_old_lines)
+
+        # Adapt new_string indentation to match the original file style
+        new_string = _adapt_indentation(
+            original_old_lines, old_string.split("\n"), new_string.split("\n")
+        )
+
+        return content.replace(original_old, new_string, 1)
+
+    # Strategy 2: Strip trailing whitespace on each line
+    def strip_trailing(text: str) -> str:
+        return "\n".join(line.rstrip() for line in text.split("\n"))
+
+    stripped_content = strip_trailing(content)
+    stripped_old = strip_trailing(old_string)
+
+    if stripped_content.count(stripped_old) == 1:
+        # Find matching lines in original
+        pos = stripped_content.find(stripped_old)
+        before = stripped_content[:pos]
+        start_line = before.count("\n")
+        old_line_count = old_string.count("\n") + 1
+
+        content_lines = content.split("\n")
+        original_old = "\n".join(content_lines[start_line:start_line + old_line_count])
+        return content.replace(original_old, new_string, 1)
+
+    return None
 
 
 def _build_diff_detail(old: str, new: str) -> str:
