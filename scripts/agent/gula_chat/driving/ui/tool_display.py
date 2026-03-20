@@ -177,20 +177,18 @@ class ToolDisplay:
 
             try:
                 while True:
-                    # Render selector line
+                    # Render selector line with descriptions inline
                     line_parts = []
-                    for i, (_, label, color, _desc) in enumerate(options):
+                    for i, (_, label, color, desc) in enumerate(options):
                         if i == selected:
-                            line_parts.append(f"\033[1m❯ {label}\033[0m")
+                            line_parts.append(
+                                f"\033[1m❯ {label}\033[0m \033[2m({desc})\033[0m"
+                            )
                         else:
                             line_parts.append(f"\033[2m  {label}\033[0m")
 
-                    # Render description of selected option below
-                    _, _, _, desc = options[selected]
-                    selector_line = "  " + "    ".join(line_parts)
-                    desc_line = f"  \033[2m  {desc}\033[0m"
-
-                    sys.stderr.write(f"\r\033[K{selector_line}\n\033[K{desc_line}\033[A")
+                    selector_line = "  " + "   ".join(line_parts)
+                    sys.stderr.write(f"\r\033[K{selector_line}")
                     sys.stderr.flush()
 
                     # Read key
@@ -215,8 +213,8 @@ class ToolDisplay:
             sys.stderr.flush()
             return self._show_simple_prompt()
 
-        # Clear both lines (selector + description) and show result
-        sys.stderr.write(f"\r\033[K\n\033[K\033[A\r\033[K\033[?25h")
+        # Clear line and show result
+        sys.stderr.write(f"\r\033[K\033[?25h")
         sys.stderr.flush()
 
         choice_value, choice_label, choice_color, _desc = options[selected]
