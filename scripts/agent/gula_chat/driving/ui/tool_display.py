@@ -130,6 +130,8 @@ class ToolDisplay:
                 self._console.print(f"  [red]{line}[/red]")
             elif line.startswith("  + "):
                 self._console.print(f"  [green]{line}[/green]")
+            elif line.lstrip().startswith("@@"):
+                self._console.print(f"  [cyan]{line}[/cyan]")
             else:
                 self._console.print(f"  [dim]{line}[/dim]")
 

@@ -382,13 +382,18 @@ class LocalToolExecutor(ToolExecutorPort):
                 title = f"Crear {os.path.relpath(resolved, self._validator.working_dir)}"
                 detail = f"Nuevo archivo ({len(content)} caracteres):\n{preview}"
             else:
-                title = f"Escribir {os.path.relpath(resolved, self._validator.working_dir)}"
-                detail = f"Sobreescribir archivo ({len(content)} caracteres)"
+                rel = os.path.relpath(resolved, self._validator.working_dir)
+                title = f"Escribir {rel}"
+
+                # Show diff against current content
+                with open(resolved, "r", encoding="utf-8", errors="replace") as rf:
+                    current_content = rf.read()
+                detail = _build_write_diff(current_content, content)
 
                 # Extra warning for sensitive files
                 sensitive = self._validator.is_sensitive(resolved)
                 if sensitive:
-                    detail = f"[SENSIBLE: {sensitive}] {detail}"
+                    detail = f"[SENSIBLE: {sensitive}]\n{detail}"
 
             approved = await self._request_approval(title, detail)
             if not approved:
@@ -791,6 +796,48 @@ def _build_diff_detail(old: str, new: str) -> str:
     # Limit display
     if len(parts) > 30:
         parts = parts[:30]
+        parts.append("  ... (truncado)")
+
+    return "\n".join(parts)
+
+
+def _build_write_diff(current: str, new: str) -> str:
+    """Build a unified-style diff for write_file overwrite approval.
+
+    Uses difflib to show only the changed lines with context,
+    so the user can see exactly what changes before approving.
+    """
+    import difflib
+
+    current_lines = current.splitlines(keepends=True)
+    new_lines = new.splitlines(keepends=True)
+
+    diff = list(difflib.unified_diff(
+        current_lines, new_lines,
+        fromfile="actual", tofile="nuevo",
+        lineterm="",
+    ))
+
+    if not diff:
+        return "Sin cambios (contenido identico)"
+
+    parts: List[str] = []
+    for line in diff:
+        line = line.rstrip("\n")
+        if line.startswith("---") or line.startswith("+++"):
+            continue  # skip file headers
+        elif line.startswith("@@"):
+            parts.append(f"  {line}")
+        elif line.startswith("-"):
+            parts.append(f"  - {line[1:]}")
+        elif line.startswith("+"):
+            parts.append(f"  + {line[1:]}")
+        else:
+            parts.append(f"    {line[1:]}" if line.startswith(" ") else f"    {line}")
+
+    # Limit display
+    if len(parts) > 40:
+        parts = parts[:40]
         parts.append("  ... (truncado)")
 
     return "\n".join(parts)
