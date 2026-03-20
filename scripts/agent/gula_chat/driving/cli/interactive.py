@@ -228,13 +228,9 @@ class InteractiveHandler:
                 for img in image_attachments
             ]
 
-        # Build project context: full on first message, minimal on continuations
-        project_context = None
-        if self._is_first_message:
-            project_context = self._context_builder.build()
-            self._is_first_message = False
-        else:
-            project_context = self._context_builder.build_minimal()
+        # Build full project context on every new prompt (matches bash behavior)
+        project_context = self._context_builder.build()
+        self._is_first_message = False
 
         # Extract git_remote_url for RAG (top-level field, like bash client)
         git_remote_url = self._context_builder.get_git_remote_url()
