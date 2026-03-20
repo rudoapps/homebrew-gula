@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from typing import Any, Dict
 
 from ...domain.entities.tool_metadata import get_tool_detail
 from .console import get_console
 from .spinner import Spinner
+
+# Approval choices
+_ALLOW = "allow"
+_ALLOW_ALWAYS = "allow_always"
+_REJECT = "reject"
 
 
 class ToolDisplay:
@@ -20,6 +26,7 @@ class ToolDisplay:
     def __init__(self) -> None:
         self._console = get_console()
         self._spinner = Spinner()
+        self._auto_approve_tools: set = set()
 
     def show_tool_start(self, name: str, input_dict: Dict[str, Any]) -> None:
         """Show that a tool is about to start executing.
@@ -96,7 +103,8 @@ class ToolDisplay:
     ) -> bool:
         """Show an interactive approval prompt for a write/edit/run operation.
 
-        Displays the operation detail and asks the user to confirm with y/n.
+        Displays the operation detail and a selector for the user to choose
+        between allow, allow always, or reject.
 
         Args:
             tool_name: The tool requesting approval.
@@ -106,9 +114,17 @@ class ToolDisplay:
             True if the user approved, False otherwise.
         """
         self._spinner.stop()
+
+        # Auto-approve if user previously selected "Permitir siempre"
+        if self._check_auto_approve(tool_name):
+            self._console.print(
+                f"  [dim](auto-aprobado: {tool_name})[/dim]"
+            )
+            return True
+
         self._console.print()
 
-        # Show the operation detail
+        # Show the operation detail (diff lines)
         for line in detail.split("\n"):
             if line.startswith("  - "):
                 self._console.print(f"  [red]{line}[/red]")
@@ -119,22 +135,106 @@ class ToolDisplay:
 
         self._console.print()
 
-        # Simple y/n prompt
-        try:
-            import sys
-            self._console.print(
-                "  [bold]Aprobar? (s/n):[/bold] ",
-                end="",
-            )
-            # Flush stderr since console writes to stderr
-            sys.stderr.flush()
+        # Interactive selector
+        result = self._show_selector(tool_name)
 
-            # Read from stdin (which is the real terminal)
+        if result == _ALLOW_ALWAYS:
+            self._auto_approve_tools.add(tool_name)
+            return True
+
+        return result == _ALLOW
+
+    def _check_auto_approve(self, tool_name: str) -> bool:
+        """Check if a tool has been set to always approve."""
+        return tool_name in self._auto_approve_tools
+
+    def _show_selector(self, tool_name: str) -> str:
+        """Show an interactive selector using keyboard arrows.
+
+        Returns:
+            One of _ALLOW, _ALLOW_ALWAYS, or _REJECT.
+        """
+        options = [
+            (_ALLOW, "Permitir", "green"),
+            (_ALLOW_ALWAYS, "Permitir siempre", "cyan"),
+            (_REJECT, "Rechazar", "red"),
+        ]
+        selected = 0
+
+        # Hide cursor
+        sys.stderr.write("\033[?25l")
+        sys.stderr.flush()
+
+        try:
+            import tty
+            import termios
+
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            tty.setraw(fd)
+
+            try:
+                while True:
+                    # Render options
+                    line_parts = []
+                    for i, (_, label, color) in enumerate(options):
+                        if i == selected:
+                            line_parts.append(f"\033[1m❯ {label}\033[0m")
+                        else:
+                            line_parts.append(f"\033[2m  {label}\033[0m")
+
+                    line = "  " + "    ".join(line_parts)
+                    sys.stderr.write(f"\r\033[K{line}")
+                    sys.stderr.flush()
+
+                    # Read key
+                    ch = sys.stdin.read(1)
+                    if ch == "\r" or ch == "\n":
+                        break
+                    elif ch == "\x1b":
+                        seq = sys.stdin.read(2)
+                        if seq == "[D":  # Left arrow
+                            selected = max(0, selected - 1)
+                        elif seq == "[C":  # Right arrow
+                            selected = min(len(options) - 1, selected + 1)
+                    elif ch == "q" or ch == "\x03":  # q or Ctrl+C
+                        selected = 2  # Reject
+                        break
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+        except (ImportError, OSError, ValueError):
+            # Fallback to simple input if terminal control unavailable
+            sys.stderr.write("\033[?25h")
+            sys.stderr.flush()
+            return self._show_simple_prompt()
+
+        # Clear line and show result
+        sys.stderr.write(f"\r\033[K\033[?25h")
+        sys.stderr.flush()
+
+        choice_value, choice_label, choice_color = options[selected]
+        self._console.print(f"  [{choice_color}]{choice_label}[/{choice_color}]")
+
+        return choice_value
+
+    def _show_simple_prompt(self) -> str:
+        """Fallback simple text prompt."""
+        self._console.print(
+            "  [bold]Permitir (s), Siempre (a), Rechazar (n):[/bold] ",
+            end="",
+        )
+        sys.stderr.flush()
+        try:
             response = input().strip().lower()
-            return response in ("s", "si", "y", "yes")
+            if response in ("a", "always", "siempre"):
+                return _ALLOW_ALWAYS
+            elif response in ("s", "si", "y", "yes"):
+                return _ALLOW
+            return _REJECT
         except (EOFError, KeyboardInterrupt):
             self._console.print("  [dim]Cancelado[/dim]")
-            return False
+            return _REJECT
 
     def show_diff(
         self,
