@@ -527,33 +527,53 @@ class LocalToolExecutor(ToolExecutorPort):
             stdout_lines: List[str] = []
             stderr_lines: List[str] = []
             start_time = time.time()
+            last_display = ""
+
+            def _update_display(text: str) -> None:
+                nonlocal last_display
+                last_display = text
+                elapsed = time.time() - start_time
+                display = text
+                if len(display) > 100:
+                    display = display[:97] + "..."
+                sys.stderr.write(
+                    f"\r\033[K  \033[2m{display} ({elapsed:.0f}s)\033[0m"
+                )
+                sys.stderr.flush()
 
             async def _read_stream(
                 stream: asyncio.StreamReader,
                 collector: List[str],
-                prefix: str = "",
             ) -> None:
+                buf = ""
                 while True:
-                    line = await stream.readline()
-                    if not line:
+                    try:
+                        chunk = await asyncio.wait_for(stream.read(4096), timeout=2.0)
+                    except asyncio.TimeoutError:
+                        # No new output — update elapsed time on current display
+                        _update_display(last_display or "Ejecutando...")
+                        continue
+                    if not chunk:
                         break
-                    decoded = line.decode("utf-8", errors="replace").rstrip("\n")
-                    collector.append(decoded)
-                    # Stream to terminal so user sees progress
-                    elapsed = time.time() - start_time
-                    display = decoded
-                    if len(display) > 120:
-                        display = display[:117] + "..."
-                    sys.stderr.write(
-                        f"\r\033[K  \033[2m{prefix}{display} ({elapsed:.0f}s)\033[0m"
-                    )
-                    sys.stderr.flush()
+                    text = chunk.decode("utf-8", errors="replace")
+                    buf += text
+                    # Split into lines, keep incomplete last line in buffer
+                    while "\n" in buf:
+                        line, buf = buf.split("\n", 1)
+                        line = line.rstrip("\r")
+                        if line:
+                            collector.append(line)
+                            _update_display(line)
+                # Flush remaining buffer
+                if buf.strip():
+                    collector.append(buf.strip())
+                    _update_display(buf.strip())
 
             try:
                 await asyncio.wait_for(
                     asyncio.gather(
                         _read_stream(proc.stdout, stdout_lines),
-                        _read_stream(proc.stderr, stderr_lines, "[stderr] "),
+                        _read_stream(proc.stderr, stderr_lines),
                     ),
                     timeout=timeout,
                 )
@@ -566,7 +586,7 @@ class LocalToolExecutor(ToolExecutorPort):
                 # Clear streaming line
                 sys.stderr.write("\r\033[K")
                 sys.stderr.flush()
-                partial = "\n".join(stdout_lines[-20:]) if stdout_lines else ""
+                partial = "\n".join(stdout_lines[-20:] + stderr_lines[-20:])
                 return (
                     f"Comando cancelado: timeout de {timeout} segundos\n"
                     f"Ultimas lineas:\n{partial}"
