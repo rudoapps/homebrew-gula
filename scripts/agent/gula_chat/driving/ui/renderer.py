@@ -103,22 +103,22 @@ class SSERenderer:
         self._model = event.model
         self._start_time = time.time()
 
-        # Build RAG indicator
+        # Build RAG indicator (plain text for spinner)
         if event.rag_enabled and event.rag_info:
             scope = event.rag_info.get("scope", "current")
             chunks = event.rag_info.get("chunks", 0)
             if scope == "related":
-                self._rag_indicator = f" [agent.rag_multi]\\[RAG:{chunks} multi-proyecto][/agent.rag_multi]"
+                self._rag_indicator = f" [RAG:{chunks} multi-proyecto]"
             else:
-                self._rag_indicator = f" [agent.rag]\\[RAG:{chunks}][/agent.rag]"
+                self._rag_indicator = f" [RAG:{chunks}]"
         elif event.rag_enabled:
-            self._rag_indicator = " [agent.rag]\\[RAG][/agent.rag]"
+            self._rag_indicator = " [RAG]"
 
-        model_tag = f" [agent.model]({event.model})[/agent.model]" if event.model else ""
+        model_tag = f" ({event.model})" if event.model else ""
         self._spinner.start(f"Conversacion #{event.conversation_id}{self._rag_indicator}{model_tag}")
 
     def _handle_thinking(self, event: ThinkingEvent) -> None:
-        model_tag = f" [agent.model]({event.model})[/agent.model]" if event.model else ""
+        model_tag = f" ({event.model})" if event.model else ""
         self._spinner.update(f"Pensando...{model_tag}")
 
     def _handle_text(self, event: TextEvent) -> None:
