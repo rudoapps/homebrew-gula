@@ -236,6 +236,9 @@ class InteractiveHandler:
         else:
             project_context = self._context_builder.build_minimal()
 
+        # Extract git_remote_url for RAG (top-level field, like bash client)
+        git_remote_url = self._context_builder.get_git_remote_url()
+
         current_prompt: Optional[str] = cleaned_prompt
         current_tool_results = None
 
@@ -255,6 +258,7 @@ class InteractiveHandler:
                     tool_results=current_tool_results,
                     project_context=project_context,
                     images=images_payload,
+                    git_remote_url=git_remote_url,
                 ):
                     # Track conversation ID
                     if isinstance(event, StartedEvent) and event.conversation_id:
@@ -328,6 +332,7 @@ class InteractiveHandler:
                 current_tool_results = tool_results
                 images_payload = None
                 project_context = None
+                git_remote_url = None
                 self._console.print()
                 continue
 

@@ -42,6 +42,7 @@ class ChatService:
         model: Optional[str] = None,
         max_iterations: int = 10,
         subagent_id: Optional[str] = None,
+        git_remote_url: Optional[str] = None,
     ) -> AsyncGenerator[SSEEvent, None]:
         """Send a message and yield SSE events as they stream back.
 
@@ -78,6 +79,7 @@ class ChatService:
             model=effective_model,
             max_iterations=max_iterations,
             subagent_id=subagent_id,
+            git_remote_url=git_remote_url,
         )
 
         # Step 3: Stream with 401 retry

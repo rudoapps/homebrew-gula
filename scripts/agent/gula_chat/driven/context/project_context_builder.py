@@ -150,6 +150,11 @@ class ProjectContextBuilder:
             minimal["project_rules"] = rules
         return minimal
 
+    def get_git_remote_url(self) -> Optional[str]:
+        """Return the git remote URL for RAG, or None."""
+        url = self._git("remote", "get-url", "origin")
+        return url if url else None
+
     def rebuild(self) -> Dict[str, Any]:
         """Force a fresh context scan, discarding the cache."""
         self._cache = None
