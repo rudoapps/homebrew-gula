@@ -215,6 +215,9 @@ class InteractiveHandler:
         Args:
             prompt: The user's message (with @file refs already expanded).
         """
+        # Reset per-turn auto-approval
+        self._tool_display.reset_turn_approval()
+
         # Detect and encode images referenced in the prompt
         cleaned_prompt, image_attachments = self._image_detector.detect_images(prompt)
         images_payload = None

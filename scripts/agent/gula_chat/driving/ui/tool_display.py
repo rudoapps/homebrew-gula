@@ -26,7 +26,7 @@ class ToolDisplay:
     def __init__(self) -> None:
         self._console = get_console()
         self._spinner = Spinner()
-        self._auto_approve_tools: set = set()
+        self._auto_approve_turn: bool = False
 
     def show_tool_start(self, name: str, input_dict: Dict[str, Any]) -> None:
         """Show that a tool is about to start executing.
@@ -115,10 +115,10 @@ class ToolDisplay:
         """
         self._spinner.stop()
 
-        # Auto-approve if user previously selected "Permitir siempre"
-        if self._check_auto_approve(tool_name):
+        # Auto-approve if user selected "Permitir todo el turno"
+        if self._auto_approve_turn:
             self._console.print(
-                f"  [dim](auto-aprobado: {tool_name})[/dim]"
+                f"  [dim](auto-aprobado este turno)[/dim]"
             )
             return True
 
@@ -141,14 +141,14 @@ class ToolDisplay:
         result = self._show_selector(tool_name)
 
         if result == _ALLOW_ALWAYS:
-            self._auto_approve_tools.add(tool_name)
+            self._auto_approve_turn = True
             return True
 
         return result == _ALLOW
 
-    def _check_auto_approve(self, tool_name: str) -> bool:
-        """Check if a tool has been set to always approve."""
-        return tool_name in self._auto_approve_tools
+    def reset_turn_approval(self) -> None:
+        """Reset auto-approval at the start of a new turn."""
+        self._auto_approve_turn = False
 
     def _show_selector(self, tool_name: str) -> str:
         """Show an interactive selector using keyboard arrows.
@@ -158,7 +158,7 @@ class ToolDisplay:
         """
         options = [
             (_ALLOW, "Permitir", "green"),
-            (_ALLOW_ALWAYS, "Permitir siempre", "cyan"),
+            (_ALLOW_ALWAYS, "Permitir todo", "cyan"),
             (_REJECT, "Rechazar", "red"),
         ]
         selected = 0
@@ -229,7 +229,7 @@ class ToolDisplay:
         sys.stderr.flush()
         try:
             response = input().strip().lower()
-            if response in ("a", "always", "siempre"):
+            if response in ("a", "always", "siempre", "todo"):
                 return _ALLOW_ALWAYS
             elif response in ("s", "si", "y", "yes"):
                 return _ALLOW
