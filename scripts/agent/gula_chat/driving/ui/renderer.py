@@ -181,8 +181,8 @@ class SSERenderer:
         if event.total_cost > 0:
             parts.append(f"total: ${event.total_cost:.4f}")
 
-        summary = " \u00b7 ".join(parts)
-        self._console.print(f"  [cost]{summary}[/cost]")
+        summary = " · ".join(parts)
+        self._console.print(f"  [dim]── {summary}[/dim]")
 
         if event.max_iterations_reached:
             self._console.print(
