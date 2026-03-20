@@ -14,6 +14,36 @@ from ...domain.entities.sse_event import SSEEvent, ErrorEvent
 from .sse_parser import parse_sse_line, parse_sse_event, parse_raw_error
 
 
+_HTTP_FRIENDLY_ERRORS = {
+    401: "Sesion expirada. Ejecuta /login para autenticarte de nuevo.",
+    403: "No tienes permisos para esta operacion.",
+    404: "Endpoint no encontrado. Verifica la configuracion del servidor.",
+    429: "Demasiadas peticiones. Espera un momento e intenta de nuevo.",
+    500: "Error interno del servidor. Intenta de nuevo.",
+    502: "El servidor no responde (502). Puede estar reiniciandose o sobrecargado.",
+    503: "Servidor no disponible (503). Intenta de nuevo en unos segundos.",
+    504: "Timeout del servidor (504). La operacion tardo demasiado.",
+}
+
+
+def _friendly_http_error(status: int, body: str = "") -> str:
+    """Convert HTTP status + body into a user-friendly error message."""
+    friendly = _HTTP_FRIENDLY_ERRORS.get(status)
+    if friendly:
+        return friendly
+    # Try to extract message from JSON body
+    if body and not body.strip().startswith("<"):
+        try:
+            data = json.loads(body)
+            msg = data.get("detail", data.get("error", data.get("message", "")))
+            if msg:
+                return f"Error {status}: {msg}"
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        return f"Error {status}: {body[:200]}"
+    return f"Error {status}"
+
+
 class HttpxApiClient(ApiClientPort):
     """API client using httpx for async HTTP with SSE streaming.
 
@@ -58,9 +88,23 @@ class HttpxApiClient(ApiClientPort):
                         )
                     await asyncio.sleep(wait)
             except httpx.HTTPStatusError as exc:
-                # Don't retry HTTP errors like 401, 403, 500
+                status = exc.response.status_code
+                # Retry on 502/503/504 (proxy/server transient errors)
+                if status in (502, 503, 504) and attempt < self.MAX_RETRIES - 1:
+                    last_error = exc
+                    wait = self.BASE_BACKOFF * (2 ** attempt)
+                    if self._debug:
+                        import sys
+                        print(
+                            f"[DEBUG] Retry {attempt + 1}/{self.MAX_RETRIES} "
+                            f"after {wait}s: HTTP {status}",
+                            file=sys.stderr,
+                        )
+                    await asyncio.sleep(wait)
+                    continue
+                # Don't retry client errors (401, 403, etc.)
                 yield ErrorEvent(
-                    error=f"HTTP {exc.response.status_code}: {exc.response.text[:200]}"
+                    error=_friendly_http_error(status, exc.response.text[:500])
                 )
                 return
 
@@ -96,22 +140,23 @@ class HttpxApiClient(ApiClientPort):
             ) as response:
                 # Check for HTTP errors before streaming
                 if response.status_code != 200:
+                    status = response.status_code
                     body = ""
                     async for chunk in response.aiter_text():
                         body += chunk
                         if len(body) > 1000:
                             break
-                    error_event = parse_raw_error(body.strip())
-                    if error_event:
-                        # Prefix with HTTP status for retry logic
-                        error_event = ErrorEvent(
-                            error=f"HTTP {response.status_code}: {error_event.error}"
+                    # For retryable errors, raise so send_chat can retry
+                    if status in (502, 503, 504):
+                        raise httpx.HTTPStatusError(
+                            message=_friendly_http_error(status, body),
+                            request=response.request,
+                            response=response,
                         )
-                        yield error_event
-                    else:
-                        yield ErrorEvent(
-                            error=f"HTTP {response.status_code}: {body[:200]}"
-                        )
+                    # For non-retryable errors, yield friendly message
+                    yield ErrorEvent(
+                        error=_friendly_http_error(status, body.strip())
+                    )
                     return
 
                 # Stream SSE lines
