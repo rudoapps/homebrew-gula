@@ -157,9 +157,9 @@ class ToolDisplay:
             One of _ALLOW, _ALLOW_ALWAYS, or _REJECT.
         """
         options = [
-            (_ALLOW, "Permitir", "green"),
-            (_ALLOW_ALWAYS, "Permitir todo", "cyan"),
-            (_REJECT, "Rechazar", "red"),
+            (_ALLOW, "Permitir", "green", "solo esta accion"),
+            (_ALLOW_ALWAYS, "Permitir todo", "cyan", "resto del turno sin preguntar"),
+            (_REJECT, "Rechazar", "red", "cancelar esta accion"),
         ]
         selected = 0
 
@@ -177,16 +177,20 @@ class ToolDisplay:
 
             try:
                 while True:
-                    # Render options
+                    # Render selector line
                     line_parts = []
-                    for i, (_, label, color) in enumerate(options):
+                    for i, (_, label, color, _desc) in enumerate(options):
                         if i == selected:
                             line_parts.append(f"\033[1m❯ {label}\033[0m")
                         else:
                             line_parts.append(f"\033[2m  {label}\033[0m")
 
-                    line = "  " + "    ".join(line_parts)
-                    sys.stderr.write(f"\r\033[K{line}")
+                    # Render description of selected option below
+                    _, _, _, desc = options[selected]
+                    selector_line = "  " + "    ".join(line_parts)
+                    desc_line = f"  \033[2m  {desc}\033[0m"
+
+                    sys.stderr.write(f"\r\033[K{selector_line}\n\033[K{desc_line}\033[A")
                     sys.stderr.flush()
 
                     # Read key
@@ -211,11 +215,11 @@ class ToolDisplay:
             sys.stderr.flush()
             return self._show_simple_prompt()
 
-        # Clear line and show result
-        sys.stderr.write(f"\r\033[K\033[?25h")
+        # Clear both lines (selector + description) and show result
+        sys.stderr.write(f"\r\033[K\n\033[K\033[A\r\033[K\033[?25h")
         sys.stderr.flush()
 
-        choice_value, choice_label, choice_color = options[selected]
+        choice_value, choice_label, choice_color, _desc = options[selected]
         self._console.print(f"  [{choice_color}]{choice_label}[/{choice_color}]")
 
         return choice_value
