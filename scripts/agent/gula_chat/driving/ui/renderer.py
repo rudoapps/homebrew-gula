@@ -44,7 +44,6 @@ class SSERenderer:
         self._text_chunks: List[str] = []
         self._streaming: bool = False
         self._header_shown: bool = False
-        self._rendered_length: int = 0
 
         # Metadata from started event
         self._model: str = ""
@@ -130,20 +129,6 @@ class SSERenderer:
             self._show_header()
 
         self._text_chunks.append(event.content)
-
-        # Incremental rendering: render complete lines as they arrive
-        full_text = "".join(self._text_chunks)
-        lines = full_text.split("\n")
-
-        if len(lines) > 1:
-            # We have at least one complete line
-            complete_text = "\n".join(lines[:-1])
-            new_content = complete_text[self._rendered_length:]
-            if new_content:
-                # Render new complete lines with indentation
-                indented = "  " + new_content.replace("\n", "\n  ")
-                self._console.print(indented, highlight=False)
-                self._rendered_length = len(complete_text) + 1  # +1 for the \n
 
     def _handle_tool_requests(self, event: ToolRequestsEvent) -> None:
         self._flush_remaining_text()
@@ -318,19 +303,16 @@ class SSERenderer:
         self._console.print()
 
     def _flush_remaining_text(self) -> None:
-        """Render any buffered text that hasn't been shown yet."""
+        """Render any buffered text as markdown."""
         if not self._text_chunks:
             return
 
         full_text = "".join(self._text_chunks)
-        remaining = full_text[self._rendered_length:]
 
-        if remaining.strip():
+        if full_text.strip():
             if not self._header_shown:
                 self._show_header()
-            indented = "  " + remaining.replace("\n", "\n  ")
-            self._console.print(indented, highlight=False)
+            render_markdown(full_text)
 
         # Reset for next turn
         self._text_chunks.clear()
-        self._rendered_length = 0
