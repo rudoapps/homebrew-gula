@@ -17,6 +17,7 @@ from ...domain.entities.tool_metadata import (
     MAX_FILE_SIZE,
     MAX_OUTPUT_LINES,
     MAX_COMMAND_TIMEOUT,
+    MAX_COMMAND_TIMEOUT_HARD,
     MAX_SEARCH_RESULTS,
 )
 from .path_validator import PathValidator
@@ -492,11 +493,14 @@ class LocalToolExecutor(ToolExecutorPort):
         )
 
     async def _run_command(self, inp: Dict[str, Any]) -> str:
-        """Execute a shell command with timeout and output capture."""
+        """Execute a shell command with timeout, streaming output to stderr."""
+        import sys
+        import time
+
         command = inp.get("command", "")
         timeout = min(
             int(inp.get("timeout", MAX_COMMAND_TIMEOUT)),
-            MAX_COMMAND_TIMEOUT,
+            MAX_COMMAND_TIMEOUT_HARD,
         )
 
         if not command:
@@ -518,20 +522,67 @@ class LocalToolExecutor(ToolExecutorPort):
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self._validator.working_dir,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
-        except asyncio.TimeoutError:
+
+            # Stream output in real-time while collecting it
+            stdout_lines: List[str] = []
+            stderr_lines: List[str] = []
+            start_time = time.time()
+
+            async def _read_stream(
+                stream: asyncio.StreamReader,
+                collector: List[str],
+                prefix: str = "",
+            ) -> None:
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    decoded = line.decode("utf-8", errors="replace").rstrip("\n")
+                    collector.append(decoded)
+                    # Stream to terminal so user sees progress
+                    elapsed = time.time() - start_time
+                    display = decoded
+                    if len(display) > 120:
+                        display = display[:117] + "..."
+                    sys.stderr.write(
+                        f"\r\033[K  \033[2m{prefix}{display} ({elapsed:.0f}s)\033[0m"
+                    )
+                    sys.stderr.flush()
+
             try:
-                proc.kill()
-            except ProcessLookupError:
-                pass
-            return f"Comando cancelado: timeout de {timeout} segundos"
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        _read_stream(proc.stdout, stdout_lines),
+                        _read_stream(proc.stderr, stderr_lines, "[stderr] "),
+                    ),
+                    timeout=timeout,
+                )
+                await proc.wait()
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
+                # Clear streaming line
+                sys.stderr.write("\r\033[K")
+                sys.stderr.flush()
+                partial = "\n".join(stdout_lines[-20:]) if stdout_lines else ""
+                return (
+                    f"Comando cancelado: timeout de {timeout} segundos\n"
+                    f"Ultimas lineas:\n{partial}"
+                )
+
+            # Clear streaming line
+            sys.stderr.write("\r\033[K")
+            sys.stderr.flush()
+
+        except Exception as exc:
+            raise RuntimeError(f"Error ejecutando comando: {exc}")
 
         output_parts: List[str] = []
 
-        stdout_text = stdout.decode("utf-8", errors="replace")
-        stderr_text = stderr.decode("utf-8", errors="replace")
+        stdout_text = "\n".join(stdout_lines)
+        stderr_text = "\n".join(stderr_lines)
 
         if stdout_text.strip():
             output_parts.append(stdout_text)

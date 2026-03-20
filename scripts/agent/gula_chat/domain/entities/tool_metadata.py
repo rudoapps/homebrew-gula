@@ -42,8 +42,11 @@ MAX_FILE_SIZE: int = 50_000
 MAX_OUTPUT_LINES: int = 200
 """Maximum lines to return from command output."""
 
-MAX_COMMAND_TIMEOUT: int = 30
+MAX_COMMAND_TIMEOUT: int = 120
 """Default timeout in seconds for run_command."""
+
+MAX_COMMAND_TIMEOUT_HARD: int = 600
+"""Absolute maximum timeout in seconds (10 minutes) for run_command."""
 
 MAX_SEARCH_RESULTS: int = 50
 """Maximum matches to return from search_code / list_files."""
