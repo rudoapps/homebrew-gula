@@ -32,6 +32,8 @@ class Container:
     """
 
     def __init__(self, debug: bool = False) -> None:
+        self._debug = debug
+
         # ── Driven adapters (infrastructure) ────────────────────────────
         self._config_adapter = JsonConfigAdapter()
         self._project_context_builder = ProjectContextBuilder()
@@ -59,6 +61,7 @@ class Container:
             auth_service=self._auth_service,
             api_client=self._api_client,
             config_port=self._config_adapter,
+            debug=debug,
         )
         self._tool_orchestrator = ToolOrchestrator(
             executor=self._tool_executor,

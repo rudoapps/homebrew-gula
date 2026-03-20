@@ -27,10 +27,12 @@ class ChatService:
         auth_service: AuthService,
         api_client: ApiClientPort,
         config_port: ConfigPort,
+        debug: bool = False,
     ) -> None:
         self._auth = auth_service
         self._api_client = api_client
         self._config_port = config_port
+        self._debug = debug
 
     async def send_message(
         self,
@@ -81,6 +83,31 @@ class ChatService:
             subagent_id=subagent_id,
             git_remote_url=git_remote_url,
         )
+
+        # Debug: log payload
+        if self._debug:
+            import json
+            import sys
+            print(
+                f"[DEBUG] Endpoint: {config.chat_endpoint}",
+                file=sys.stderr,
+            )
+            # Redact large fields for readability
+            debug_payload = dict(payload)
+            if "project_context" in debug_payload and debug_payload["project_context"]:
+                ctx = debug_payload["project_context"]
+                debug_payload["project_context"] = {
+                    k: (v[:80] + "..." if isinstance(v, str) and len(v) > 80 else v)
+                    for k, v in ctx.items()
+                }
+            if "tool_results" in debug_payload:
+                for tr in debug_payload.get("tool_results", []):
+                    if isinstance(tr.get("result"), str) and len(tr["result"]) > 200:
+                        tr["result"] = tr["result"][:200] + "..."
+            print(
+                f"[DEBUG] Payload: {json.dumps(debug_payload, ensure_ascii=False, indent=2)}",
+                file=sys.stderr,
+            )
 
         # Step 3: Stream with 401 retry
         retried_auth = False
