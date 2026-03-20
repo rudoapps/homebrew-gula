@@ -241,6 +241,9 @@ class InteractiveHandler:
 
         while True:
             renderer = SSERenderer()
+            # Show spinner immediately when sending tool results back
+            if current_tool_results is not None:
+                renderer.show_waiting_spinner()
             text_chunks: List[str] = []
             pending_tool_event: Optional[ToolRequestsEvent] = None
             turn_complete = False

@@ -92,6 +92,10 @@ class SSERenderer:
         self._flush_remaining_text()
         self._spinner.stop()
 
+    def show_waiting_spinner(self) -> None:
+        """Show a spinner while waiting for the server response."""
+        self._spinner.start("Procesando resultados...")
+
     # ── Event handlers ──────────────────────────────────────────────────
 
     def _handle_started(self, event: StartedEvent) -> None:
