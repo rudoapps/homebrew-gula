@@ -42,7 +42,7 @@ class ChatService:
         project_context: Optional[Dict[str, Any]] = None,
         images: Optional[List[Dict[str, str]]] = None,
         model: Optional[str] = None,
-        max_iterations: int = 10,
+        max_iterations: int = 15,
         subagent_id: Optional[str] = None,
         git_remote_url: Optional[str] = None,
     ) -> AsyncGenerator[SSEEvent, None]:
