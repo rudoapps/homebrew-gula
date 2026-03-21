@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import json
+import time
+
 from ..ports.driven.api_client_port import ApiClientPort
 from ..ports.driven.config_port import ConfigPort
 from ...domain.entities.config import AppConfig
@@ -48,8 +52,8 @@ class AuthService:
                 "No estas autenticado. Ejecuta 'gula agent login' primero."
             )
 
-        if not config.access_token:
-            # No access token but we have a refresh token — try refreshing
+        if not config.access_token or self._is_token_expired(config.access_token):
+            # No access token or expired — refresh automatically
             return await self._do_refresh(config)
 
         return config
@@ -69,6 +73,32 @@ class AuthService:
                 "No hay refresh token. Ejecuta 'gula agent login' primero."
             )
         return await self._do_refresh(config)
+
+    @staticmethod
+    def _is_token_expired(token: str, margin_seconds: int = 60) -> bool:
+        """Check if a JWT is expired by decoding the payload (no verification).
+
+        Args:
+            token: The JWT access token.
+            margin_seconds: Refresh this many seconds before actual expiry.
+
+        Returns:
+            True if the token is expired or will expire within margin_seconds.
+        """
+        try:
+            parts = token.split(".")
+            if len(parts) != 3:
+                return True  # Not a valid JWT — treat as expired
+            # Decode payload (base64url without padding)
+            payload_b64 = parts[1]
+            payload_b64 += "=" * (4 - len(payload_b64) % 4)  # pad
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+            exp = payload.get("exp")
+            if exp is None:
+                return False  # No expiry claim — assume valid
+            return time.time() >= (exp - margin_seconds)
+        except Exception:
+            return True  # Can't parse — treat as expired
 
     async def _do_refresh(self, config: AppConfig) -> AppConfig:
         """Perform the actual token refresh."""

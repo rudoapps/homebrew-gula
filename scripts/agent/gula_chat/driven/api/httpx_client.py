@@ -15,7 +15,7 @@ from .sse_parser import parse_sse_line, parse_sse_event, parse_raw_error
 
 
 _HTTP_FRIENDLY_ERRORS = {
-    401: "Sesion expirada. Ejecuta /login para autenticarte de nuevo.",
+    401: "401: Sesion expirada.",
     403: "No tienes permisos para esta operacion.",
     404: "Endpoint no encontrado. Verifica la configuracion del servidor.",
     429: "Demasiadas peticiones. Espera un momento e intenta de nuevo.",
