@@ -132,9 +132,16 @@ class ToolDisplay:
 
         self._console.print()
 
-        # Show the operation detail (diff lines)
+        # Show the operation detail (diff lines / script content)
+        in_script_block = False
         for line in detail.split("\n"):
-            if line.startswith("  - "):
+            if line.startswith("── contenido del script"):
+                in_script_block = True
+                self._console.print(f"  [bold cyan]{line}[/bold cyan]")
+            elif in_script_block:
+                # Script content — show with syntax coloring hint
+                self._console.print(f"  [yellow]{line}[/yellow]")
+            elif line.startswith("  - "):
                 self._console.print(f"  [red]{line}[/red]")
             elif line.startswith("  + "):
                 self._console.print(f"  [green]{line}[/green]")

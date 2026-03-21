@@ -508,9 +508,16 @@ class LocalToolExecutor(ToolExecutorPort):
 
         # Check approval
         if self._request_approval:
+            detail = f"$ {command}\n(timeout: {timeout}s)"
+
+            # If the command runs a script file, show its content
+            script_content = _extract_script_content(command)
+            if script_content:
+                detail += f"\n\n── contenido del script ──\n{script_content}"
+
             approved = await self._request_approval(
                 f"Ejecutar comando",
-                f"$ {command}\n(timeout: {timeout}s)",
+                detail,
             )
             if not approved:
                 raise ToolDeniedError("Operacion rechazada por el usuario")
@@ -870,6 +877,70 @@ def _build_diff_detail(old: str, new: str) -> str:
         parts.append("  ... (truncado)")
 
     return "\n".join(parts)
+
+
+def _extract_script_content(command: str) -> Optional[str]:
+    """Extract and return the content of a script file referenced in a command.
+
+    Detects patterns like:
+      python3 /tmp/fix.py, ruby script.rb, bash ./deploy.sh,
+      sh -c 'cat script.sh', node fix.js, etc.
+
+    Returns the script content (truncated) or None if no script detected.
+    """
+    import shlex
+
+    # Common interpreters and script extensions
+    _INTERPRETERS = {
+        "python", "python3", "ruby", "bash", "sh", "zsh",
+        "node", "perl", "swift",
+    }
+    _SCRIPT_EXTENSIONS = {
+        ".py", ".rb", ".sh", ".js", ".pl", ".swift", ".bash", ".zsh",
+    }
+
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        parts = command.split()
+
+    if not parts:
+        return None
+
+    # Find a file argument that looks like a script
+    script_path = None
+    for i, part in enumerate(parts):
+        # Skip flags
+        if part.startswith("-"):
+            continue
+        # Check if it's an interpreter followed by a file
+        base = os.path.basename(part)
+        if base in _INTERPRETERS and i + 1 < len(parts):
+            candidate = parts[i + 1]
+            if not candidate.startswith("-") and os.path.isfile(candidate):
+                script_path = candidate
+                break
+            continue
+        # Check if the part itself is a script file
+        _, ext = os.path.splitext(part)
+        if ext in _SCRIPT_EXTENSIONS and os.path.isfile(part):
+            script_path = part
+            break
+
+    if not script_path:
+        return None
+
+    try:
+        with open(script_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        # Truncate long scripts
+        lines = content.split("\n")
+        if len(lines) > 60:
+            content = "\n".join(lines[:60])
+            content += f"\n... ({len(lines)} lineas totales)"
+        return content
+    except OSError:
+        return None
 
 
 def _build_write_diff(current: str, new: str) -> str:
