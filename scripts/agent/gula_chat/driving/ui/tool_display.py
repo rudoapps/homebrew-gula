@@ -309,8 +309,8 @@ class ToolDisplay:
 def _extract_command_summary(output: str) -> str:
     """Extract a one-line summary from command output.
 
-    Looks for build results, test results, error counts, etc.
-    Returns empty string if no useful summary is found.
+    Platform-agnostic: shows the last meaningful line of output
+    and the exit code if non-zero.
     """
     import re
 
@@ -318,45 +318,28 @@ def _extract_command_summary(output: str) -> str:
     if not lines:
         return ""
 
-    # Check for build/test result patterns
+    # Check for exit code
+    exit_code = None
+    last_line = lines[-1].strip()
+    m = re.search(r"\[exit code: (\d+)\]", last_line)
+    if m:
+        exit_code = int(m.group(1))
+        lines = lines[:-1]  # remove exit code line
+
+    # Find last non-empty, non-bracket line
+    summary_line = ""
     for line in reversed(lines):
         line = line.strip()
+        if line and not line.startswith("["):
+            summary_line = line[:80]
+            break
 
-        # xcodebuild: BUILD SUCCEEDED / BUILD FAILED
-        if "BUILD SUCCEEDED" in line:
-            return "BUILD SUCCEEDED"
-        if "BUILD FAILED" in line:
-            return "BUILD FAILED"
+    if exit_code is not None and exit_code != 0:
+        if summary_line:
+            return f"{summary_line} (exit {exit_code})"
+        return f"exit code {exit_code}"
 
-        # xcodebuild: ** TEST SUCCEEDED ** / ** TEST FAILED **
-        if "TEST SUCCEEDED" in line:
-            return "TEST SUCCEEDED"
-        if "TEST FAILED" in line:
-            return "TEST FAILED"
-
-        # gradle: BUILD SUCCESSFUL / BUILD FAILED
-        if "BUILD SUCCESSFUL" in line:
-            return line[:80]
-        if "BUILD FAILED" in line.upper():
-            return line[:80]
-
-        # npm/yarn: error count
-        if re.search(r"\d+ errors?", line, re.IGNORECASE):
-            return line[:80]
-
-        # pytest summary
-        if re.search(r"\d+ passed|PASSED|FAILED", line):
-            return line[:80]
-
-        # exit code at the end
-        if line.startswith("[exit code:"):
-            code = re.search(r"\d+", line)
-            if code and code.group() != "0":
-                # Also grab the last meaningful line before exit code
-                for prev in reversed(lines[:-1]):
-                    prev = prev.strip()
-                    if prev and not prev.startswith("["):
-                        return f"{prev[:60]} (exit {code.group()})"
-                return f"exit code {code.group()}"
+    if summary_line:
+        return summary_line
 
     return ""
