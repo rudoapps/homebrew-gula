@@ -26,6 +26,7 @@ class ToolProgressCallback(Protocol):
         input_dict: Dict[str, Any],
         success: bool,
         elapsed: float,
+        output: str = "",
     ) -> None:
         """Called when a tool finishes execution."""
         ...
@@ -182,7 +183,7 @@ class ToolOrchestrator:
                     elapsed = time.time() - t0
                     if self._progress:
                         self._progress.on_tool_complete(
-                            tool_call.name, tool_call.input, True, elapsed
+                            tool_call.name, tool_call.input, True, elapsed, result.output
                         )
                     return result
 
@@ -198,6 +199,6 @@ class ToolOrchestrator:
         elapsed = time.time() - t0
         if self._progress:
             self._progress.on_tool_complete(
-                tool_call.name, tool_call.input, result.success, elapsed
+                tool_call.name, tool_call.input, result.success, elapsed, result.output
             )
         return result

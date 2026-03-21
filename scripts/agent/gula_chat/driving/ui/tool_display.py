@@ -44,6 +44,7 @@ class ToolDisplay:
         input_dict: Dict[str, Any],
         success: bool,
         elapsed: float,
+        output: str = "",
     ) -> None:
         """Show that a tool has finished executing.
 
@@ -52,6 +53,7 @@ class ToolDisplay:
             input_dict: The tool input parameters.
             success: Whether the tool succeeded.
             elapsed: Time taken in seconds.
+            output: The tool's output text (for summary extraction).
         """
         icon, verb, detail, action_msg = get_tool_detail(name, input_dict)
         elapsed_str = f"{elapsed:.1f}s" if elapsed >= 0.1 else "<0.1s"
@@ -68,6 +70,12 @@ class ToolDisplay:
                 f"  [error]\u2717[/error] [agent.tool]{action_msg}[/agent.tool] "
                 f"[dim]({elapsed_str})[/dim]"
             )
+
+        # Show summary for run_command results
+        if name == "run_command" and output:
+            summary = _extract_command_summary(output)
+            if summary:
+                self._console.print(f"  [dim]  {summary}[/dim]")
 
     def show_parallel_summary(
         self,
@@ -283,9 +291,10 @@ class ToolDisplay:
         input_dict: Dict[str, Any],
         success: bool,
         elapsed: float,
+        output: str = "",
     ) -> None:
         """Alias for show_tool_complete (ToolProgressCallback protocol)."""
-        self.show_tool_complete(name, input_dict, success, elapsed)
+        self.show_tool_complete(name, input_dict, success, elapsed, output)
 
     def on_parallel_summary(
         self,
@@ -295,3 +304,59 @@ class ToolDisplay:
     ) -> None:
         """Alias for show_parallel_summary (ToolProgressCallback protocol)."""
         self.show_parallel_summary(count, elapsed, has_errors)
+
+
+def _extract_command_summary(output: str) -> str:
+    """Extract a one-line summary from command output.
+
+    Looks for build results, test results, error counts, etc.
+    Returns empty string if no useful summary is found.
+    """
+    import re
+
+    lines = output.strip().split("\n")
+    if not lines:
+        return ""
+
+    # Check for build/test result patterns
+    for line in reversed(lines):
+        line = line.strip()
+
+        # xcodebuild: BUILD SUCCEEDED / BUILD FAILED
+        if "BUILD SUCCEEDED" in line:
+            return "BUILD SUCCEEDED"
+        if "BUILD FAILED" in line:
+            return "BUILD FAILED"
+
+        # xcodebuild: ** TEST SUCCEEDED ** / ** TEST FAILED **
+        if "TEST SUCCEEDED" in line:
+            return "TEST SUCCEEDED"
+        if "TEST FAILED" in line:
+            return "TEST FAILED"
+
+        # gradle: BUILD SUCCESSFUL / BUILD FAILED
+        if "BUILD SUCCESSFUL" in line:
+            return line[:80]
+        if "BUILD FAILED" in line.upper():
+            return line[:80]
+
+        # npm/yarn: error count
+        if re.search(r"\d+ errors?", line, re.IGNORECASE):
+            return line[:80]
+
+        # pytest summary
+        if re.search(r"\d+ passed|PASSED|FAILED", line):
+            return line[:80]
+
+        # exit code at the end
+        if line.startswith("[exit code:"):
+            code = re.search(r"\d+", line)
+            if code and code.group() != "0":
+                # Also grab the last meaningful line before exit code
+                for prev in reversed(lines[:-1]):
+                    prev = prev.strip()
+                    if prev and not prev.startswith("["):
+                        return f"{prev[:60]} (exit {code.group()})"
+                return f"exit code {code.group()}"
+
+    return ""
