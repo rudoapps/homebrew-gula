@@ -1,8 +1,8 @@
 class Gula < Formula
   desc "CLI para desarrollo móvil"
   homepage "https://github.com/rudoapps/gula"
-  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/v0.0.272.tar.gz"
-  sha256 "5f58ef8e10297740e1ac41f7ca6121224f76a8ebb397238a1bc0bf1c724aaf46"
+  url "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/v0.0.273.tar.gz"
+  sha256 "08c0dcba0cc5c36c3a8f20a617cc101ccf29c904945bb21850b407dee673305a"
   license "MIT"
 
   depends_on "go" => :build
