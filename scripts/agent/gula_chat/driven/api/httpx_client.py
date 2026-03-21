@@ -200,7 +200,10 @@ class HttpxApiClient(ApiClientPort):
                 f"{api_url}/users/refresh",
                 json={"refresh_token": refresh_token},
             )
-            response.raise_for_status()
+            if response.status_code != 200:
+                raise RuntimeError(
+                    _friendly_http_error(response.status_code, response.text[:500])
+                )
             data = response.json()
             return AuthTokens(
                 access_token=data["access_token"],
