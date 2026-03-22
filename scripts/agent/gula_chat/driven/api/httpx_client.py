@@ -281,4 +281,5 @@ class HttpxApiClient(ApiClientPort):
                 headers={"Authorization": f"Bearer {access_token}"},
             )
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            return data.get("messages", [])
