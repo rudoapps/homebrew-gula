@@ -25,6 +25,9 @@ _HTTP_FRIENDLY_ERRORS = {
     504: "Timeout del servidor (504). La operacion tardo demasiado.",
 }
 
+# HTTP 426 is handled specially — we extract the detail message from the response body
+_UPGRADE_REQUIRED_STATUS = 426
+
 
 def _friendly_http_error(status: int, body: str = "") -> str:
     """Convert HTTP status + body into a user-friendly error message."""
