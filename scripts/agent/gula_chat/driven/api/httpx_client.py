@@ -265,3 +265,17 @@ class HttpxApiClient(ApiClientPort):
             )
             response.raise_for_status()
             return response.json()
+
+    async def get_messages(
+        self,
+        api_url: str,
+        access_token: str,
+    ) -> List[Dict[str, Any]]:
+        """Fetch active broadcast messages."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                f"{api_url}/agent/messages",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            response.raise_for_status()
+            return response.json()

@@ -35,6 +35,7 @@ def build_chat_payload(
     git_remote_url: Optional[str] = None,
     subagent_id: Optional[str] = None,
     user_context: Optional[str] = None,
+    gula_version: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build the chat payload matching the backend API contract.
 
@@ -99,6 +100,9 @@ def build_chat_payload(
 
     if user_context:
         payload["user_context"] = user_context
+
+    if gula_version:
+        payload["gula_version"] = gula_version
 
     return payload
 

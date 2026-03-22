@@ -45,6 +45,7 @@ class ChatService:
         max_iterations: int = 15,
         subagent_id: Optional[str] = None,
         git_remote_url: Optional[str] = None,
+        gula_version: Optional[str] = None,
     ) -> AsyncGenerator[SSEEvent, None]:
         """Send a message and yield SSE events as they stream back.
 
@@ -82,6 +83,7 @@ class ChatService:
             max_iterations=max_iterations,
             subagent_id=subagent_id,
             git_remote_url=git_remote_url,
+            gula_version=gula_version,
         )
 
         # Debug: log payload

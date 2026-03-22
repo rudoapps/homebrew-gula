@@ -64,6 +64,40 @@ git commit -m "Update sha256 for v${NEW_VERSION}"
 git push origin main
 ```
 
+### Step 6: Create GitHub Release
+
+Create a release on GitHub based on the tag. Follow the style of previous releases:
+
+```bash
+# Title format: "v0.0.XXX - Brief description of the main change"
+# Body format: markdown with sections for each major change using emoji headers
+#   - 🚀 for new features
+#   - 🐛 for bug fixes
+#   - ✏️ for improvements/changes
+#   - 🔧 for internal/tooling changes
+# Always end with an install section:
+#   ### 📦 Instalación
+#   ```bash
+#   brew update && brew upgrade gula
+#   ```
+
+NEW_VERSION=$(cat VERSION)
+gh release create "$NEW_VERSION" \
+  --title "v${NEW_VERSION} - Brief description" \
+  --notes "$(cat <<'EOF'
+## Main change title
+
+Description of changes...
+
+### 📦 Instalación
+
+```bash
+brew update && brew upgrade gula
+```
+EOF
+)"
+```
+
 ## Quick Release (All Steps Combined)
 
 ```bash
@@ -90,6 +124,11 @@ SHA256=$(curl -sL "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/$
 git add Formula/gula.rb
 git commit -m "Update sha256 for v${NEW_VERSION}"
 git push origin main
+
+# 6. Create GitHub Release
+gh release create "$NEW_VERSION" \
+  --title "v${NEW_VERSION} - Brief description" \
+  --notes "Release notes in markdown..."
 ```
 
 ## For Claude AI Sessions
@@ -103,5 +142,6 @@ When asked to release a new version:
 5. **Push to remote**: Push both main branch and tag
 6. **Update Formula**: Get SHA256 from tarball URL and update Formula/gula.rb
 7. **Push Formula update**: Commit and push the sha256 update
+8. **Create GitHub Release**: Use `gh release create` with a title in format `"v0.0.XXX - Brief description"` and markdown body. Look at previous releases (`gh release list` / `gh release view <tag>`) for style reference. Use emoji section headers (🚀 features, 🐛 fixes, ✏️ improvements, 🔧 tooling). Always include install section at the end.
 
 Users will receive the update automatically (auto-update runs every hour).

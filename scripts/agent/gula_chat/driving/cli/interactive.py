@@ -34,6 +34,7 @@ from .commands import (
     format_subagents_display,
 )
 from .input_handler import InputHandler
+from ... import __version__ as gula_version
 
 
 def _detect_project_name() -> str:
@@ -135,10 +136,14 @@ class InteractiveHandler:
         # Try to resume last conversation for this project
         self._conversation_id = self._config_port.get_project_conversation()
 
+        # Fetch broadcast messages (best-effort, don't block on failure)
+        broadcast_messages = await self._fetch_broadcast_messages()
+
         # Show session header
         self._header.show(
             project_name=self._project_name,
             conversation_id=self._conversation_id,
+            broadcast_messages=broadcast_messages,
         )
 
         while True:
@@ -260,6 +265,7 @@ class InteractiveHandler:
                     project_context=project_context,
                     images=images_payload,
                     git_remote_url=git_remote_url,
+                    gula_version=gula_version,
                 ):
                     # Track conversation ID
                     if isinstance(event, StartedEvent) and event.conversation_id:
@@ -456,6 +462,17 @@ class InteractiveHandler:
             self._last_response = "".join(text_chunks)
 
         self._console.print()
+
+    async def _fetch_broadcast_messages(self) -> list:
+        """Fetch broadcast messages from the API. Returns [] on any failure."""
+        try:
+            config = await self._auth_service.ensure_valid_token()
+            return await self._api_client.get_messages(
+                api_url=config.api_url,
+                access_token=config.access_token,
+            )
+        except Exception:
+            return []
 
     def _show_exit_summary(self) -> None:
         """Display a session summary on exit."""
