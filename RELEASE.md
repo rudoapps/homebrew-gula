@@ -35,10 +35,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 # Read version from file
 NEW_VERSION=$(cat VERSION)
 
-# Create tag and push
-git tag "$NEW_VERSION"
+# Create tag (with v prefix) and push
+git tag "v${NEW_VERSION}"
 git push origin main
-git push origin "$NEW_VERSION"
+git push origin "v${NEW_VERSION}"
 ```
 
 ### Step 4: Update Formula with new SHA256
@@ -82,7 +82,7 @@ Create a release on GitHub based on the tag. Follow the style of previous releas
 #   ```
 
 NEW_VERSION=$(cat VERSION)
-gh release create "$NEW_VERSION" \
+gh release create "v${NEW_VERSION}" \
   --title "v${NEW_VERSION} - Brief description" \
   --notes "$(cat <<'EOF'
 ## Main change title
@@ -112,12 +112,12 @@ git commit -m "Your commit message
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 # 3. Tag and push
-git tag "$NEW_VERSION"
+git tag "v${NEW_VERSION}"
 git push origin main
-git push origin "$NEW_VERSION"
+git push origin "v${NEW_VERSION}"
 
 # 4. Get SHA256 and update Formula
-SHA256=$(curl -sL "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/${NEW_VERSION}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
+SHA256=$(curl -sL "https://github.com/rudoapps/homebrew-gula/archive/refs/tags/v${NEW_VERSION}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
 
 # 5. Edit Formula/gula.rb - update url version and sha256
 # Then:
@@ -126,7 +126,7 @@ git commit -m "Update sha256 for v${NEW_VERSION}"
 git push origin main
 
 # 6. Create GitHub Release
-gh release create "$NEW_VERSION" \
+gh release create "v${NEW_VERSION}" \
   --title "v${NEW_VERSION} - Brief description" \
   --notes "Release notes in markdown..."
 ```
@@ -138,7 +138,7 @@ When asked to release a new version:
 1. **Read current version**: `cat VERSION`
 2. **Increment version**: Update VERSION file with new version number
 3. **Commit changes**: Include all modified files with descriptive message
-4. **Create git tag**: Tag must match VERSION content exactly
+4. **Create git tag**: Tag must be `v` + VERSION content (e.g., VERSION=`0.0.279` → tag=`v0.0.279`)
 5. **Push to remote**: Push both main branch and tag
 6. **Update Formula**: Get SHA256 from tarball URL and update Formula/gula.rb
 7. **Push Formula update**: Commit and push the sha256 update
