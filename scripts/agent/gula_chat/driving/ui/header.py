@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from rich.panel import Panel
+from rich.text import Text
+
 from .console import get_console
 
 # Style mapping for broadcast message types
@@ -15,10 +18,17 @@ _MESSAGE_STYLES: Dict[str, str] = {
 }
 
 _MESSAGE_ICONS: Dict[str, str] = {
-    "info": "\u2139",      # ℹ
-    "warning": "\u26a0",   # ⚠
-    "success": "\u2713",   # ✓
-    "error": "\u2717",     # ✗
+    "info": "\u2139\ufe0f ",     # ℹ️
+    "warning": "\u26a0\ufe0f ",  # ⚠️
+    "success": "\u2705 ",        # ✅
+    "error": "\u274c ",          # ❌
+}
+
+_PANEL_BORDER_STYLES: Dict[str, str] = {
+    "info": "cyan",
+    "warning": "yellow",
+    "success": "green",
+    "error": "red",
 }
 
 
@@ -72,18 +82,36 @@ class SessionHeader:
         # Broadcast messages (after header, before prompt)
         if broadcast_messages:
             self._console.print()
-            for msg in broadcast_messages:
-                self._render_broadcast(msg)
+            self._render_broadcasts(broadcast_messages)
 
         self._console.print()
 
-    def _render_broadcast(self, msg: Dict[str, Any]) -> None:
-        """Render a single broadcast message with appropriate styling."""
-        msg_type = msg.get("message_type", "info")
-        text = msg.get("message", "")
-        style = _MESSAGE_STYLES.get(msg_type, "cyan")
-        icon = _MESSAGE_ICONS.get(msg_type, "\u2139")
-        self._console.print(f"  [{style}]{icon} {text}[/{style}]")
+    def _render_broadcasts(self, messages: List[Dict[str, Any]]) -> None:
+        """Render broadcast messages grouped in a styled panel."""
+        lines = Text()
+        for i, msg in enumerate(messages):
+            msg_type = msg.get("message_type", "info")
+            text = msg.get("message", "")
+            style = _MESSAGE_STYLES.get(msg_type, "cyan")
+            icon = _MESSAGE_ICONS.get(msg_type, "\u2139\ufe0f ")
+            if i > 0:
+                lines.append("\n")
+            lines.append(f"{icon}", style=style)
+            lines.append(text, style=style)
+
+        # Use the most severe message type for the panel border
+        severity_order = ["error", "warning", "success", "info"]
+        types = [m.get("message_type", "info") for m in messages]
+        border_type = next((t for t in severity_order if t in types), "info")
+        border_style = _PANEL_BORDER_STYLES.get(border_type, "cyan")
+
+        panel = Panel(
+            lines,
+            border_style=border_style,
+            padding=(0, 1),
+            expand=False,
+        )
+        self._console.print(panel)
 
     def show_new_conversation(self) -> None:
         """Display a brief banner when starting a new conversation."""

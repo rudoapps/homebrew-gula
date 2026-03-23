@@ -467,11 +467,14 @@ class InteractiveHandler:
         """Fetch broadcast messages from the API. Returns [] on any failure."""
         try:
             config = await self._auth_service.ensure_valid_token()
-            return await self._api_client.get_messages(
+            messages = await self._api_client.get_messages(
                 api_url=config.api_url,
                 access_token=config.access_token,
             )
-        except Exception:
+            return messages
+        except Exception as exc:
+            import sys
+            print(f"  [dim]broadcast: {exc}[/dim]", file=sys.stderr)
             return []
 
     def _show_exit_summary(self) -> None:
