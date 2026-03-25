@@ -289,6 +289,7 @@ class LocalToolExecutor(ToolExecutorPort):
             "--max-count", str(MAX_SEARCH_RESULTS),
             "--max-columns", "200",
             "--max-columns-preview",
+            "--binary-file=skip",
         ]
 
         if not case_sensitive:
@@ -308,7 +309,7 @@ class LocalToolExecutor(ToolExecutorPort):
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=15
             )
-            output = stdout.decode("utf-8", errors="replace")
+            output = stdout.decode("utf-8", errors="replace").replace("\x00", "")
 
             if not output.strip():
                 return f'No se encontraron resultados para "{query}"'
