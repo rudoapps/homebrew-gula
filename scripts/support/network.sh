@@ -226,9 +226,7 @@ check_version() {
     if [ -n "$latest_tag" ] && [ "$latest_tag" != "null" ]; then
       echo "$latest_tag" > "$cache_file"
     else
-      # Si falla la consulta, indicarlo y continuar
-      echo -e "${YELLOW}⚠️  No se pudo verificar actualizaciones (versión actual: $VERSION)${NC}"
-      echo ""
+      # Si falla la consulta, continuar silenciosamente
       return 0
     fi
   fi
@@ -237,20 +235,10 @@ check_version() {
   local cmp_result
   cmp_result=$(version_compare "$VERSION" "$latest_tag"; echo $?)
 
-  if [ "$cmp_result" -eq 0 ]; then
-    # Versiones iguales
-    if [ "$using_cache" = true ]; then
-      echo -e "✅ Versión $VERSION (última verificada)"
-    else
-      echo -e "✅ Versión $VERSION (actualizada)"
-    fi
-  elif [ "$cmp_result" -eq 1 ]; then
-    # Versión local es más nueva (desarrollo)
-    echo -e "✅ Versión $VERSION (desarrollo)"
-  else
-    # Versión remota es más nueva - notificar al usuario
-    echo -e "${YELLOW}📦 Nueva versión disponible: $latest_tag (actual: $VERSION)${NC}"
-    echo -e "${CYAN}Para actualizar: brew update && brew upgrade gula${NC}"
+  if [ "$cmp_result" -eq 2 ]; then
+    # Versión remota es más nueva
+    echo -e "${YELLOW}  📦 Nueva versión disponible: $latest_tag${NC}"
+    echo -e "${DIM}  brew update && brew upgrade gula${NC}"
+    echo ""
   fi
-  echo ""
 }

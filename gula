@@ -37,22 +37,8 @@ source "$scripts_dir/global_vars.sh"
 # Solo mostrar logo y mensajes si no está en modo JSON
 if [ "$JSON_OUTPUT" != "true" ]; then
   source "$scripts_dir/support/logo.sh"
-
+  echo -e "  ${DIM}v${VERSION}${NC}"
   echo ""
-  echo -e "${BOLD}versión: ${VERSION}"
-  echo -e "${BOLD}propiedad: Rudo apps${NC}"
-
-  echo ""
-  echo -e "${BOLD}──────────────────────────────────────────────${NC}"
-  echo -e "${BOLD}Cargando prerequisitos:${NC}"
-  echo ""
-  if [ -z "$HOMEBREW_PREFIX" ]; then
-      echo "No se encontró el prefijo de Homebrew. Verifica si brew está instalado correctamente."
-  else
-      echo "✅ El prefijo de Homebrew es: $HOMEBREW_PREFIX"
-  fi
-
-  echo -e "✅ Ruta de homebrew: $scripts_dir"
 fi
 
 source "$scripts_dir/android/android.sh"
@@ -84,9 +70,7 @@ source "$scripts_dir/agent/agent.sh"
 # list_branches function loaded from general_support.sh
 
 if [ "$JSON_OUTPUT" != "true" ]; then
-  echo -e "✅ Imports cargados correctamente"
   check_version
-  echo "──────────────────────────────────────────────"
 fi
 
 # Inicializar variables

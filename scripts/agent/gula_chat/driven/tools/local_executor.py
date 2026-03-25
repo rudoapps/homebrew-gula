@@ -20,7 +20,7 @@ from ...domain.entities.tool_metadata import (
     MAX_COMMAND_TIMEOUT_HARD,
     MAX_SEARCH_RESULTS,
 )
-from .path_validator import PathValidator
+from .path_validator import PathValidator, OutsideAllowedDirError
 from .file_backup import FileBackup
 
 
@@ -87,6 +87,35 @@ class LocalToolExecutor(ToolExecutorPort):
                 name=tool_call.name,
                 output=output,
                 success=True,
+            )
+        except OutsideAllowedDirError as exc:
+            # Ask user for permission to access the directory
+            granted = await self._request_dir_access(exc)
+            if granted:
+                # Retry the operation now that the dir is allowed
+                try:
+                    output = await handler(tool_call.input)
+                    return ToolResult(
+                        id=tool_call.id,
+                        name=tool_call.name,
+                        output=output,
+                        success=True,
+                    )
+                except Exception as retry_exc:
+                    return ToolResult(
+                        id=tool_call.id,
+                        name=tool_call.name,
+                        output=f"Error ejecutando {tool_call.name}: {retry_exc}",
+                        success=False,
+                    )
+            return ToolResult(
+                id=tool_call.id,
+                name=tool_call.name,
+                output=(
+                    f"Acceso denegado: el usuario no permitio acceder a "
+                    f"'{exc.requested_dir}'"
+                ),
+                success=False,
             )
         except ToolDeniedError as exc:
             return ToolResult(
@@ -691,6 +720,29 @@ class LocalToolExecutor(ToolExecutorPort):
             output += f"\n... [truncado]"
 
         return output if output.strip() else f"git {subcommand}: sin salida"
+
+    # ── Directory access ────────────────────────────────────────────────
+
+    async def _request_dir_access(self, exc: OutsideAllowedDirError) -> bool:
+        """Ask the user for permission to access a directory outside the project.
+
+        If the user approves, the directory is added to the validator's
+        allow-list so subsequent accesses succeed without prompting again.
+        """
+        if not self._request_approval:
+            return False
+
+        approved = await self._request_approval(
+            f"Acceder a {exc.requested_dir}",
+            (
+                f"El agente quiere acceder a '{exc.raw_path}' que esta fuera\n"
+                f"del directorio de trabajo actual ({exc.working_dir}).\n\n"
+                f"Se permitira acceso a: {exc.requested_dir}"
+            ),
+        )
+        if approved:
+            self._validator.add_allowed_dir(exc.requested_dir)
+        return approved
 
     # ── Helpers ──────────────────────────────────────────────────────────
 
