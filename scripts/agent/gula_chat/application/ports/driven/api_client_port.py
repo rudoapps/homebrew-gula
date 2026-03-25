@@ -116,10 +116,11 @@ class ApiClientPort(ABC):
         self,
         api_url: str,
         access_token: str,
-    ) -> List[Dict[str, Any]]:
-        """Fetch active broadcast messages for the current user.
+        gula_version: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch active broadcast messages and version check for the current user.
 
         Returns:
-            List of message dicts with 'message', 'message_type', etc.
+            Dict with 'messages' list and optional 'version_check'.
         """
         ...

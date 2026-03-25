@@ -113,6 +113,26 @@ class SessionHeader:
         )
         self._console.print(panel)
 
+    def show_update_required(self, message: str) -> None:
+        """Display a blocking update-required banner and exit message."""
+        self._console.print()
+        text = Text()
+        text.append("\u26a0\ufe0f  ", style="yellow bold")
+        text.append("Actualizacion requerida", style="yellow bold")
+        text.append("\n\n")
+        text.append(message, style="white")
+        text.append("\n\n")
+        text.append("brew update && brew upgrade gula", style="cyan bold")
+
+        panel = Panel(
+            text,
+            border_style="yellow",
+            padding=(1, 2),
+            expand=False,
+        )
+        self._console.print(panel)
+        self._console.print()
+
     def show_new_conversation(self) -> None:
         """Display a brief banner when starting a new conversation."""
         self._console.print()

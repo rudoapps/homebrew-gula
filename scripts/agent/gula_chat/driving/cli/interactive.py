@@ -136,8 +136,17 @@ class InteractiveHandler:
         # Try to resume last conversation for this project
         self._conversation_id = self._config_port.get_project_conversation()
 
-        # Fetch broadcast messages (best-effort, don't block on failure)
-        broadcast_messages = await self._fetch_broadcast_messages()
+        # Fetch broadcast messages and version check (best-effort)
+        api_data = await self._fetch_startup_data()
+        broadcast_messages = api_data.get("messages", [])
+        version_check = api_data.get("version_check")
+
+        # Block if server requires a newer version
+        if version_check and version_check.get("update_required"):
+            self._header.show_update_required(
+                version_check.get("message", ""),
+            )
+            return 1
 
         # Show session header
         self._header.show(
@@ -463,19 +472,19 @@ class InteractiveHandler:
 
         self._console.print()
 
-    async def _fetch_broadcast_messages(self) -> list:
-        """Fetch broadcast messages from the API. Returns [] on any failure."""
+    async def _fetch_startup_data(self) -> dict:
+        """Fetch broadcast messages and version check. Returns {} on failure."""
         try:
             config = await self._auth_service.ensure_valid_token()
-            messages = await self._api_client.get_messages(
+            return await self._api_client.get_messages(
                 api_url=config.api_url,
                 access_token=config.access_token,
+                gula_version=gula_version,
             )
-            return messages
         except Exception as exc:
             import sys
             print(f"  [dim]broadcast: {exc}[/dim]", file=sys.stderr)
-            return []
+            return {}
 
     def _show_exit_summary(self) -> None:
         """Display a session summary on exit."""
