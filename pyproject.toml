@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gula"
+dynamic = ["version"]
+description = "CLI para el agente de IA de Gula"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "httpx>=0.25",
+    "prompt-toolkit>=3.0",
+    "rich>=13.0",
+]
+
+[project.scripts]
+gula-ai = "gula_chat.__main__:main"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scripts/agent/gula_chat"]

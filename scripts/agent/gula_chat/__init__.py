@@ -4,17 +4,25 @@ import os as _os
 
 
 def _read_version() -> str:
-    """Read version from the VERSION file at repo root."""
-    # Navigate from gula_chat/ -> agent/ -> scripts/ -> gula/VERSION
+    """Read version from VERSION file or package metadata."""
+    # 1. Try VERSION file (Homebrew / development)
     _here = _os.path.dirname(_os.path.abspath(__file__))
     for _rel in (
-        _os.path.join(_here, "..", "..", "..", "VERSION"),       # scripts/agent/gula_chat -> gula/VERSION
-        _os.path.join(_here, "..", "..", "..", "..", "VERSION"), # extra level just in case
+        _os.path.join(_here, "..", "..", "..", "VERSION"),
+        _os.path.join(_here, "..", "..", "..", "..", "VERSION"),
     ):
         _path = _os.path.normpath(_rel)
         if _os.path.isfile(_path):
             with open(_path) as _f:
                 return _f.read().strip()
+
+    # 2. Try package metadata (pip install)
+    try:
+        from importlib.metadata import version
+        return version("gula")
+    except Exception:
+        pass
+
     return "dev"
 
 

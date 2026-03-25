@@ -11,7 +11,6 @@ from .application.services.chat_service import ChatService
 from .application.services.subagent_service import SubagentService
 from .application.services.tool_orchestrator import ToolOrchestrator
 from .driven.api.httpx_client import HttpxApiClient
-from .driven.clipboard.macos_clipboard_adapter import MacOSClipboardAdapter
 from .driven.config.json_config_adapter import JsonConfigAdapter
 from .driven.context.project_context_builder import ProjectContextBuilder
 from .driven.tools.file_backup import FileBackup
@@ -38,7 +37,7 @@ class Container:
         self._config_adapter = JsonConfigAdapter()
         self._project_context_builder = ProjectContextBuilder()
         self._api_client = HttpxApiClient(debug=debug)
-        self._clipboard_adapter = MacOSClipboardAdapter()
+        self._clipboard_adapter = self._create_clipboard_adapter()
 
         # ── Tool execution infrastructure ───────────────────────────────
         self._path_validator = PathValidator()
@@ -72,6 +71,21 @@ class Container:
             api_client=self._api_client,
             chat_service=self._chat_service,
         )
+
+    @staticmethod
+    def _create_clipboard_adapter() -> ClipboardPort:
+        """Create the appropriate clipboard adapter for the current platform."""
+        import platform
+        system = platform.system()
+        if system == "Darwin":
+            from .driven.clipboard.macos_clipboard_adapter import MacOSClipboardAdapter
+            return MacOSClipboardAdapter()
+        elif system == "Linux":
+            from .driven.clipboard.linux_clipboard_adapter import LinuxClipboardAdapter
+            return LinuxClipboardAdapter()
+        else:
+            from .driven.clipboard.windows_clipboard_adapter import WindowsClipboardAdapter
+            return WindowsClipboardAdapter()
 
     # ── Public accessors for the driving layer ──────────────────────────
 
