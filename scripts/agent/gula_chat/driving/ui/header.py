@@ -9,6 +9,20 @@ from rich.text import Text
 
 from .console import get_console
 
+
+def _is_homebrew_install() -> bool:
+    """Check if gula was installed via Homebrew."""
+    import os
+    return "/homebrew/" in os.path.abspath(__file__) or "/Cellar/" in os.path.abspath(__file__)
+
+
+def _get_upgrade_command() -> str:
+    """Return the appropriate upgrade command for the install method."""
+    if _is_homebrew_install():
+        return "brew update && brew upgrade gula"
+    return "pip install --upgrade git+https://github.com/rudoapps/homebrew-gula.git"
+
+
 # Style mapping for broadcast message types
 _MESSAGE_STYLES: Dict[str, str] = {
     "info": "cyan",
@@ -122,7 +136,7 @@ class SessionHeader:
         text.append("\n\n")
         text.append(message, style="white")
         text.append("\n\n")
-        text.append("brew update && brew upgrade gula", style="cyan bold")
+        text.append(_get_upgrade_command(), style="cyan bold")
 
         panel = Panel(
             text,
