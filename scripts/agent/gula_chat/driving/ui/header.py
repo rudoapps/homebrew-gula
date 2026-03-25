@@ -11,9 +11,10 @@ from .console import get_console
 
 
 def _is_homebrew_install() -> bool:
-    """Check if gula was installed via Homebrew."""
+    """Check if gula was installed via Homebrew or Linuxbrew."""
     import os
-    return "/homebrew/" in os.path.abspath(__file__) or "/Cellar/" in os.path.abspath(__file__)
+    path = os.path.abspath(__file__).lower()
+    return any(k in path for k in ("/homebrew/", "/linuxbrew/", "/cellar/"))
 
 
 def _get_upgrade_command() -> str:

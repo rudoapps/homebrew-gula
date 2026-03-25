@@ -239,7 +239,18 @@ check_version() {
   if [ "$cmp_result" -eq 2 ]; then
     # Versión remota es más nueva
     echo -e "${YELLOW}  📦 Nueva versión disponible: $latest_tag${NC}"
-    echo -e "${DIM}  brew update && brew upgrade gula${NC}"
+    echo -e "${DIM}  $(get_upgrade_command)${NC}"
     echo ""
   fi
+}
+
+get_upgrade_command() {
+  # Si estamos dentro de una instalación Homebrew/Linuxbrew
+  if echo "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" | grep -qE "(homebrew|linuxbrew|Cellar)"; then
+    echo "brew update && brew upgrade gula"
+    return
+  fi
+
+  # Si no es Homebrew, usar pip
+  echo "pip install --no-cache-dir --upgrade git+https://github.com/rudoapps/homebrew-gula.git"
 }
