@@ -287,3 +287,23 @@ class HttpxApiClient(ApiClientPort):
             )
             response.raise_for_status()
             return response.json()
+
+    async def create_auth_session(self, api_url: str) -> str:
+        """Create a CLI authentication session."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(f"{api_url}/cli-auth/session")
+            response.raise_for_status()
+            data = response.json()
+            return data["session_id"]
+
+    async def poll_auth_session(
+        self, api_url: str, session_id: str
+    ) -> Dict[str, Any]:
+        """Poll an authentication session for completion."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{api_url}/cli-auth/poll",
+                params={"session": session_id},
+            )
+            response.raise_for_status()
+            return response.json()

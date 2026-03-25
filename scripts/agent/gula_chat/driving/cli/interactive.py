@@ -473,9 +473,22 @@ class InteractiveHandler:
         self._console.print()
 
     async def _fetch_startup_data(self) -> dict:
-        """Fetch broadcast messages and version check. Returns {} on failure."""
+        """Fetch broadcast messages and version check.
+
+        If not authenticated, triggers interactive browser login first.
+        Returns {} on failure.
+        """
+        from ...application.services.auth_service import AuthenticationError
+
         try:
             config = await self._auth_service.ensure_valid_token()
+        except AuthenticationError:
+            # No valid tokens — trigger browser-based login
+            config = await self._do_interactive_login()
+            if config is None:
+                return {}
+
+        try:
             return await self._api_client.get_messages(
                 api_url=config.api_url,
                 access_token=config.access_token,
@@ -485,6 +498,50 @@ class InteractiveHandler:
             import sys
             print(f"  [dim]broadcast: {exc}[/dim]", file=sys.stderr)
             return {}
+
+    async def _do_interactive_login(self) -> Optional["AppConfig"]:
+        """Run browser-based login flow with Rich UI feedback.
+
+        Returns:
+            AppConfig on success, None on failure.
+        """
+        from rich.panel import Panel
+        from rich.text import Text
+        from ...application.services.auth_service import AuthenticationError
+
+        self._console.print()
+
+        # Show login prompt
+        text = Text()
+        text.append("\U0001f511 ", style="yellow")
+        text.append("Inicio de sesion requerido", style="yellow bold")
+        text.append("\n\n")
+        text.append("Se abrira el navegador para iniciar sesion...", style="dim")
+        panel = Panel(text, border_style="yellow", padding=(0, 1), expand=False)
+        self._console.print(panel)
+        self._console.print()
+
+        try:
+            with self._console.status(
+                "  [dim]Esperando autenticacion en el navegador...[/dim]",
+                spinner="dots",
+            ):
+                config = await self._auth_service.login()
+
+            self._console.print(
+                "  [green]\u2713[/green] Sesion iniciada correctamente"
+            )
+            self._console.print()
+            return config
+
+        except AuthenticationError as exc:
+            self._console.print(f"  [red]\u2717 {exc}[/red]")
+            self._console.print()
+            return None
+        except Exception as exc:
+            self._console.print(f"  [red]\u2717 Error de autenticacion: {exc}[/red]")
+            self._console.print()
+            return None
 
     def _show_exit_summary(self) -> None:
         """Display a session summary on exit."""

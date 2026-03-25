@@ -124,3 +124,24 @@ class ApiClientPort(ABC):
             Dict with 'messages' list and optional 'version_check'.
         """
         ...
+
+    @abstractmethod
+    async def create_auth_session(self, api_url: str) -> str:
+        """Create a CLI authentication session.
+
+        Returns:
+            The session_id to use for browser login and polling.
+        """
+        ...
+
+    @abstractmethod
+    async def poll_auth_session(
+        self, api_url: str, session_id: str
+    ) -> Dict[str, Any]:
+        """Poll an authentication session for completion.
+
+        Returns:
+            Dict with 'status' and, when completed, 'access_token',
+            'refresh_token', and 'user_email'.
+        """
+        ...

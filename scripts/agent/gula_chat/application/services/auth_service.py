@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
+import platform
+import subprocess
 import time
+import webbrowser
 
 from ..ports.driven.api_client_port import ApiClientPort
 from ..ports.driven.config_port import ConfigPort
@@ -22,7 +26,11 @@ class AuthService:
       - Check if the current access token is present.
       - Refresh expired tokens using the refresh token.
       - Persist updated tokens to config.
+      - Interactive browser-based login when no tokens exist.
     """
+
+    LOGIN_POLL_INTERVAL = 2.0  # seconds
+    LOGIN_MAX_ATTEMPTS = 60  # 2 minutes total
 
     def __init__(
         self,
@@ -73,6 +81,83 @@ class AuthService:
                 "No hay refresh token. Ejecuta 'gula agent login' primero."
             )
         return await self._do_refresh(config)
+
+    async def login(self) -> AppConfig:
+        """Perform interactive browser-based login.
+
+        Creates a CLI auth session, opens the browser for the user to log in,
+        then polls until the session completes or times out.
+
+        Returns:
+            Updated AppConfig with fresh tokens.
+
+        Raises:
+            AuthenticationError: If login fails or times out.
+        """
+        config = self._config_port.get_config()
+        api_url = config.api_url
+
+        # Step 1: Create auth session
+        try:
+            session_id = await self._api_client.create_auth_session(api_url)
+        except Exception as exc:
+            raise AuthenticationError(
+                f"No se pudo crear la sesion de autenticacion: {exc}"
+            ) from exc
+
+        # Step 2: Open browser
+        login_url = f"{api_url}/cli-auth/login?session={session_id}"
+        self._open_browser(login_url)
+
+        # Step 3: Poll for completion
+        for _ in range(self.LOGIN_MAX_ATTEMPTS):
+            await asyncio.sleep(self.LOGIN_POLL_INTERVAL)
+            try:
+                result = await self._api_client.poll_auth_session(
+                    api_url, session_id
+                )
+            except Exception:
+                continue  # Transient error — keep polling
+
+            status = result.get("status", "")
+            if status == "completed":
+                access_token = result.get("access_token", "")
+                refresh_token = result.get("refresh_token", "")
+                user_email = result.get("user_email", "")
+                if access_token and refresh_token:
+                    self._config_port.set_config("access_token", access_token)
+                    self._config_port.set_config("refresh_token", refresh_token)
+                    if user_email:
+                        self._config_port.set_config("user_email", user_email)
+                    return self._config_port.get_config()
+                raise AuthenticationError(
+                    "El servidor no devolvio tokens validos."
+                )
+            elif status in ("expired", "not_found"):
+                raise AuthenticationError(
+                    "La sesion de autenticacion expiro. Intenta de nuevo."
+                )
+            # status == "pending" → keep polling
+
+        raise AuthenticationError(
+            "Tiempo de espera agotado. No se completo el login en el navegador."
+        )
+
+    @staticmethod
+    def _open_browser(url: str) -> None:
+        """Open URL in the default browser, cross-platform."""
+        system = platform.system()
+        try:
+            if system == "Darwin":
+                subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif system == "Linux":
+                subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            elif system == "Windows":
+                subprocess.Popen(["cmd", "/c", "start", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                webbrowser.open(url)
+        except Exception:
+            webbrowser.open(url)
 
     @staticmethod
     def _is_token_expired(token: str, margin_seconds: int = 60) -> bool:

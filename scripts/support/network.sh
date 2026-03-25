@@ -208,7 +208,8 @@ check_version() {
 
   # Verificar si existe caché y es válido
   if [ -f "$cache_file" ]; then
-    local cache_time=$(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file" 2>/dev/null)
+    local cache_time
+    cache_time=$(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo "0")
     local time_diff=$((current_time - cache_time))
 
     if [ $time_diff -lt $cache_duration ]; then
