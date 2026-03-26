@@ -241,6 +241,9 @@ class InteractiveHandler:
             # Regular message — send to agent
             await self._send_message(user_input)
 
+            # Check for new broadcast messages between turns
+            await self._check_broadcasts()
+
     async def _send_message(
         self,
         prompt: str,
@@ -541,6 +544,34 @@ class InteractiveHandler:
         skills = self._skill_service.list_skills()
         output = format_skills_display(skills)
         self._console.print(output)
+
+    async def _check_broadcasts(self) -> None:
+        """Check for new broadcast messages between turns. Silent on failure."""
+        try:
+            config = await self._auth_service.ensure_valid_token()
+            data = await self._api_client.get_messages(
+                api_url=config.api_url,
+                access_token=config.access_token,
+                gula_version=gula_version,
+            )
+
+            # Version check — block if update required
+            version_check = data.get("version_check")
+            if version_check and version_check.get("update_required"):
+                self._header.show_update_required(
+                    version_check.get("message", ""),
+                )
+                raise SystemExit(1)
+
+            # Show new broadcast messages
+            messages = data.get("messages", [])
+            if messages:
+                self._header._render_broadcasts(messages)
+                self._console.print()
+        except SystemExit:
+            raise
+        except Exception:
+            pass
 
     async def _fetch_startup_data(self) -> dict:
         """Fetch broadcast messages and version check.
