@@ -126,6 +126,19 @@ class ApiClientPort(ABC):
         ...
 
     @abstractmethod
+    async def get_skills(
+        self,
+        api_url: str,
+        access_token: str,
+    ) -> Dict[str, Any]:
+        """Fetch available skills from the backend.
+
+        Returns:
+            Dict with a 'skills' key containing a list of skill dicts.
+        """
+        ...
+
+    @abstractmethod
     async def create_auth_session(self, api_url: str) -> str:
         """Create a CLI authentication session.
 

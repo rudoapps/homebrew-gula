@@ -9,6 +9,7 @@ from ...application.ports.driven.api_client_port import ApiClientPort
 from ...application.ports.driven.clipboard_port import ClipboardPort
 from ...application.ports.driven.config_port import ConfigPort
 from ...application.services.auth_service import AuthService
+from ...application.services.skill_service import SkillService
 from ...application.services.subagent_service import SubagentService
 from ..ui.console import get_console
 
@@ -70,15 +71,17 @@ class SlashCommandRegistry:
         auth_service: AuthService,
         api_client: ApiClientPort,
         subagent_service: SubagentService,
-        get_last_response: Callable[[], str],
-        get_total_cost: Callable[[], float],
-        get_conversation_id: Callable[[], Optional[int]],
+        skill_service: Optional[SkillService] = None,
+        get_last_response: Callable[[], str] = lambda: "",
+        get_total_cost: Callable[[], float] = lambda: 0.0,
+        get_conversation_id: Callable[[], Optional[int]] = lambda: None,
     ) -> None:
         self._config_port = config_port
         self._clipboard_port = clipboard_port
         self._auth_service = auth_service
         self._api_client = api_client
         self._subagent_service = subagent_service
+        self._skill_service = skill_service
         self._get_last_response = get_last_response
         self._get_total_cost = get_total_cost
         self._get_conversation_id = get_conversation_id
@@ -112,6 +115,8 @@ class SlashCommandRegistry:
             "explain": self._cmd_subagent_shortcut,
             "refactor": self._cmd_subagent_shortcut,
             "document": self._cmd_subagent_shortcut,
+            # Skills
+            "skills": self._cmd_skills,
         }
 
     # Expose the last-dispatched command name for shortcut resolution
@@ -140,6 +145,13 @@ class SlashCommandRegistry:
 
         handler = self._commands.get(cmd_name)
         if handler is None:
+            # Try skill dispatch before giving up
+            if self._skill_service and self._skill_service.get_skill(cmd_name):
+                return CommandResult(
+                    handled=True,
+                    action="invoke_skill",
+                    action_data=f"{cmd_name}\n{args}",
+                )
             return CommandResult(
                 handled=True,
                 output=f"Comando desconocido: /{cmd_name}. Escribe /help para ver los comandos disponibles.",
@@ -225,12 +237,26 @@ class SlashCommandRegistry:
             "\n"
             "  /exit /quit /q    Salir\n"
             "\n"
+            "Skills:\n"
+            "  /skills           Listar skills disponibles\n"
+            "  /<skill> <msg>    Invocar una skill\n"
+            "\n"
             "Atajos:\n"
             "  @archivo.py       Adjuntar contenido de un archivo\n"
             "  Esc+Enter         Nueva linea (sin enviar)\n"
             "  Ctrl+D            Salir\n"
             "  Ctrl+C            Cancelar mensaje actual"
         )
+
+        # Append loaded skills if available
+        if self._skill_service:
+            skills = self._skill_service.list_skills()
+            if skills:
+                help_text += "\n\nSkills cargadas:"
+                for s in skills:
+                    icon = f"{s.icon} " if s.icon else ""
+                    help_text += f"\n  /{s.name:<16} {icon}{s.description}"
+
         return CommandResult(handled=True, output=help_text)
 
     def _cmd_models(self, args: str) -> CommandResult:
@@ -344,6 +370,18 @@ class SlashCommandRegistry:
             handled=True,
             action="invoke_subagent",
             action_data=f"{subagent_id}\n{prompt}",
+        )
+
+    def _cmd_skills(self, args: str) -> CommandResult:
+        """List available skills."""
+        if not self._skill_service:
+            return CommandResult(handled=True, output="Skills no disponibles.")
+        skills = self._skill_service.list_skills()
+        if not skills:
+            return CommandResult(handled=True, output="No hay skills cargadas.")
+        return CommandResult(
+            handled=True,
+            action="list_skills",
         )
 
     def _cmd_subagent_shortcut(self, args: str) -> CommandResult:
@@ -503,6 +541,40 @@ def format_models_display(
 
     lines.append("  [dim]Usa /model <id> para cambiar de modelo[/dim]")
     lines.append("  [dim]    /model auto para routing automatico[/dim]")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def format_skills_display(skills: list) -> str:
+    """Format skills list into a rich display string.
+
+    Args:
+        skills: List of Skill domain objects.
+
+    Returns:
+        Formatted string ready to print.
+    """
+    lines: List[str] = ["", "  [bold]Skills disponibles:[/bold]", ""]
+
+    if not skills:
+        lines.append("  No hay skills cargadas.")
+        lines.append("")
+        return "\n".join(lines)
+
+    # Group by category
+    categories: Dict[str, list] = {}
+    for s in skills:
+        categories.setdefault(s.category, []).append(s)
+
+    for cat, cat_skills in sorted(categories.items()):
+        lines.append(f"  [dim]{cat.capitalize()}:[/dim]")
+        for s in cat_skills:
+            icon = f"{s.icon} " if s.icon else ""
+            source_tag = f"[dim]({s.source})[/dim]" if s.source != "backend" else ""
+            lines.append(f"    [cyan]/{s.name:<16}[/cyan] {icon}{s.description} {source_tag}")
+        lines.append("")
+
+    lines.append("  [dim]Uso: /<skill> <mensaje>[/dim]")
     lines.append("")
     return "\n".join(lines)
 

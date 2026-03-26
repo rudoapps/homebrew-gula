@@ -11,6 +11,7 @@ from ...application.ports.driven.clipboard_port import ClipboardPort
 from ...application.ports.driven.config_port import ConfigPort
 from ...application.services.auth_service import AuthService
 from ...application.services.chat_service import ChatService
+from ...application.services.skill_service import SkillService
 from ...application.services.subagent_service import SubagentService
 from ...application.services.tool_orchestrator import ToolOrchestrator
 from ...driven.context.project_context_builder import ProjectContextBuilder
@@ -31,6 +32,7 @@ from .commands import (
     SlashCommandRegistry,
     format_models_display,
     format_quota_display,
+    format_skills_display,
     format_subagents_display,
 )
 from .input_handler import InputHandler
@@ -82,6 +84,7 @@ class InteractiveHandler:
         auth_service: AuthService,
         api_client: ApiClientPort,
         subagent_service: SubagentService,
+        skill_service: Optional[SkillService] = None,
         tool_orchestrator: Optional[ToolOrchestrator] = None,
         project_context_builder: Optional[ProjectContextBuilder] = None,
     ) -> None:
@@ -91,6 +94,7 @@ class InteractiveHandler:
         self._auth_service = auth_service
         self._api_client = api_client
         self._subagent_service = subagent_service
+        self._skill_service = skill_service
         self._tool_orchestrator = tool_orchestrator
         self._context_builder = project_context_builder or ProjectContextBuilder()
         self._tool_display = ToolDisplay()
@@ -114,6 +118,7 @@ class InteractiveHandler:
             auth_service=auth_service,
             api_client=api_client,
             subagent_service=subagent_service,
+            skill_service=skill_service,
             get_last_response=lambda: self._last_response,
             get_total_cost=lambda: self._total_cost,
             get_conversation_id=lambda: self._conversation_id,
@@ -135,6 +140,13 @@ class InteractiveHandler:
         """Main async REPL loop."""
         # Try to resume last conversation for this project
         self._conversation_id = self._config_port.get_project_conversation()
+
+        # Load skills (best-effort, concurrent with startup data)
+        if self._skill_service:
+            try:
+                await self._skill_service.load_skills()
+            except Exception:
+                pass
 
         # Fetch broadcast messages and version check (best-effort)
         api_data = await self._fetch_startup_data()
@@ -215,12 +227,25 @@ class InteractiveHandler:
                             cmd_result.action_data
                         )
 
+                elif cmd_result.action == "invoke_skill":
+                    if cmd_result.action_data:
+                        await self._handle_invoke_skill(
+                            cmd_result.action_data
+                        )
+
+                elif cmd_result.action == "list_skills":
+                    self._handle_list_skills()
+
                 continue
 
             # Regular message — send to agent
             await self._send_message(user_input)
 
-    async def _send_message(self, prompt: str) -> None:
+    async def _send_message(
+        self,
+        prompt: str,
+        system_prompt_addition: Optional[str] = None,
+    ) -> None:
         """Send a message and handle the full tool execution loop.
 
         The loop continues sending tool_results back to the server until
@@ -228,6 +253,7 @@ class InteractiveHandler:
 
         Args:
             prompt: The user's message (with @file refs already expanded).
+            system_prompt_addition: Extra instructions for the system prompt (from skills).
         """
         # Reset per-turn auto-approval
         self._tool_display.reset_turn_approval()
@@ -275,6 +301,7 @@ class InteractiveHandler:
                     images=images_payload,
                     git_remote_url=git_remote_url,
                     gula_version=gula_version,
+                    system_prompt_addition=system_prompt_addition,
                 ):
                     # Track conversation ID
                     if isinstance(event, StartedEvent) and event.conversation_id:
@@ -349,6 +376,7 @@ class InteractiveHandler:
                 images_payload = None
                 project_context = None
                 git_remote_url = None
+                system_prompt_addition = None
                 self._console.print()
                 continue
 
@@ -471,6 +499,48 @@ class InteractiveHandler:
             self._last_response = "".join(text_chunks)
 
         self._console.print()
+
+    async def _handle_invoke_skill(self, action_data: str) -> None:
+        """Invoke a skill by name, expanding its template and sending as a message.
+
+        Args:
+            action_data: String in the format "skill_name\\nargs".
+        """
+        parts = action_data.split("\n", maxsplit=1)
+        name = parts[0]
+        args = parts[1] if len(parts) > 1 else ""
+
+        if not self._skill_service:
+            self._console.print("  [red]Skills no disponibles.[/red]")
+            return
+
+        resolution = self._skill_service.resolve(name, args)
+        if not resolution:
+            self._console.print(f"  [red]Skill '{name}' no encontrada.[/red]")
+            return
+
+        skill = self._skill_service.get_skill(name)
+        if skill:
+            icon = f"{skill.icon} " if skill.icon else ""
+            self._console.print(
+                f"  [cyan]{icon}{skill.display_name}[/cyan]"
+            )
+            self._console.print()
+
+        # Send the expanded prompt as a regular message
+        await self._send_message(
+            resolution.expanded_prompt,
+            system_prompt_addition=resolution.system_prompt_addition,
+        )
+
+    def _handle_list_skills(self) -> None:
+        """Display available skills."""
+        if not self._skill_service:
+            self._console.print("  [red]Skills no disponibles.[/red]")
+            return
+        skills = self._skill_service.list_skills()
+        output = format_skills_display(skills)
+        self._console.print(output)
 
     async def _fetch_startup_data(self) -> dict:
         """Fetch broadcast messages and version check.

@@ -8,6 +8,7 @@ from .application.ports.driven.config_port import ConfigPort
 from .application.ports.driven.tool_executor_port import ToolExecutorPort
 from .application.services.auth_service import AuthService
 from .application.services.chat_service import ChatService
+from .application.services.skill_service import SkillService
 from .application.services.subagent_service import SubagentService
 from .application.services.tool_orchestrator import ToolOrchestrator
 from .driven.api.httpx_client import HttpxApiClient
@@ -71,6 +72,10 @@ class Container:
             api_client=self._api_client,
             chat_service=self._chat_service,
         )
+        self._skill_service = SkillService(
+            auth_service=self._auth_service,
+            api_client=self._api_client,
+        )
 
     @staticmethod
     def _create_clipboard_adapter() -> ClipboardPort:
@@ -112,6 +117,10 @@ class Container:
     @property
     def subagent_service(self) -> SubagentService:
         return self._subagent_service
+
+    @property
+    def skill_service(self) -> SkillService:
+        return self._skill_service
 
     @property
     def tool_orchestrator(self) -> ToolOrchestrator:

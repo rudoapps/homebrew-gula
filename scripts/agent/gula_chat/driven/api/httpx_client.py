@@ -288,6 +288,20 @@ class HttpxApiClient(ApiClientPort):
             response.raise_for_status()
             return response.json()
 
+    async def get_skills(
+        self,
+        api_url: str,
+        access_token: str,
+    ) -> Dict[str, Any]:
+        """Fetch available skills."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{api_url}/agent/skills",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def create_auth_session(self, api_url: str) -> str:
         """Create a CLI authentication session."""
         async with httpx.AsyncClient(timeout=30.0) as client:

@@ -36,6 +36,7 @@ def build_chat_payload(
     subagent_id: Optional[str] = None,
     user_context: Optional[str] = None,
     gula_version: Optional[str] = None,
+    system_prompt_addition: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build the chat payload matching the backend API contract.
 
@@ -103,6 +104,9 @@ def build_chat_payload(
 
     if gula_version:
         payload["gula_version"] = gula_version
+
+    if system_prompt_addition:
+        payload["system_prompt_addition"] = system_prompt_addition
 
     return payload
 

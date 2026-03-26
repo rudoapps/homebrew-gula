@@ -46,6 +46,7 @@ class ChatService:
         subagent_id: Optional[str] = None,
         git_remote_url: Optional[str] = None,
         gula_version: Optional[str] = None,
+        system_prompt_addition: Optional[str] = None,
     ) -> AsyncGenerator[SSEEvent, None]:
         """Send a message and yield SSE events as they stream back.
 
@@ -84,6 +85,7 @@ class ChatService:
             subagent_id=subagent_id,
             git_remote_url=git_remote_url,
             gula_version=gula_version,
+            system_prompt_addition=system_prompt_addition,
         )
 
         # Debug: log payload
