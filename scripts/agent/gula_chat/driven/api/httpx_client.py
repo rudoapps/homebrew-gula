@@ -274,11 +274,14 @@ class HttpxApiClient(ApiClientPort):
         api_url: str,
         access_token: str,
         gula_version: Optional[str] = None,
+        after_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Fetch active broadcast messages and version check."""
         params = {}
         if gula_version:
             params["gula_version"] = gula_version
+        if after_id is not None:
+            params["after_id"] = after_id
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(
                 f"{api_url}/agent/messages",

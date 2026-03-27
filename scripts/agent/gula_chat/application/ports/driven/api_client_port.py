@@ -117,8 +117,12 @@ class ApiClientPort(ABC):
         api_url: str,
         access_token: str,
         gula_version: Optional[str] = None,
+        after_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Fetch active broadcast messages and version check for the current user.
+
+        Args:
+            after_id: If provided, only return messages with id > after_id.
 
         Returns:
             Dict with 'messages' list and optional 'version_check'.

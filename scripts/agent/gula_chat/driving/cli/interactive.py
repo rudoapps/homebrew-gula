@@ -108,6 +108,7 @@ class InteractiveHandler:
         self._turn_count: int = 0
         self._project_name: str = _detect_project_name()
         self._is_first_message: bool = True
+        self._last_broadcast_id: Optional[int] = None
 
         # Sub-components
         self._input_handler = InputHandler()
@@ -151,6 +152,7 @@ class InteractiveHandler:
         # Fetch broadcast messages and version check (best-effort)
         api_data = await self._fetch_startup_data()
         broadcast_messages = api_data.get("messages", [])
+        self._track_broadcast_ids(broadcast_messages)
         version_check = api_data.get("version_check")
 
         # Block if server requires a newer version
@@ -553,6 +555,7 @@ class InteractiveHandler:
                 api_url=config.api_url,
                 access_token=config.access_token,
                 gula_version=gula_version,
+                after_id=self._last_broadcast_id,
             )
 
             # Version check — block if update required
@@ -563,15 +566,24 @@ class InteractiveHandler:
                 )
                 raise SystemExit(1)
 
-            # Show new broadcast messages
+            # Show only new broadcast messages
             messages = data.get("messages", [])
             if messages:
+                self._track_broadcast_ids(messages)
                 self._header._render_broadcasts(messages)
                 self._console.print()
         except SystemExit:
             raise
         except Exception:
             pass
+
+    def _track_broadcast_ids(self, messages: List[dict]) -> None:
+        """Update _last_broadcast_id with the highest id from messages."""
+        for msg in messages:
+            msg_id = msg.get("id")
+            if msg_id is not None:
+                if self._last_broadcast_id is None or msg_id > self._last_broadcast_id:
+                    self._last_broadcast_id = msg_id
 
     async def _fetch_startup_data(self) -> dict:
         """Fetch broadcast messages and version check.
