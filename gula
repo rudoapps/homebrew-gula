@@ -38,7 +38,6 @@ source "$scripts_dir/global_vars.sh"
 if [ "$JSON_OUTPUT" != "true" ]; then
   source "$scripts_dir/support/logo.sh"
   echo -e "  ${DIM}v${VERSION}${NC}"
-  echo ""
 fi
 
 source "$scripts_dir/android/android.sh"

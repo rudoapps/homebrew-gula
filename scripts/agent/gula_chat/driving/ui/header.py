@@ -72,7 +72,6 @@ class SessionHeader:
             rag_status: RAG status string, or None if not available.
             broadcast_messages: List of broadcast message dicts from the API.
         """
-        self._console.print()
         self._console.rule(style="dim")
 
         # Project line
@@ -96,7 +95,6 @@ class SessionHeader:
 
         # Broadcast messages (after header, before prompt)
         if broadcast_messages:
-            self._console.print()
             self._render_broadcasts(broadcast_messages)
 
         self._console.print()
