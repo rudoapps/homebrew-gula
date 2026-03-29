@@ -72,7 +72,8 @@ class SessionHeader:
             rag_status: RAG status string, or None if not available.
             broadcast_messages: List of broadcast message dicts from the API.
         """
-        self._console.rule(style="dim")
+        _SEP = "\u2500" * 70
+        self._console.print(f"  [dim]{_SEP}[/dim]")
 
         # Project line
         parts = [f"[agent.header]{project_name}[/agent.header]"]
@@ -91,7 +92,7 @@ class SessionHeader:
             "  [dim]/new nueva conversacion \u00b7 /help comandos[/dim]"
         )
 
-        self._console.rule(style="dim")
+        self._console.print(f"  [dim]{_SEP}[/dim]")
 
         # Broadcast messages (after header, before prompt)
         if broadcast_messages:
@@ -122,7 +123,7 @@ class SessionHeader:
             lines,
             border_style=border_style,
             padding=(0, 1),
-            expand=False,
+            width=74,
         )
         self._console.print(panel)
 
@@ -141,7 +142,7 @@ class SessionHeader:
             text,
             border_style="yellow",
             padding=(1, 2),
-            expand=False,
+            width=74,
         )
         self._console.print(panel)
         self._console.print()
