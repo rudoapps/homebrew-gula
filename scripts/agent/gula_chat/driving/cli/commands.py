@@ -267,19 +267,23 @@ class SlashCommandRegistry:
         )
 
     def _cmd_model(self, args: str) -> CommandResult:
-        """Change the active model."""
+        """Change the active model or show list if no arg given."""
         model_id = args.strip()
         if not model_id:
-            config = self._config_port.get_config()
-            current = config.preferred_model or "auto"
+            # No arg → show models list (same as /models)
+            return CommandResult(handled=True, action="list_models")
+
+        # "auto" → clear override
+        if model_id == "auto":
+            self._config_port.set_config("preferred_model", "auto")
             return CommandResult(
                 handled=True,
-                output=f"Modelo actual: {current}\nUsa: /model <id>",
+                output="  [success]\u2713[/success] Modelo: [bold]auto[/bold] (routing automatico)",
             )
-        self._config_port.set_config("preferred_model", model_id)
+
+        # Otherwise validate against backend
         return CommandResult(
             handled=True,
-            output=f"Modelo cambiado a: {model_id}",
             action="change_model",
             action_data=model_id,
         )
