@@ -121,7 +121,7 @@ class SessionHeader:
             icon = _MESSAGE_ICONS.get(msg_type, "\u2139\ufe0f ")
             if i > 0:
                 lines.append("\n")
-            lines.append(f"{icon}", style=style)
+            lines.append(f"{icon} ", style=style)
             lines.append(text, style=style)
 
         # Use the most severe message type for the panel border
