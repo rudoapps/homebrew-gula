@@ -25,30 +25,15 @@ class SelectOption:
     active: bool = False
 
 
-def select_option(
-    options: List[SelectOption],
-    title: str = "",
-) -> Optional[str]:
-    """Show an interactive selector and return the chosen value.
-
-    Args:
-        options: List of options to display.
-        title: Optional title shown above the list.
-
-    Returns:
-        The value of the selected option, or None if cancelled.
-    """
-    if not options:
-        return None
-
-    # Find initial cursor position (active option or first enabled)
+def _build_selector_app(options, title):
+    """Build a prompt_toolkit Application for the selector."""
     cursor = 0
     for i, opt in enumerate(options):
         if opt.active and not opt.disabled:
             cursor = i
             break
 
-    result: Optional[str] = None
+    result: List[Optional[str]] = [None]
 
     kb = KeyBindings()
 
@@ -74,9 +59,8 @@ def select_option(
 
     @kb.add("enter")
     def _select(event):
-        nonlocal result
         if not options[cursor].disabled:
-            result = options[cursor].value
+            result[0] = options[cursor].value
         event.app.exit()
 
     @kb.add("escape")
@@ -119,8 +103,7 @@ def select_option(
             lines.append(("", "\n"))
 
             if opt.description:
-                desc_style = "ansigray"
-                lines.append((desc_style, f"     {opt.description}\n"))
+                lines.append(("ansigray", f"     {opt.description}\n"))
 
         lines.append(("ansigray", "\n  \u2191\u2193 mover \u00b7 enter seleccionar \u00b7 esc cancelar"))
         return lines
@@ -135,9 +118,32 @@ def select_option(
         full_screen=False,
         output=_create_stderr_output(),
     )
-    app.run()
 
-    return result
+    return app, result
+
+
+async def select_option_async(
+    options: List[SelectOption],
+    title: str = "",
+) -> Optional[str]:
+    """Show an interactive selector (async-safe) and return the chosen value."""
+    if not options:
+        return None
+    app, result = _build_selector_app(options, title)
+    await app.run_async()
+    return result[0]
+
+
+def select_option(
+    options: List[SelectOption],
+    title: str = "",
+) -> Optional[str]:
+    """Show an interactive selector (sync) and return the chosen value."""
+    if not options:
+        return None
+    app, result = _build_selector_app(options, title)
+    app.run()
+    return result[0]
 
 
 def _create_stderr_output():

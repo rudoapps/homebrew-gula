@@ -27,7 +27,7 @@ from ...domain.entities.sse_event import (
 from ..ui.console import get_console
 from ..ui.header import SessionHeader
 from ..ui.renderer import SSERenderer
-from ..ui.selector import SelectOption, select_option
+from ..ui.selector import SelectOption, select_option, select_option_async
 from ..ui.tool_display import ToolDisplay
 from .commands import (
     SlashCommandRegistry,
@@ -438,7 +438,7 @@ class InteractiveHandler:
             models = await self._fetch_models()
             if models is None:
                 return
-            self._show_model_selector(models)
+            await self._show_model_selector(models)
         except Exception as exc:
             self._console.print(f"  [red]Error al obtener modelos: {exc}[/red]")
 
@@ -476,7 +476,7 @@ class InteractiveHandler:
             self._console.print(f"  [red]Error al obtener modelos: {exc}[/red]")
             return None
 
-    def _show_model_selector(self, models: List[dict]) -> None:
+    async def _show_model_selector(self, models: List[dict]) -> None:
         """Show interactive model selector."""
         current = self._config_port.get_config().preferred_model or "auto"
 
@@ -518,7 +518,7 @@ class InteractiveHandler:
             ))
 
         self._console.print()
-        chosen = select_option(options, title="Selecciona modelo")
+        chosen = await select_option_async(options, title="Selecciona modelo")
 
         if chosen is None:
             self._console.print("  [dim]Cancelado[/dim]")
@@ -743,7 +743,7 @@ class InteractiveHandler:
         """Ask the user if they want to analyze project architecture."""
         project_name = rag_info.get("project_name", self._project_name)
 
-        chosen = select_option(
+        chosen = await select_option_async(
             [
                 SelectOption(value="yes", label="Si, analizar arquitectura", description=f"Analiza {project_name} y genera una guia para mejorar las respuestas"),
                 SelectOption(value="no", label="No, continuar", description="Puedes hacerlo mas tarde con /analyze"),
