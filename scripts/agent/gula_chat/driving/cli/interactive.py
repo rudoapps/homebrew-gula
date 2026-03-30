@@ -703,10 +703,13 @@ class InteractiveHandler:
         If not authenticated, triggers interactive browser login first.
         Returns {} on failure.
         """
-        from ...application.services.auth_service import AuthenticationError
+        from ...application.services.auth_service import AuthenticationError, ServerUnavailableError
 
         try:
             config = await self._auth_service.ensure_valid_token()
+        except ServerUnavailableError as exc:
+            self._console.print(f"  [yellow]\u26a0 {exc}[/yellow]")
+            return {}
         except AuthenticationError:
             # No valid tokens — trigger browser-based login
             config = await self._do_interactive_login()

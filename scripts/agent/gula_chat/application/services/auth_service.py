@@ -19,6 +19,10 @@ class AuthenticationError(Exception):
     """Raised when authentication fails and cannot be recovered."""
 
 
+class ServerUnavailableError(Exception):
+    """Raised when the server is down (502, 503, timeout)."""
+
+
 class AuthService:
     """Manages authentication tokens.
 
@@ -187,6 +191,8 @@ class AuthService:
 
     async def _do_refresh(self, config: AppConfig) -> AppConfig:
         """Perform the actual token refresh."""
+        import httpx
+
         try:
             tokens = await self._api_client.refresh_token(
                 api_url=config.api_url,
@@ -195,6 +201,18 @@ class AuthService:
             self._config_port.set_config("access_token", tokens.access_token)
             self._config_port.set_config("refresh_token", tokens.refresh_token)
             return self._config_port.get_config()
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+            raise ServerUnavailableError(
+                "No se puede conectar al servidor. Verifica tu conexion."
+            ) from exc
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (502, 503, 504):
+                raise ServerUnavailableError(
+                    f"El servidor no esta disponible ({exc.response.status_code})."
+                ) from exc
+            raise AuthenticationError(
+                f"No se pudo renovar el token: {exc}"
+            ) from exc
         except Exception as exc:
             raise AuthenticationError(
                 f"No se pudo renovar el token: {exc}"
