@@ -718,8 +718,9 @@ class InteractiveHandler:
         """Fetch broadcast messages and version check.
 
         If not authenticated, triggers interactive browser login first.
-        Returns {} on failure.
+        Returns {} on failure, or {"_server_down": True} if server is unavailable.
         """
+        import httpx
         from ...application.services.auth_service import AuthenticationError, ServerUnavailableError
 
         try:
@@ -728,7 +729,10 @@ class InteractiveHandler:
             return {"_server_down": True, "_error": str(exc)}
         except AuthenticationError:
             # No valid tokens — trigger browser-based login
-            config = await self._do_interactive_login()
+            try:
+                config = await self._do_interactive_login()
+            except Exception:
+                config = None
             if config is None:
                 return {}
 
@@ -738,9 +742,13 @@ class InteractiveHandler:
                 access_token=config.access_token,
                 gula_version=gula_version,
             )
-        except Exception as exc:
-            import sys
-            print(f"  [dim]broadcast: {exc}[/dim]", file=sys.stderr)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+            return {"_server_down": True, "_error": "No se puede conectar al servidor. Verifica tu conexion."}
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (502, 503, 504):
+                return {"_server_down": True, "_error": f"El servidor no esta disponible ({exc.response.status_code})."}
+            return {}
+        except Exception:
             return {}
 
     async def _fetch_rag_info(self) -> Optional[dict]:
@@ -869,10 +877,29 @@ class InteractiveHandler:
 
         Returns:
             AppConfig on success, None on failure.
+        Raises:
+            ServerUnavailableError: If the server is down.
         """
+        import httpx
         from rich.panel import Panel
         from rich.text import Text
-        from ...application.services.auth_service import AuthenticationError
+        from ...application.services.auth_service import AuthenticationError, ServerUnavailableError
+
+        # Check if server is reachable before showing login UI
+        try:
+            config = self._auth_service.get_config()
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{config.api_url}/agent/models")
+                if resp.status_code in (502, 503, 504):
+                    raise ServerUnavailableError(
+                        f"El servidor no esta disponible ({resp.status_code})."
+                    )
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout):
+            raise ServerUnavailableError(
+                "No se puede conectar al servidor. Verifica tu conexion."
+            )
+        except ServerUnavailableError:
+            raise
 
         self._console.print()
 
