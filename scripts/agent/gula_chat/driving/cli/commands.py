@@ -106,6 +106,8 @@ class SlashCommandRegistry:
             "diff": self._cmd_diff,
             "quota": self._cmd_quota,
             "presupuesto": self._cmd_quota,
+            "analyze": self._cmd_analyze,
+            "analizar": self._cmd_analyze,
             # Subagent commands
             "subagents": self._cmd_subagents,
             "subagent": self._cmd_subagent,
@@ -218,6 +220,7 @@ class SlashCommandRegistry:
             "  /clear            Limpiar la pantalla\n"
             "  /models           Listar modelos disponibles\n"
             "  /model <id>       Cambiar modelo\n"
+            "  /analyze          Analizar arquitectura del proyecto\n"
             "  /resume <id>      Retomar conversacion por ID\n"
             "  /undo             Deshacer ultimo cambio (stub)\n"
             "  /diff             Mostrar cambios recientes (stub)\n"
@@ -258,6 +261,10 @@ class SlashCommandRegistry:
                     help_text += f"\n  /{s.name:<16} {icon}{s.description}"
 
         return CommandResult(handled=True, output=help_text)
+
+    def _cmd_analyze(self, args: str) -> CommandResult:
+        """Regenerate project architecture analysis."""
+        return CommandResult(handled=True, action="analyze_architecture")
 
     def _cmd_models(self, args: str) -> CommandResult:
         """List available models (async fetch handled by InteractiveHandler)."""

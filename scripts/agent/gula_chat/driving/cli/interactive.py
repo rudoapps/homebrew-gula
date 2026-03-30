@@ -174,6 +174,11 @@ class InteractiveHandler:
             rag_info=rag_info,
         )
 
+        # Offer architecture analysis if project is indexed but has no guide
+        if (rag_info and rag_info.get("has_index")
+                and not rag_info.get("has_architecture_guide")):
+            await self._offer_architecture_analysis(rag_info)
+
         while True:
             try:
                 user_input = await self._input_handler.read_input()
@@ -246,6 +251,9 @@ class InteractiveHandler:
 
                 elif cmd_result.action == "list_skills":
                     self._handle_list_skills()
+
+                elif cmd_result.action == "analyze_architecture":
+                    await self._run_architecture_analysis()
 
                 continue
 
@@ -730,6 +738,69 @@ class InteractiveHandler:
             )
         except Exception:
             return None
+
+    async def _offer_architecture_analysis(self, rag_info: dict) -> None:
+        """Ask the user if they want to analyze project architecture."""
+        project_name = rag_info.get("project_name", self._project_name)
+
+        chosen = select_option(
+            [
+                SelectOption(value="yes", label="Si, analizar arquitectura", description=f"Analiza {project_name} y genera una guia para mejorar las respuestas"),
+                SelectOption(value="no", label="No, continuar", description="Puedes hacerlo mas tarde con /analyze"),
+            ],
+            title="Este proyecto no tiene guia de arquitectura. Quieres generarla?",
+        )
+
+        if chosen == "yes":
+            await self._run_architecture_analysis(rag_info)
+
+    async def _run_architecture_analysis(self, rag_info: Optional[dict] = None) -> None:
+        """Send project files to backend for architecture analysis."""
+        if not rag_info:
+            rag_info = await self._fetch_rag_info()
+        if not rag_info or not rag_info.get("project_id"):
+            self._console.print("  [red]Proyecto no encontrado en el RAG.[/red]")
+            return
+
+        project_id = rag_info["project_id"]
+        self._console.print("  [dim]Analizando arquitectura del proyecto...[/dim]")
+
+        # Build payload from local project
+        context = self._context_builder.build()
+        key_files_content = {}
+        import os
+        root = self._context_builder._root
+        for kf in context.get("key_files", []):
+            path = root / kf
+            if path.is_file():
+                try:
+                    content = path.read_text(errors="replace")[:3000]
+                    key_files_content[kf] = content
+                except OSError:
+                    pass
+
+        try:
+            config = await self._auth_service.ensure_valid_token()
+            result = await self._api_client.analyze_architecture(
+                api_url=config.api_url,
+                access_token=config.access_token,
+                project_id=project_id,
+                payload={
+                    "file_tree": context.get("file_tree", ""),
+                    "dependencies": context.get("dependencies", ""),
+                    "key_files": key_files_content,
+                    "project_type": context.get("project_type", ""),
+                },
+            )
+            if result.get("status") == "completed":
+                self._console.print(
+                    f"  [success]\u2713[/success] Guia de arquitectura generada "
+                    f"[dim]({result.get('guide_length', 0)} chars)[/dim]"
+                )
+            else:
+                self._console.print(f"  [red]Error: {result.get('message', 'unknown')}[/red]")
+        except Exception as exc:
+            self._console.print(f"  [red]Error al analizar: {exc}[/red]")
 
     async def _do_interactive_login(self) -> Optional["AppConfig"]:
         """Run browser-based login flow with Rich UI feedback.

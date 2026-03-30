@@ -307,6 +307,23 @@ class HttpxApiClient(ApiClientPort):
             response.raise_for_status()
             return response.json()
 
+    async def analyze_architecture(
+        self,
+        api_url: str,
+        access_token: str,
+        project_id: int,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Send project files for architecture analysis."""
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{api_url}/rag/projects/{project_id}/analyze",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def get_skills(
         self,
         api_url: str,

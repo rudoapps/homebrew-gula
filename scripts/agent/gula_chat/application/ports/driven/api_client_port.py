@@ -144,6 +144,17 @@ class ApiClientPort(ABC):
         ...
 
     @abstractmethod
+    async def analyze_architecture(
+        self,
+        api_url: str,
+        access_token: str,
+        project_id: int,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Send project files to backend for architecture analysis."""
+        ...
+
+    @abstractmethod
     async def get_skills(
         self,
         api_url: str,
