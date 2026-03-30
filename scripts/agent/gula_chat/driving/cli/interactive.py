@@ -782,29 +782,40 @@ class InteractiveHandler:
                 except OSError:
                     pass
 
-        # Include a diverse sample of code files from different directories
-        # No hardcoded patterns — let the LLM figure out the architecture
+        # Collect all code files with their sizes, then pick the most
+        # representative ones (largest files have the most patterns).
+        # No hardcoded patterns — the LLM deduces the architecture.
         code_extensions = {".py", ".swift", ".kt", ".ts", ".js", ".dart", ".go", ".rs", ".java"}
-        skip_dirs = {"node_modules", "__pycache__", ".git", "venv", ".venv", "build", "dist", "Pods"}
-        seen_dirs: set = set()
-        for path in sorted(root.rglob("*")):
-            if len(key_files_content) >= 25:
-                break
+        skip_dirs = {"node_modules", "__pycache__", ".git", "venv", ".venv", "build", "dist", "Pods",
+                     "migrations", ".build", "DerivedData"}
+        candidates = []
+        for path in root.rglob("*"):
             if not path.is_file() or path.suffix not in code_extensions:
                 continue
             rel = str(path.relative_to(root))
             if any(s in rel.split("/") for s in skip_dirs):
                 continue
-            # One file per directory for diversity
+            try:
+                size = path.stat().st_size
+                if size < 100:
+                    continue
+                candidates.append((size, rel, path))
+            except OSError:
+                pass
+
+        # Sort by size descending — largest files contain the real patterns
+        candidates.sort(key=lambda x: x[0], reverse=True)
+
+        # Pick top files ensuring diversity across directories
+        seen_dirs: set = set()
+        for _, rel, path in candidates:
+            if len(key_files_content) >= 20:
+                break
             parent = str(path.parent.relative_to(root))
             if parent in seen_dirs:
                 continue
             try:
-                content = path.read_text(errors="replace")
-                # Skip trivial files
-                if len(content.strip()) < 50:
-                    continue
-                key_files_content[rel] = content[:3000]
+                key_files_content[rel] = path.read_text(errors="replace")[:4000]
                 seen_dirs.add(parent)
             except OSError:
                 pass
