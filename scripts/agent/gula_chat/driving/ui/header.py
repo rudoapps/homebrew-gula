@@ -77,14 +77,16 @@ class SessionHeader:
         # RAG status indicator
         if rag_info and rag_info.get("has_index"):
             chunks = rag_info.get("total_chunks", 0)
-            parts.append(f"[agent.rag]RAG:{chunks} chunks[/agent.rag]")
+            indexed_at = rag_info.get("last_indexed_at", "")
+            date_str = f" {indexed_at[:10]}" if indexed_at else ""
+            parts.append(f"[agent.rag]RAG:{chunks} chunks{date_str}[/agent.rag]")
         elif rag_info and rag_info.get("status") == "pending":
             parts.append("[dim]RAG: pendiente[/dim]")
 
         line = " \u00b7 ".join(parts)
         self._console.print(f"  {line}")
 
-        # Linked projects line
+        # Linked projects line with last indexed date
         linked = rag_info.get("linked_projects", []) if rag_info else []
         if linked:
             mentions = []
@@ -92,8 +94,12 @@ class SessionHeader:
                 name = lp.get("name", "")
                 mention = lp.get("mention", "")
                 status = lp.get("status", "")
+                indexed_at = lp.get("last_indexed_at", "")
+                date_str = ""
+                if indexed_at:
+                    date_str = f" {indexed_at[:10]}"
                 if status == "ready":
-                    mentions.append(f"[agent.rag]{mention}[/agent.rag] [dim]{name}[/dim]")
+                    mentions.append(f"[agent.rag]{mention}[/agent.rag] [dim]{name}{date_str}[/dim]")
                 else:
                     mentions.append(f"[dim]{mention} {name} (no indexado)[/dim]")
             self._console.print(f"  [dim]Proyectos:[/dim] {' \u00b7 '.join(mentions)}")
