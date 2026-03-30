@@ -174,8 +174,8 @@ class InteractiveHandler:
             rag_info=rag_info,
         )
 
-        # Offer architecture analysis if project is indexed but has no guide
-        if (rag_info and rag_info.get("has_index")
+        # Offer architecture analysis if project is registered but has no guide
+        if (rag_info and rag_info.get("project_id")
                 and not rag_info.get("has_architecture_guide")):
             await self._offer_architecture_analysis(rag_info)
 
