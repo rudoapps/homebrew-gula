@@ -183,12 +183,22 @@ class InteractiveHandler:
         # Check RAG status for current project (best-effort)
         rag_info = await self._fetch_rag_info()
 
+        # Detect auto-applied skill for this project type
+        active_skill_name = None
+        if self._skill_service:
+            context = self._context_builder.build()
+            project_type = context.get("project_type", "")
+            auto_skill = self._skill_service.get_auto_skill_for_project(project_type)
+            if auto_skill:
+                active_skill_name = f"{auto_skill.icon} {auto_skill.display_name}".strip()
+
         # Show session header
         self._header.show(
             project_name=self._project_name,
             conversation_id=self._conversation_id,
             broadcast_messages=broadcast_messages,
             rag_info=rag_info,
+            active_skill=active_skill_name,
         )
 
         # Offer architecture analysis if project is registered but has no guide

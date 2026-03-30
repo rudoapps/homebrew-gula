@@ -63,6 +63,7 @@ class SessionHeader:
         conversation_id: Optional[int] = None,
         broadcast_messages: Optional[List[Dict[str, Any]]] = None,
         rag_info: Optional[Dict[str, Any]] = None,
+        active_skill: Optional[str] = None,
     ) -> None:
         """Display the session header banner."""
         _SEP = "\u2500" * 70
@@ -103,6 +104,10 @@ class SessionHeader:
                 else:
                     mentions.append(f"[dim]{mention} {name} (no indexado)[/dim]")
             self._console.print(f"  [dim]Proyectos:[/dim] {' \u00b7 '.join(mentions)}")
+
+        # Active skill line
+        if active_skill:
+            self._console.print(f"  [dim]Skill:[/dim] [cyan]{active_skill}[/cyan]")
 
         # Shortcuts line
         self._console.print(

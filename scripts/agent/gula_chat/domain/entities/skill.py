@@ -31,6 +31,7 @@ class Skill:
     allowed_tools: Optional[List[str]] = None
     icon: str = ""
     category: str = "general"
+    auto_apply_project_type: str = ""
 
 
 @dataclass

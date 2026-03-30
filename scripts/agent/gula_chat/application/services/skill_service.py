@@ -62,6 +62,19 @@ class SkillService:
         """Return all loaded skills sorted by category then name."""
         return sorted(self._skills.values(), key=lambda s: (s.category, s.name))
 
+    def get_auto_skill_for_project(self, project_type: str) -> Optional[Skill]:
+        """Find the skill that auto-applies for a project type."""
+        if not project_type:
+            return None
+        for skill in self._skills.values():
+            if skill.auto_apply_project_type and (
+                skill.auto_apply_project_type == project_type
+                or project_type.startswith(skill.auto_apply_project_type + "/")
+                or project_type.startswith(skill.auto_apply_project_type)
+            ):
+                return skill
+        return None
+
     def resolve(self, name: str, args: str) -> Optional[SkillResolution]:
         """Resolve a skill invocation into an expanded prompt.
 
@@ -109,6 +122,7 @@ class SkillService:
                     allowed_tools=s.get("allowed_tools"),
                     icon=s.get("icon", ""),
                     category=s.get("category", "general"),
+                    auto_apply_project_type=s.get("auto_apply_project_type", ""),
                 )
                 for s in skills_raw
                 if "name" in s
