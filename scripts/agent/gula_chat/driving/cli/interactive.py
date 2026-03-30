@@ -772,12 +772,37 @@ class InteractiveHandler:
         context = self._context_builder.build()
         key_files_content = {}
         root = self._context_builder._root
+
+        # Include config/key files
         for kf in context.get("key_files", []):
             path = root / kf
             if path.is_file():
                 try:
-                    content = path.read_text(errors="replace")[:3000]
-                    key_files_content[kf] = content
+                    key_files_content[kf] = path.read_text(errors="replace")[:3000]
+                except OSError:
+                    pass
+
+        # Include representative code files that reveal architecture
+        arch_patterns = [
+            "adapter", "port", "service", "repository", "factory",
+            "router", "controller", "viewmodel", "presenter",
+            "entity", "model", "mapper", "usecase", "interactor",
+        ]
+        code_extensions = {".py", ".swift", ".kt", ".ts", ".js", ".dart", ".go", ".rs"}
+        arch_files_found = 0
+        for path in sorted(root.rglob("*")):
+            if arch_files_found >= 12:
+                break
+            if not path.is_file() or path.suffix not in code_extensions:
+                continue
+            rel = str(path.relative_to(root))
+            if any(skip in rel for skip in ["node_modules", "__pycache__", ".git", "test", "migration"]):
+                continue
+            name_lower = path.stem.lower()
+            if any(p in name_lower for p in arch_patterns):
+                try:
+                    key_files_content[rel] = path.read_text(errors="replace")[:3000]
+                    arch_files_found += 1
                 except OSError:
                     pass
 
