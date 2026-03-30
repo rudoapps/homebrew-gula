@@ -763,12 +763,14 @@ class InteractiveHandler:
             return
 
         project_id = rag_info["project_id"]
-        self._console.print("  [dim]Analizando arquitectura del proyecto...[/dim]")
+
+        from ..ui.spinner import Spinner
+        spinner = Spinner()
+        spinner.start("Analizando arquitectura del proyecto...")
 
         # Build payload from local project
         context = self._context_builder.build()
         key_files_content = {}
-        import os
         root = self._context_builder._root
         for kf in context.get("key_files", []):
             path = root / kf
@@ -778,6 +780,8 @@ class InteractiveHandler:
                     key_files_content[kf] = content
                 except OSError:
                     pass
+
+        spinner.update("Generando guia de arquitectura con IA...")
 
         try:
             config = await self._auth_service.ensure_valid_token()
@@ -793,14 +797,14 @@ class InteractiveHandler:
                 },
             )
             if result.get("status") == "completed":
-                self._console.print(
-                    f"  [success]\u2713[/success] Guia de arquitectura generada "
-                    f"[dim]({result.get('guide_length', 0)} chars)[/dim]"
+                spinner.stop(
+                    f"Guia de arquitectura generada ({result.get('guide_length', 0)} chars)",
+                    "success",
                 )
             else:
-                self._console.print(f"  [red]Error: {result.get('message', 'unknown')}[/red]")
+                spinner.stop(f"Error: {result.get('message', 'unknown')}", "error")
         except Exception as exc:
-            self._console.print(f"  [red]Error al analizar: {exc}[/red]")
+            spinner.stop(f"Error al analizar: {exc}", "error")
 
     async def _do_interactive_login(self) -> Optional["AppConfig"]:
         """Run browser-based login flow with Rich UI feedback.
