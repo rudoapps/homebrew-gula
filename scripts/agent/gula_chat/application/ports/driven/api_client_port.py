@@ -130,6 +130,20 @@ class ApiClientPort(ABC):
         ...
 
     @abstractmethod
+    async def check_rag(
+        self,
+        api_url: str,
+        access_token: str,
+        git_remote_url: str,
+    ) -> Dict[str, Any]:
+        """Check RAG index status and linked projects for a git repo.
+
+        Returns:
+            Dict with has_index, status, project_name, linked_projects, etc.
+        """
+        ...
+
+    @abstractmethod
     async def get_skills(
         self,
         api_url: str,

@@ -291,6 +291,22 @@ class HttpxApiClient(ApiClientPort):
             response.raise_for_status()
             return response.json()
 
+    async def check_rag(
+        self,
+        api_url: str,
+        access_token: str,
+        git_remote_url: str,
+    ) -> Dict[str, Any]:
+        """Check RAG index status and linked projects."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                f"{api_url}/rag/check",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={"git_remote_url": git_remote_url},
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def get_skills(
         self,
         api_url: str,

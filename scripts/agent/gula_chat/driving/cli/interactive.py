@@ -163,11 +163,15 @@ class InteractiveHandler:
             )
             return 1
 
+        # Check RAG status for current project (best-effort)
+        rag_info = await self._fetch_rag_info()
+
         # Show session header
         self._header.show(
             project_name=self._project_name,
             conversation_id=self._conversation_id,
             broadcast_messages=broadcast_messages,
+            rag_info=rag_info,
         )
 
         while True:
@@ -711,6 +715,21 @@ class InteractiveHandler:
             import sys
             print(f"  [dim]broadcast: {exc}[/dim]", file=sys.stderr)
             return {}
+
+    async def _fetch_rag_info(self) -> Optional[dict]:
+        """Fetch RAG project info if current directory is a git repo."""
+        git_url = self._context_builder.get_git_remote_url()
+        if not git_url:
+            return None
+        try:
+            config = await self._auth_service.ensure_valid_token()
+            return await self._api_client.check_rag(
+                api_url=config.api_url,
+                access_token=config.access_token,
+                git_remote_url=git_url,
+            )
+        except Exception:
+            return None
 
     async def _do_interactive_login(self) -> Optional["AppConfig"]:
         """Run browser-based login flow with Rich UI feedback.

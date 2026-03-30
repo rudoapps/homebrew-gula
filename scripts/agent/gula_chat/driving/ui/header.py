@@ -61,17 +61,10 @@ class SessionHeader:
         self,
         project_name: str,
         conversation_id: Optional[int] = None,
-        rag_status: Optional[str] = None,
         broadcast_messages: Optional[List[Dict[str, Any]]] = None,
+        rag_info: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Display the session header banner.
-
-        Args:
-            project_name: Name of the current project (typically git repo name).
-            conversation_id: Current conversation ID, or None for new.
-            rag_status: RAG status string, or None if not available.
-            broadcast_messages: List of broadcast message dicts from the API.
-        """
+        """Display the session header banner."""
         _SEP = "\u2500" * 70
         self._console.print(f"  [dim]{_SEP}[/dim]")
 
@@ -81,11 +74,29 @@ class SessionHeader:
         if conversation_id is not None:
             parts.append(f"[dim]conversacion #{conversation_id}[/dim]")
 
-        if rag_status:
-            parts.append(f"[agent.rag]{rag_status}[/agent.rag]")
+        # RAG status indicator
+        if rag_info and rag_info.get("has_index"):
+            chunks = rag_info.get("total_chunks", 0)
+            parts.append(f"[agent.rag]RAG:{chunks} chunks[/agent.rag]")
+        elif rag_info and rag_info.get("status") == "pending":
+            parts.append("[dim]RAG: pendiente[/dim]")
 
         line = " \u00b7 ".join(parts)
         self._console.print(f"  {line}")
+
+        # Linked projects line
+        linked = rag_info.get("linked_projects", []) if rag_info else []
+        if linked:
+            mentions = []
+            for lp in linked:
+                name = lp.get("name", "")
+                mention = lp.get("mention", "")
+                status = lp.get("status", "")
+                if status == "ready":
+                    mentions.append(f"[agent.rag]{mention}[/agent.rag] [dim]{name}[/dim]")
+                else:
+                    mentions.append(f"[dim]{mention} {name} (no indexado)[/dim]")
+            self._console.print(f"  [dim]Proyectos:[/dim] {' \u00b7 '.join(mentions)}")
 
         # Shortcuts line
         self._console.print(
