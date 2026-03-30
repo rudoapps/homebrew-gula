@@ -150,8 +150,25 @@ class InteractiveHandler:
             except Exception:
                 pass
 
-        # Fetch broadcast messages and version check (best-effort)
-        api_data = await self._fetch_startup_data()
+        # Fetch startup data with server-down retry loop
+        while True:
+            api_data = await self._fetch_startup_data()
+
+            if api_data.get("_server_down"):
+                self._console.print()
+                chosen = await select_option_async(
+                    [
+                        SelectOption(value="retry", label="Reintentar conexion"),
+                        SelectOption(value="exit", label="Salir"),
+                    ],
+                    title=f"\u26a0  {api_data.get('_error', 'El servidor no esta disponible')}",
+                )
+                if chosen == "retry":
+                    continue
+                return 0
+
+            break
+
         broadcast_messages = api_data.get("messages", [])
         self._track_broadcast_ids(broadcast_messages)
         version_check = api_data.get("version_check")
@@ -708,8 +725,7 @@ class InteractiveHandler:
         try:
             config = await self._auth_service.ensure_valid_token()
         except ServerUnavailableError as exc:
-            self._console.print(f"  [yellow]\u26a0 {exc}[/yellow]")
-            return {}
+            return {"_server_down": True, "_error": str(exc)}
         except AuthenticationError:
             # No valid tokens — trigger browser-based login
             config = await self._do_interactive_login()
