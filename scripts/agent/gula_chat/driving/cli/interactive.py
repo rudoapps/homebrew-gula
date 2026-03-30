@@ -782,29 +782,32 @@ class InteractiveHandler:
                 except OSError:
                     pass
 
-        # Include representative code files that reveal architecture
-        arch_patterns = [
-            "adapter", "port", "service", "repository", "factory",
-            "router", "controller", "viewmodel", "presenter",
-            "entity", "model", "mapper", "usecase", "interactor",
-        ]
-        code_extensions = {".py", ".swift", ".kt", ".ts", ".js", ".dart", ".go", ".rs"}
-        arch_files_found = 0
+        # Include a diverse sample of code files from different directories
+        # No hardcoded patterns — let the LLM figure out the architecture
+        code_extensions = {".py", ".swift", ".kt", ".ts", ".js", ".dart", ".go", ".rs", ".java"}
+        skip_dirs = {"node_modules", "__pycache__", ".git", "venv", ".venv", "build", "dist", "Pods"}
+        seen_dirs: set = set()
         for path in sorted(root.rglob("*")):
-            if arch_files_found >= 12:
+            if len(key_files_content) >= 25:
                 break
             if not path.is_file() or path.suffix not in code_extensions:
                 continue
             rel = str(path.relative_to(root))
-            if any(skip in rel for skip in ["node_modules", "__pycache__", ".git", "test", "migration"]):
+            if any(s in rel.split("/") for s in skip_dirs):
                 continue
-            name_lower = path.stem.lower()
-            if any(p in name_lower for p in arch_patterns):
-                try:
-                    key_files_content[rel] = path.read_text(errors="replace")[:3000]
-                    arch_files_found += 1
-                except OSError:
-                    pass
+            # One file per directory for diversity
+            parent = str(path.parent.relative_to(root))
+            if parent in seen_dirs:
+                continue
+            try:
+                content = path.read_text(errors="replace")
+                # Skip trivial files
+                if len(content.strip()) < 50:
+                    continue
+                key_files_content[rel] = content[:3000]
+                seen_dirs.add(parent)
+            except OSError:
+                pass
 
         spinner.update("Generando guia de arquitectura con IA...")
 
