@@ -103,7 +103,8 @@ class SessionHeader:
                     mentions.append(f"[agent.rag]{mention}[/agent.rag] [dim]{name}{date_str}[/dim]")
                 else:
                     mentions.append(f"[dim]{mention} {name} (no indexado)[/dim]")
-            self._console.print(f"  [dim]Proyectos:[/dim] {' \u00b7 '.join(mentions)}")
+            sep = " \u00b7 "
+            self._console.print(f"  [dim]Proyectos:[/dim] {sep.join(mentions)}")
 
         # Active skill line
         if active_skill:
