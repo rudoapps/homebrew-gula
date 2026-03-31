@@ -398,6 +398,17 @@ class InteractiveHandler:
                 if self._tool_orchestrator:
                     self._tool_orchestrator.request_abort()
                 return
+            except Exception as exc:
+                renderer.finalize()
+                error_msg = str(exc)
+                if any(s in error_msg for s in ["502", "503", "504", "conectar", "timeout", "timed out"]):
+                    self._console.print()
+                    self._console.print("  [yellow]\u26a0 El servidor no esta disponible. Intenta de nuevo en unos segundos.[/yellow]")
+                else:
+                    self._console.print()
+                    self._console.print(f"  [red]Error: {error_msg}[/red]")
+                self._console.print()
+                return
 
             finally:
                 renderer.finalize()
