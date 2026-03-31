@@ -28,9 +28,9 @@ def render_markdown(text: str) -> None:
 
     console = get_console()
     md = Markdown(text, code_theme="monokai")
-    # Add 2-space left padding to match the gula agent indentation style
+    # Add 2-space left padding and limit width to prevent resize issues
     padded = Padding(md, (0, 0, 0, 2))
-    console.print(padded)
+    console.print(padded, width=min(console.width, 100))
 
 
 def render_streaming_text(text: str) -> None:
