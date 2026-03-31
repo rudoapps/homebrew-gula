@@ -319,7 +319,7 @@ class LocalToolExecutor(ToolExecutorPort):
             "--max-count", str(MAX_SEARCH_RESULTS),
             "--max-columns", "200",
             "--max-columns-preview",
-            "--binary-file=skip",
+            "--no-binary",
         ]
 
         if not case_sensitive:
@@ -432,14 +432,14 @@ class LocalToolExecutor(ToolExecutorPort):
         context_lines: int,
     ) -> str:
         """Run ripgrep with full output mode support."""
-        cmd = [rg_path, "--no-heading", "--binary-file=skip", "--max-columns", "500"]
+        cmd = [rg_path, "--no-heading", "--no-binary", "--max-columns", "500"]
 
         if case_insensitive:
             cmd.append("--ignore-case")
 
         if output_mode == "files_with_matches":
             cmd.append("--files-with-matches")
-            cmd.append("--sort=modified")
+            cmd.extend(["--sort", "modified"])
         elif output_mode == "count":
             cmd.append("--count")
         else:
@@ -513,7 +513,7 @@ class LocalToolExecutor(ToolExecutorPort):
         if not rg_path:
             return await self._search_code({"query": pattern, "path": path, "output_mode": output_mode})
 
-        cmd = [rg_path, "--no-heading", "--binary-file=skip", "--max-columns", "500"]
+        cmd = [rg_path, "--no-heading", "--no-binary", "--max-columns", "500"]
 
         if case_insensitive:
             cmd.append("--ignore-case")
@@ -526,7 +526,7 @@ class LocalToolExecutor(ToolExecutorPort):
 
         if output_mode == "files_with_matches":
             cmd.append("--files-with-matches")
-            cmd.append("--sort=modified")
+            cmd.extend(["--sort", "modified"])
         elif output_mode == "count":
             cmd.append("--count")
         else:
