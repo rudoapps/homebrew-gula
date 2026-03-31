@@ -70,6 +70,14 @@ class LocalToolExecutor(ToolExecutorPort):
             "edit_file": self._edit_file,
             "run_command": self._run_command,
             "git_info": self._git_info,
+            "web_fetch": self._web_fetch,
+            "find_and_replace": self._find_and_replace,
+            "file_diff": self._file_diff,
+            "move_file": self._move_file,
+            "undo_edit": self._undo_edit,
+            "symbols": self._symbols,
+            "find_definition": self._find_definition,
+            "find_references": self._find_references,
         }
 
         handler = dispatch.get(tool_call.name)
@@ -913,6 +921,304 @@ class LocalToolExecutor(ToolExecutorPort):
             output += f"\n... [truncado]"
 
         return output if output.strip() else f"git {subcommand}: sin salida"
+
+    # ── New tools ─────────────────────────────────────────────────────
+
+    async def _web_fetch(self, inp: Dict[str, Any]) -> str:
+        """Fetch a URL and return content as text/markdown."""
+        import httpx
+
+        url = inp.get("url", "")
+        if not url:
+            raise ValueError("Se requiere el parametro 'url'")
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers={"User-Agent": "gula-agent/1.0"})
+                resp.raise_for_status()
+                content_type = resp.headers.get("content-type", "")
+
+                if "html" in content_type:
+                    # Convert HTML to readable text
+                    text = resp.text
+                    # Strip HTML tags (simple approach)
+                    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
+                    text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL)
+                    text = re.sub(r'<[^>]+>', ' ', text)
+                    text = re.sub(r'\s+', ' ', text).strip()
+                    # Limit size
+                    if len(text) > 15000:
+                        text = text[:15000] + "\n... [truncado]"
+                    return text
+                else:
+                    text = resp.text
+                    if len(text) > 15000:
+                        text = text[:15000] + "\n... [truncado]"
+                    return text
+        except Exception as exc:
+            return f"Error fetching {url}: {exc}"
+
+    async def _find_and_replace(self, inp: Dict[str, Any]) -> str:
+        """Search and replace across multiple files."""
+        search = inp.get("search", "")
+        replace = inp.get("replace", "")
+        file_pattern = inp.get("file_pattern", "")
+        is_regex = inp.get("is_regex", False)
+
+        if not search:
+            raise ValueError("Se requiere el parametro 'search'")
+
+        if is_regex:
+            try:
+                pattern = re.compile(search)
+            except re.error as e:
+                raise ValueError(f"Regex invalida: {e}")
+        else:
+            pattern = re.compile(re.escape(search))
+
+        cwd = self._validator.working_dir
+        changed_files = []
+
+        for root, dirs, files in os.walk(cwd):
+            dirs[:] = [d for d in dirs if not d.startswith(".")
+                       and d not in ("node_modules", "__pycache__", "venv", ".venv", "build", "dist")]
+            for name in files:
+                if name.startswith("."):
+                    continue
+                if file_pattern and not fnmatch.fnmatch(name, file_pattern):
+                    continue
+                full = os.path.join(root, name)
+                try:
+                    with open(full, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                except (OSError, UnicodeDecodeError):
+                    continue
+
+                matches = list(pattern.finditer(content))
+                if not matches:
+                    continue
+
+                # Apply replacement
+                if is_regex:
+                    new_content = pattern.sub(replace, content)
+                else:
+                    new_content = content.replace(search, replace)
+
+                # Backup and write
+                self._backup.create_backup(full)
+                with open(full, "w", encoding="utf-8") as f:
+                    f.write(new_content)
+
+                rel = os.path.relpath(full, cwd)
+                changed_files.append(f"{rel} ({len(matches)} reemplazos)")
+
+        if not changed_files:
+            return f'No se encontraron coincidencias para "{search}"'
+
+        return f"{len(changed_files)} archivos modificados:\n" + "\n".join(changed_files)
+
+    async def _file_diff(self, inp: Dict[str, Any]) -> str:
+        """Show git diff for a file."""
+        path = inp.get("path", "")
+        commit = inp.get("commit", "HEAD")
+
+        if not path:
+            raise ValueError("Se requiere el parametro 'path'")
+
+        ok, resolved = self._validator.validate_read(path)
+        if not ok:
+            raise ToolDeniedError(resolved)
+
+        cmd = ["git", "diff", commit, "--", resolved]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=self._validator.working_dir,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        except asyncio.TimeoutError:
+            return "Timeout de 10 segundos"
+
+        output = stdout.decode("utf-8", errors="replace")
+        if not output.strip():
+            return f"Sin cambios en {path} (comparando con {commit})"
+
+        lines = output.split("\n")
+        if len(lines) > MAX_OUTPUT_LINES:
+            output = "\n".join(lines[:MAX_OUTPUT_LINES]) + "\n... [truncado]"
+
+        return output
+
+    async def _move_file(self, inp: Dict[str, Any]) -> str:
+        """Move or rename a file/directory."""
+        source = inp.get("source", "")
+        destination = inp.get("destination", "")
+
+        if not source or not destination:
+            raise ValueError("Se requieren 'source' y 'destination'")
+
+        ok, resolved_src = self._validator.validate_read(source)
+        if not ok:
+            raise ToolDeniedError(resolved_src)
+        ok, resolved_dst = self._validator.validate_write(destination)
+        if not ok:
+            raise ToolDeniedError(resolved_dst)
+
+        if not os.path.exists(resolved_src):
+            raise FileNotFoundError(f"No encontrado: {source}")
+
+        if self._request_approval:
+            approved = await self._request_approval(
+                f"Mover archivo",
+                f"{source} → {destination}",
+            )
+            if not approved:
+                raise ToolDeniedError("Operacion rechazada por el usuario")
+
+        parent = os.path.dirname(resolved_dst)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+
+        shutil.move(resolved_src, resolved_dst)
+        return f"Movido: {source} → {destination}"
+
+    async def _undo_edit(self, inp: Dict[str, Any]) -> str:
+        """Undo the last edit by restoring from backup."""
+        path = inp.get("path", "")
+        if not path:
+            raise ValueError("Se requiere el parametro 'path'")
+
+        ok, resolved = self._validator.validate_write(path)
+        if not ok:
+            raise ToolDeniedError(resolved)
+
+        # Find the most recent backup for this file
+        index = self._backup._load_index()
+        matching = [e for e in index if e["original_path"] == resolved]
+        if not matching:
+            return f"No hay backup disponible para {path}"
+
+        latest = max(matching, key=lambda e: e["timestamp"])
+        restored = self._backup.restore_backup(latest["backup_id"])
+        if restored:
+            rel = os.path.relpath(resolved, self._validator.working_dir)
+            return f"Restaurado: {rel} (backup aplicado)"
+        return f"Error al restaurar backup para {path}"
+
+    async def _symbols(self, inp: Dict[str, Any]) -> str:
+        """Extract symbol definitions from a file (LSP document_symbols equivalent)."""
+        path = inp.get("path", "")
+        if not path:
+            raise ValueError("Se requiere el parametro 'path'")
+
+        ok, resolved = self._validator.validate_read(path)
+        if not ok:
+            raise ToolDeniedError(resolved)
+
+        if not os.path.isfile(resolved):
+            raise FileNotFoundError(f"Archivo no encontrado: {path}")
+
+        with open(resolved, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+
+        ext = os.path.splitext(resolved)[1].lower()
+        symbols = []
+
+        # Language-aware symbol patterns
+        patterns = {
+            ".py": [
+                (r'^(class\s+\w+)', "class"),
+                (r'^(\s*def\s+\w+)', "function"),
+                (r'^(\s*async\s+def\s+\w+)', "async function"),
+            ],
+            ".swift": [
+                (r'^(\s*(?:class|struct|enum|protocol|actor)\s+\w+)', "type"),
+                (r'^(\s*(?:func|init)\s+\w+)', "function"),
+                (r'^(\s*(?:var|let)\s+\w+)', "property"),
+                (r'^(\s*extension\s+\w+)', "extension"),
+            ],
+            ".kt": [
+                (r'^(\s*(?:class|object|interface|data class|sealed class|enum class)\s+\w+)', "type"),
+                (r'^(\s*(?:fun|suspend fun)\s+\w+)', "function"),
+                (r'^(\s*(?:val|var)\s+\w+)', "property"),
+            ],
+            ".ts": [
+                (r'^(\s*(?:class|interface|type|enum)\s+\w+)', "type"),
+                (r'^(\s*(?:function|async function)\s+\w+)', "function"),
+                (r'^(\s*(?:export\s+)?(?:const|let|var)\s+\w+)', "variable"),
+            ],
+            ".js": [
+                (r'^(\s*class\s+\w+)', "class"),
+                (r'^(\s*(?:function|async function)\s+\w+)', "function"),
+                (r'^(\s*(?:const|let|var)\s+\w+\s*=\s*(?:function|\(|async))', "function"),
+            ],
+            ".dart": [
+                (r'^(\s*(?:class|mixin|extension|enum)\s+\w+)', "type"),
+                (r'^(\s*\w+\s+\w+\s*\()', "function"),
+            ],
+            ".go": [
+                (r'^(type\s+\w+\s+(?:struct|interface))', "type"),
+                (r'^(func\s+(?:\(\w+\s+\*?\w+\)\s+)?\w+)', "function"),
+            ],
+        }
+
+        file_patterns = patterns.get(ext, patterns.get(".py", []))
+
+        for i, line in enumerate(lines, 1):
+            for regex, kind in file_patterns:
+                m = re.match(regex, line)
+                if m:
+                    symbols.append(f"{i:>5} [{kind}] {m.group(1).strip()}")
+                    break
+
+        if not symbols:
+            return f"No se encontraron simbolos en {path}"
+
+        return f"{len(symbols)} simbolos en {path}:\n" + "\n".join(symbols)
+
+    async def _find_definition(self, inp: Dict[str, Any]) -> str:
+        """Find where a symbol is defined in the project (LSP go_to_definition)."""
+        symbol = inp.get("symbol", "")
+        file_pattern = inp.get("file_pattern", "")
+
+        if not symbol:
+            raise ValueError("Se requiere el parametro 'symbol'")
+
+        # Build regex patterns for common definition forms across languages
+        def_patterns = [
+            rf'^\s*(?:class|struct|enum|protocol|interface|actor|type)\s+{re.escape(symbol)}\b',
+            rf'^\s*(?:def|func|fun|function|suspend fun|async def)\s+{re.escape(symbol)}\b',
+            rf'^\s*(?:val|var|let|const)\s+{re.escape(symbol)}\b',
+            rf'^\s*extension\s+{re.escape(symbol)}\b',
+            rf'^\s*data\s+class\s+{re.escape(symbol)}\b',
+        ]
+        combined = "|".join(f"({p})" for p in def_patterns)
+
+        # Use grep to search
+        return await self._grep({
+            "pattern": combined,
+            "output_mode": "content",
+            "glob": file_pattern or None,
+            "head_limit": 20,
+            "context_after": 3,
+        })
+
+    async def _find_references(self, inp: Dict[str, Any]) -> str:
+        """Find all references to a symbol in the project (LSP find_references)."""
+        symbol = inp.get("symbol", "")
+        file_pattern = inp.get("file_pattern", "")
+
+        if not symbol:
+            raise ValueError("Se requiere el parametro 'symbol'")
+
+        return await self._grep({
+            "pattern": rf'\b{re.escape(symbol)}\b',
+            "output_mode": "content",
+            "glob": file_pattern or None,
+            "head_limit": 50,
+        })
 
     # ── Directory access ────────────────────────────────────────────────
 
