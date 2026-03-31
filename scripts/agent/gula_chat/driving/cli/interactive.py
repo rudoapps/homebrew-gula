@@ -110,6 +110,7 @@ class InteractiveHandler:
         self._project_name: str = _detect_project_name()
         self._is_first_message: bool = True
         self._last_broadcast_id: Optional[int] = None
+        self._last_complete_max_iterations: bool = False
 
         # Sub-components
         self._input_handler = InputHandler()
@@ -367,6 +368,7 @@ class InteractiveHandler:
                             self._total_cost += event.session_cost
                         self._turn_count += 1
                         turn_complete = True
+                        self._last_complete_max_iterations = event.max_iterations_reached
 
                     # Accumulate text for /copy
                     if isinstance(event, TextEvent) and event.content:
@@ -442,6 +444,21 @@ class InteractiveHandler:
             # No more tool requests or turn is complete
             if turn_complete or not pending_tool_event:
                 break
+
+        # If max iterations was reached, offer to continue
+        if self._last_complete_max_iterations:
+            self._last_complete_max_iterations = False
+            self._console.print()
+            chosen = await select_option_async(
+                [
+                    SelectOption(value="continue", label="Continuar", description="Seguir con mas iteraciones"),
+                    SelectOption(value="stop", label="Parar", description="Volver al prompt"),
+                ],
+                title="Se ha alcanzado el limite de iteraciones",
+            )
+            if chosen == "continue":
+                await self._send_message("Continua con lo que estabas haciendo")
+                return
 
         self._console.print()
 
