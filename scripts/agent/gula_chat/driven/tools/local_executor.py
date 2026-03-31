@@ -65,6 +65,7 @@ class LocalToolExecutor(ToolExecutorPort):
             "read_file": self._read_file,
             "list_files": self._list_files,
             "search_code": self._search_code,
+            "grep": self._grep,
             "write_file": self._write_file,
             "edit_file": self._edit_file,
             "run_command": self._run_command,
@@ -135,7 +136,7 @@ class LocalToolExecutor(ToolExecutorPort):
     # ── Tool implementations ─────────────────────────────────────────────
 
     async def _read_file(self, inp: Dict[str, Any]) -> str:
-        """Read a file with line numbers (cat -n style)."""
+        """Read a file with line numbers (cat -n style). Supports offset/limit."""
         path = inp.get("path", inp.get("file_path", ""))
         if not path:
             raise ValueError("Se requiere el parametro 'path'")
@@ -151,16 +152,22 @@ class LocalToolExecutor(ToolExecutorPort):
         with open(resolved, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
 
-        # Handle line range if specified
-        start_line = inp.get("start_line")
-        end_line = inp.get("end_line")
-
         lines = content.split("\n")
         total_lines = len(lines)
 
-        if start_line is not None or end_line is not None:
-            s = max(1, int(start_line or 1))
-            e = min(total_lines, int(end_line or total_lines))
+        # Support offset/limit (1-based) and legacy start_line/end_line
+        offset = inp.get("offset") or inp.get("start_line")
+        limit = inp.get("limit")
+        end_line = inp.get("end_line")
+
+        if offset is not None or limit is not None or end_line is not None:
+            s = max(1, int(offset or 1))
+            if limit is not None:
+                e = min(total_lines, s + int(limit) - 1)
+            elif end_line is not None:
+                e = min(total_lines, int(end_line))
+            else:
+                e = total_lines
             lines = lines[s - 1:e]
             start_num = s
         else:
@@ -244,6 +251,17 @@ class LocalToolExecutor(ToolExecutorPort):
         if not matches:
             return f"No se encontraron archivos en {path}"
 
+        # Sort by modification time (most recent first)
+        try:
+            matches.sort(
+                key=lambda m: os.path.getmtime(
+                    os.path.join(cwd, m.rstrip("/"))
+                ) if os.path.exists(os.path.join(cwd, m.rstrip("/"))) else 0,
+                reverse=True,
+            )
+        except OSError:
+            pass
+
         header = f"{len(matches)} archivos"
         if len(matches) >= MAX_SEARCH_RESULTS:
             header += f" (limitado a {MAX_SEARCH_RESULTS})"
@@ -254,25 +272,29 @@ class LocalToolExecutor(ToolExecutorPort):
         """Search for a pattern in code files using ripgrep or fallback."""
         query = inp.get("pattern", inp.get("query", ""))
         path = inp.get("path", inp.get("directory", "."))
-        file_pattern = inp.get("file_pattern", "")
-        case_sensitive = inp.get("case_sensitive", True)
+        file_pattern = inp.get("file_pattern", inp.get("glob", ""))
+        case_insensitive = inp.get("case_insensitive", not inp.get("case_sensitive", True))
+        output_mode = inp.get("output_mode", "content")
+        head_limit = int(inp.get("head_limit", 50))
+        offset = int(inp.get("offset", 0))
+        context_lines = inp.get("context_lines", 3)
 
         if not query:
-            raise ValueError("Se requiere el parametro 'pattern'")
+            raise ValueError("Se requiere el parametro 'query' o 'pattern'")
 
         ok, result = self._validator.validate_read(path)
         if not ok:
             raise ToolDeniedError(result)
         resolved = result
 
-        # Try ripgrep first, fallback to Python
         rg_path = shutil.which("rg")
         if rg_path:
-            return await self._search_with_ripgrep(
-                rg_path, query, resolved, file_pattern, case_sensitive
+            return await self._search_with_ripgrep_v2(
+                rg_path, query, resolved, file_pattern, case_insensitive,
+                output_mode, head_limit, offset, context_lines,
             )
         return self._search_with_python(
-            query, resolved, file_pattern, case_sensitive
+            query, resolved, file_pattern, not case_insensitive
         )
 
     async def _search_with_ripgrep(
@@ -389,6 +411,157 @@ class LocalToolExecutor(ToolExecutorPort):
 
         return "\n".join(matches)
 
+    async def _search_with_ripgrep_v2(
+        self,
+        rg_path: str,
+        query: str,
+        directory: str,
+        file_pattern: str,
+        case_insensitive: bool,
+        output_mode: str,
+        head_limit: int,
+        offset: int,
+        context_lines: int,
+    ) -> str:
+        """Run ripgrep with full output mode support."""
+        cmd = [rg_path, "--no-heading", "--binary-file=skip", "--max-columns", "500"]
+
+        if case_insensitive:
+            cmd.append("--ignore-case")
+
+        if output_mode == "files_with_matches":
+            cmd.append("--files-with-matches")
+            cmd.append("--sort=modified")
+        elif output_mode == "count":
+            cmd.append("--count")
+        else:
+            cmd.append("--line-number")
+            if context_lines:
+                cmd.extend(["-C", str(context_lines)])
+
+        if file_pattern:
+            cmd.extend(["--glob", file_pattern])
+
+        cmd.extend([query, directory])
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+            output = stdout.decode("utf-8", errors="replace").replace("\x00", "")
+
+            if not output.strip():
+                return f'No se encontraron resultados para "{query}"'
+
+            cwd = self._validator.working_dir
+            lines = output.strip().split("\n")
+
+            # Make paths relative
+            relative_lines = []
+            for line in lines:
+                if directory in line:
+                    line = line.replace(directory, os.path.relpath(directory, cwd), 1)
+                relative_lines.append(line)
+
+            # Apply offset and limit
+            if offset > 0:
+                relative_lines = relative_lines[offset:]
+            if head_limit > 0:
+                relative_lines = relative_lines[:head_limit]
+
+            return "\n".join(relative_lines)
+
+        except asyncio.TimeoutError:
+            return "Busqueda cancelada: timeout de 15 segundos"
+        except Exception:
+            return self._search_with_python(query, directory, file_pattern, not case_insensitive)
+
+    async def _grep(self, inp: Dict[str, Any]) -> str:
+        """Powerful grep tool with ripgrep — multiline, file type filter, all output modes."""
+        pattern = inp.get("pattern", "")
+        if not pattern:
+            raise ValueError("Se requiere el parametro 'pattern'")
+
+        path = inp.get("path", ".")
+        ok, result = self._validator.validate_read(path)
+        if not ok:
+            raise ToolDeniedError(result)
+        resolved = result
+
+        glob_filter = inp.get("glob", "")
+        file_type = inp.get("file_type", "")
+        output_mode = inp.get("output_mode", "files_with_matches")
+        case_insensitive = inp.get("case_insensitive", False)
+        multiline = inp.get("multiline", False)
+        head_limit = int(inp.get("head_limit", 50))
+        offset = int(inp.get("offset", 0))
+        context_before = inp.get("context_before", 0)
+        context_after = inp.get("context_after", 0)
+
+        rg_path = shutil.which("rg")
+        if not rg_path:
+            return await self._search_code({"query": pattern, "path": path, "output_mode": output_mode})
+
+        cmd = [rg_path, "--no-heading", "--binary-file=skip", "--max-columns", "500"]
+
+        if case_insensitive:
+            cmd.append("--ignore-case")
+        if multiline:
+            cmd.extend(["-U", "--multiline-dotall"])
+        if glob_filter:
+            cmd.extend(["--glob", glob_filter])
+        if file_type:
+            cmd.extend(["--type", file_type])
+
+        if output_mode == "files_with_matches":
+            cmd.append("--files-with-matches")
+            cmd.append("--sort=modified")
+        elif output_mode == "count":
+            cmd.append("--count")
+        else:
+            cmd.append("--line-number")
+            if context_before:
+                cmd.extend(["-B", str(context_before)])
+            if context_after:
+                cmd.extend(["-A", str(context_after)])
+
+        cmd.extend([pattern, resolved])
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+            output = stdout.decode("utf-8", errors="replace").replace("\x00", "")
+
+            if not output.strip():
+                return f'No se encontraron resultados para "{pattern}"'
+
+            cwd = self._validator.working_dir
+            lines = output.strip().split("\n")
+            relative_lines = []
+            for line in lines:
+                if resolved in line:
+                    line = line.replace(resolved, os.path.relpath(resolved, cwd), 1)
+                relative_lines.append(line)
+
+            if offset > 0:
+                relative_lines = relative_lines[offset:]
+            if head_limit > 0:
+                relative_lines = relative_lines[:head_limit]
+
+            return "\n".join(relative_lines)
+
+        except asyncio.TimeoutError:
+            return "Busqueda cancelada: timeout de 15 segundos"
+        except Exception as exc:
+            return f"Error en grep: {exc}"
+
     async def _write_file(self, inp: Dict[str, Any]) -> str:
         """Write content to a file, creating directories as needed."""
         path = inp.get("path", inp.get("file_path", ""))
@@ -486,8 +659,12 @@ class LocalToolExecutor(ToolExecutorPort):
                     f"Verifica que el texto coincida exactamente."
                 )
         else:
-            # Apply exact replacement
-            new_content = current.replace(old_string, new_string, 1)
+            # Apply replacement (all occurrences or just first)
+            replace_all = inp.get("replace_all", False)
+            if replace_all:
+                new_content = current.replace(old_string, new_string)
+            else:
+                new_content = current.replace(old_string, new_string, 1)
 
         # Calculate diff stats
         old_lines = old_string.count("\n") + 1
@@ -532,6 +709,8 @@ class LocalToolExecutor(ToolExecutorPort):
             int(inp.get("timeout", MAX_COMMAND_TIMEOUT)),
             MAX_COMMAND_TIMEOUT_HARD,
         )
+        background = inp.get("background", False)
+        description = inp.get("description", "")
 
         if not command:
             raise ValueError("Se requiere el parametro 'command'")
@@ -551,6 +730,19 @@ class LocalToolExecutor(ToolExecutorPort):
             )
             if not approved:
                 raise ToolDeniedError("Operacion rechazada por el usuario")
+
+        # Background execution
+        if background:
+            import uuid
+            task_id = str(uuid.uuid4())[:8]
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=self._validator.working_dir,
+            )
+            desc = description or command[:50]
+            return f"Comando ejecutandose en background (pid={proc.pid}, task_id={task_id}): {desc}"
 
         try:
             proc = await asyncio.create_subprocess_shell(
