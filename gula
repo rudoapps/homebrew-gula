@@ -64,6 +64,7 @@ source "$scripts_dir/support/git.sh"
 source "$scripts_dir/support/network.sh"
 source "$scripts_dir/support/os.sh"
 source "$scripts_dir/support/validation.sh"
+source "$scripts_dir/support/bitbucket_repo.sh"
 source "$scripts_dir/agent/agent.sh"
 
 # list_branches function loaded from general_support.sh
@@ -81,6 +82,11 @@ BATCH_MODE="false"
 INTEGRATE_MODE="false"
 INSTALL_MODE_SELECTED="false"  # Indica si el usuario ya eligió modo vía flag
 MODULE_NAMES=()
+BB_USER=""
+BB_TOKEN=""
+BB_WORKSPACE=""
+BB_REPO=""
+BB_PRIVATE="true"
 export FORCE_INSTALL
 export BATCH_MODE
 export INTEGRATE_MODE
@@ -190,6 +196,11 @@ show_help() {
   echo -e "${BOLD}  --module${NC}        Instalar como módulo completo sin preguntar (modo por defecto)"
   echo -e "${BOLD}  --integrate${NC}     [Solo iOS] Integrar en estructura existente (data→data, domain→domain, etc.)"
   echo -e "${BOLD}  --list${NC}          Lista todos los templates disponibles (para template)"
+  echo -e "${BOLD}  --bb-user=XXXX${NC}   Usuario de Bitbucket (requerido con --bb-token)"
+  echo -e "${BOLD}  --bb-token=XXXX${NC}  App Password de Bitbucket (activa creación de repo + push tras create)"
+  echo -e "${BOLD}  --bb-workspace=X${NC} Workspace de Bitbucket (requerido con --bb-token)"
+  echo -e "${BOLD}  --bb-repo=XXXX${NC}  Nombre del repo en Bitbucket (opcional, usa nombre del proyecto)"
+  echo -e "${BOLD}  --bb-public${NC}     Crear repo público (por defecto es privado)"
   echo -e "${BOLD}  --help, -h${NC}      Muestra esta ayuda"
   echo ""
   echo -e "${BOLD}EJEMPLOS DE USO:${NC}"
@@ -218,6 +229,11 @@ show_help() {
   echo "  gula create flutter --key=mi_clave_secreta"
   echo "  gula create ios --key=mi_clave_secreta"
   echo "  gula create python --key=mi_clave_secreta"
+  echo ""
+  echo -e "${BOLD}  Crear proyecto + repo en Bitbucket:${NC}"
+  echo "  gula create flutter --key=mi_clave --bb-user=mi_user --bb-token=APP_PWD --bb-workspace=rudoapps"
+  echo "  gula create python --key=mi_clave --bb-user=mi_user --bb-token=APP_PWD --bb-workspace=rudoapps --bb-repo=mi-api"
+  echo "  gula create ios --key=mi_clave --bb-user=mi_user --bb-token=APP_PWD --bb-workspace=rudoapps --bb-public"
   echo ""
   echo -e "${BOLD}  Generar templates:${NC}"
   echo "  gula template user"
@@ -443,6 +459,23 @@ fi
 # Manejar comando 'ai' — cliente Python
 if [[ "$COMMAND" == "ai" ]]; then
   shift  # Remove 'ai' from args
+
+  # Auto-install Python dependencies if missing
+  _missing_py_deps=()
+  for _dep in httpx rich prompt_toolkit pyyaml; do
+    python3 -c "import $_dep" 2>/dev/null || _missing_py_deps+=("$_dep")
+  done
+  if [ ${#_missing_py_deps[@]} -gt 0 ]; then
+    echo -e "  ${DIM}Instalando dependencias Python: ${_missing_py_deps[*]}...${NC}"
+    pip3 install --quiet httpx rich prompt-toolkit pyyaml 2>/dev/null || \
+      python3 -m pip install --quiet httpx rich prompt-toolkit pyyaml 2>/dev/null || {
+        echo -e "  ${RED}Error: No se pudieron instalar las dependencias Python.${NC}"
+        echo -e "  Ejecuta manualmente: ${BOLD}pip3 install httpx rich prompt-toolkit pyyaml${NC}"
+        exit 1
+      }
+    echo -e "  ${GREEN}✓${NC} Dependencias instaladas"
+  fi
+
   PYTHONPATH="${scripts_dir}/agent" exec python3 -m gula_chat "$@"
 fi
 
@@ -508,6 +541,21 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --list)
       LIST_TEMPLATES="true"
+      ;;
+    --bb-user=*)
+      BB_USER="${1#*=}"
+      ;;
+    --bb-token=*)
+      BB_TOKEN="${1#*=}"
+      ;;
+    --bb-workspace=*)
+      BB_WORKSPACE="${1#*=}"
+      ;;
+    --bb-repo=*)
+      BB_REPO="${1#*=}"
+      ;;
+    --bb-public)
+      BB_PRIVATE="false"
       ;;
     --help|-h)
       COMMAND="help"
@@ -599,6 +647,41 @@ elif [ "$COMMAND" == "create" ]; then
     exit 1
   fi
   create_project "$MODULE_NAME"
+
+  # Post-create: configurar repo en Bitbucket si se pasaron los flags
+  if [ -n "$BB_TOKEN" ]; then
+    if [ -z "$BB_USER" ] || [ -z "$BB_WORKSPACE" ]; then
+      echo -e "${RED}Error: Se requieren --bb-user y --bb-workspace para crear el repo en Bitbucket.${NC}"
+      echo "Uso: gula create <platform> --key=XXX --bb-user=usuario --bb-token=YYY --bb-workspace=mi_workspace [--bb-repo=nombre_repo]"
+      exit 1
+    fi
+
+    # Determinar el directorio del proyecto creado
+    # Cada plataforma usa distinta variable: projectPath (ios/python), PROJECT_PATH (android/flutter)
+    CREATED_PROJECT_DIR="${projectPath:-${PROJECT_PATH:-}}"
+
+    if [ -z "$CREATED_PROJECT_DIR" ] || [ ! -d "$CREATED_PROJECT_DIR" ]; then
+      echo -e "${RED}Error: No se pudo determinar el directorio del proyecto creado.${NC}"
+      exit 1
+    fi
+
+    # Si no se especificó nombre de repo, usar el nombre del proyecto
+    if [ -z "$BB_REPO" ]; then
+      BB_REPO=$(basename "$CREATED_PROJECT_DIR")
+    fi
+
+    # Normalizar nombre del repo (lowercase, sin espacios)
+    BB_REPO=$(echo "$BB_REPO" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+
+    # Guardar directorio actual y entrar al proyecto
+    ORIGINAL_DIR="$PWD"
+    cd "$CREATED_PROJECT_DIR"
+
+    setup_bitbucket_repo "$BB_USER" "$BB_TOKEN" "$BB_WORKSPACE" "$BB_REPO" "$BB_PRIVATE"
+
+    # Volver al directorio original
+    cd "$ORIGINAL_DIR"
+  fi
 elif [ "$COMMAND" == "branches" ]; then
   if [ -z "$KEY" ]; then
     if [ "$JSON_OUTPUT" = "true" ]; then
