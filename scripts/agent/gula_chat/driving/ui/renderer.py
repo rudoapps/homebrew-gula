@@ -49,7 +49,6 @@ class SSERenderer:
         self._model: str = ""
         self._rag_indicator: str = ""
         self._conversation_id: Optional[int] = None
-        self._last_render_len: int = 0
 
     def render(self, event: SSEEvent) -> None:
         """Render a single SSE event to the console.
@@ -134,11 +133,6 @@ class SSERenderer:
             self._show_header()
 
         self._text_chunks.append(event.content)
-
-        # Stream text progressively (render every ~200 chars)
-        total = sum(len(c) for c in self._text_chunks)
-        if total - self._last_render_len > 200:
-            self._render_incremental()
 
     def _handle_tool_requests(self, event: ToolRequestsEvent) -> None:
         self._flush_remaining_text()
@@ -299,15 +293,6 @@ class SSERenderer:
 
     # ── Internal helpers ────────────────────────────────────────────────
 
-    def _render_incremental(self) -> None:
-        """Render accumulated text progressively during streaming."""
-        from .markdown import render_streaming_text
-        full = "".join(self._text_chunks)
-        new_text = full[self._last_render_len:]
-        if new_text:
-            render_streaming_text(new_text)
-            self._last_render_len = len(full)
-
     def _show_header(self) -> None:
         """Print the Agent response header."""
         if self._header_shown:
@@ -322,7 +307,7 @@ class SSERenderer:
         self._console.print()
 
     def _flush_remaining_text(self) -> None:
-        """Render any remaining text as final markdown."""
+        """Render any buffered text as markdown."""
         if not self._text_chunks:
             return
 
@@ -331,21 +316,7 @@ class SSERenderer:
         if full_text.strip():
             if not self._header_shown:
                 self._show_header()
-
-            if self._last_render_len > 0:
-                # We already streamed partial text — render remaining as streaming
-                remaining = full_text[self._last_render_len:]
-                if remaining.strip():
-                    from .markdown import render_streaming_text
-                    render_streaming_text(remaining)
-                # Print newline to end streaming block
-                import sys
-                sys.stderr.write("\n")
-                sys.stderr.flush()
-            else:
-                # No streaming happened — render full markdown
-                render_markdown(full_text)
+            render_markdown(full_text)
 
         # Reset for next turn
         self._text_chunks.clear()
-        self._last_render_len = 0
