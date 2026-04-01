@@ -116,6 +116,9 @@ class SlashCommandRegistry:
             "memoria": self._cmd_memories,
             "forget": self._cmd_forget,
             "olvidar": self._cmd_forget,
+            "commit": self._cmd_commit,
+            "review": self._cmd_review,
+            "context": self._cmd_context,
             # Subagent commands
             "subagents": self._cmd_subagents,
             "subagent": self._cmd_subagent,
@@ -229,6 +232,9 @@ class SlashCommandRegistry:
             "  /models           Listar modelos disponibles\n"
             "  /model <id>       Cambiar modelo\n"
             "  /analyze          Analizar arquitectura del proyecto\n"
+            "  /commit [msg]     Commit con mensaje auto-generado o manual\n"
+            "  /review           Code review de los cambios actuales\n"
+            "  /context          Diagnostico de tokens y contexto\n"
             "  /mode <modo>      Permisos: auto|ask|plan\n"
             "  /remember <texto> Guardar en memoria persistente\n"
             "  /memories         Ver memorias guardadas\n"
@@ -312,6 +318,21 @@ class SlashCommandRegistry:
         if LocalMemory().delete_memory(filename):
             return CommandResult(handled=True, output=f"  [success]\u2713[/success] Memoria eliminada: {filename}")
         return CommandResult(handled=True, output=f"  [red]No encontrada: {filename}[/red]")
+
+    def _cmd_commit(self, args: str) -> CommandResult:
+        """Generate commit message from diff and commit."""
+        msg = args.strip()
+        if msg:
+            return CommandResult(handled=True, action="commit_with_message", action_data=msg)
+        return CommandResult(handled=True, action="commit_auto")
+
+    def _cmd_review(self, args: str) -> CommandResult:
+        """Review current changes with AI."""
+        return CommandResult(handled=True, action="review_changes")
+
+    def _cmd_context(self, args: str) -> CommandResult:
+        """Show token context diagnostics."""
+        return CommandResult(handled=True, action="show_context")
 
     def _cmd_mode(self, args: str) -> CommandResult:
         """Change permission mode."""

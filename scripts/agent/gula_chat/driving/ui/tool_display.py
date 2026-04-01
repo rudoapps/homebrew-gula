@@ -312,6 +312,13 @@ class ToolDisplay:
         """Alias for show_parallel_summary (ToolProgressCallback protocol)."""
         self.show_parallel_summary(count, elapsed, has_errors)
 
+    def on_multi_file_preview(self, count: int, summary: str) -> None:
+        """Show preview of multiple file edits before execution."""
+        self._console.print()
+        self._console.print(f"  [bold cyan]\u2139 {count} archivos a modificar:[/bold cyan]")
+        for line in summary.strip().split("\n"):
+            self._console.print(f"  [dim]{line.strip()}[/dim]")
+
 
 def _extract_command_summary(output: str) -> str:
     """Extract a one-line summary from command output.

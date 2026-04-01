@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
@@ -64,11 +65,20 @@ class InputHandler:
 
     def __init__(self) -> None:
         history_path = _get_history_path()
+        # Completions for slash commands and @mentions
+        _completions = [
+            "/help", "/new", "/cost", "/copy", "/clear", "/models", "/model",
+            "/resume", "/quota", "/analyze", "/mode", "/commit", "/review",
+            "/context", "/remember", "/memories", "/forget", "/skills",
+            "/undo", "/diff",
+            "@ios", "@back", "@backend", "@android", "@flutter", "@web",
+        ]
         self._session: PromptSession[str] = PromptSession(
             history=FileHistory(str(history_path)),
             auto_suggest=AutoSuggestFromHistory(),
+            completer=WordCompleter(_completions, sentence=True),
             key_bindings=_build_key_bindings(),
-            multiline=False,  # Enter submits; Esc+Enter for newlines
+            multiline=False,
             enable_open_in_editor=False,
         )
         self._console = get_console()

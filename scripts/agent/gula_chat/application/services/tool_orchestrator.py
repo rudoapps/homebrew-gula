@@ -40,6 +40,14 @@ class ToolProgressCallback(Protocol):
         """Called after a batch of parallel tools completes."""
         ...
 
+    def on_multi_file_preview(
+        self,
+        count: int,
+        summary: str,
+    ) -> None:
+        """Called before executing multiple file edits."""
+        ...
+
 
 class ToolOrchestrator:
     """Orchestrates tool execution: classifies, schedules, and tracks results.
@@ -118,6 +126,23 @@ class ToolOrchestrator:
                 self._progress.on_parallel_summary(
                     len(parallel), elapsed, has_errors
                 )
+
+        # ── Multi-file preview: show summary before sequential edits ──
+        write_edits = [tc for tc in sequential if tc.name in ("write_file", "edit_file")]
+        if len(write_edits) > 1 and self._progress:
+            import os
+            summary_lines = []
+            for tc in write_edits:
+                path = tc.input.get("path", tc.input.get("file_path", "?"))
+                if tc.name == "edit_file":
+                    old = tc.input.get("old_string", "")[:60].replace("\n", " ")
+                    summary_lines.append(f"  edit {path} ({len(old)} chars)")
+                else:
+                    size = len(tc.input.get("content", ""))
+                    summary_lines.append(f"  write {path} ({size} chars)")
+            self._progress.on_multi_file_preview(
+                len(write_edits), "\n".join(summary_lines)
+            )
 
         # ── Phase 2: sequential tools ────────────────────────────────
         for tc in sequential:

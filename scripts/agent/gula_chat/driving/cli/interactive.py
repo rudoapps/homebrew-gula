@@ -295,6 +295,19 @@ class InteractiveHandler:
                         icon = icons.get(mode.value, "")
                         self._console.print(f"  {icon} Modo: [bold]{mode.value}[/bold]")
 
+                elif cmd_result.action == "commit_auto":
+                    await self._handle_commit()
+
+                elif cmd_result.action == "commit_with_message":
+                    if cmd_result.action_data:
+                        await self._handle_commit(cmd_result.action_data)
+
+                elif cmd_result.action == "review_changes":
+                    await self._handle_review()
+
+                elif cmd_result.action == "show_context":
+                    await self._handle_context()
+
                 elif cmd_result.action == "analyze_architecture":
                     await self._run_architecture_analysis()
 
@@ -779,6 +792,142 @@ class InteractiveHandler:
             if msg_id is not None:
                 if self._last_broadcast_id is None or msg_id > self._last_broadcast_id:
                     self._last_broadcast_id = msg_id
+
+    async def _handle_commit(self, message: Optional[str] = None) -> None:
+        """Commit changes with auto-generated or manual message."""
+        import subprocess
+
+        # Get diff
+        diff_result = subprocess.run(
+            ["git", "diff", "--stat"],
+            capture_output=True, text=True,
+            cwd=self._context_builder._root,
+        )
+        staged_result = subprocess.run(
+            ["git", "diff", "--cached", "--stat"],
+            capture_output=True, text=True,
+            cwd=self._context_builder._root,
+        )
+
+        diff_stat = diff_result.stdout.strip() + staged_result.stdout.strip()
+        if not diff_stat:
+            self._console.print("  [dim]No hay cambios para commitear.[/dim]")
+            return
+
+        if not message:
+            # Auto-generate message using the LLM
+            diff_detail = subprocess.run(
+                ["git", "diff", "--no-color"],
+                capture_output=True, text=True,
+                cwd=self._context_builder._root,
+            ).stdout[:3000]
+
+            await self._send_message(
+                f"Genera un mensaje de commit conciso (1-2 líneas, en inglés) para estos cambios. "
+                f"Solo responde con el mensaje, nada más.\n\n```\n{diff_stat}\n\n{diff_detail}\n```"
+            )
+            return
+
+        # Stage all and commit with provided message
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=self._context_builder._root,
+        )
+        result = subprocess.run(
+            ["git", "commit", "-m", message],
+            capture_output=True, text=True,
+            cwd=self._context_builder._root,
+        )
+        if result.returncode == 0:
+            self._console.print(f"  [success]\u2713[/success] {result.stdout.strip()}")
+        else:
+            self._console.print(f"  [red]{result.stderr.strip()}[/red]")
+
+    async def _handle_review(self) -> None:
+        """Review current git changes with AI."""
+        import subprocess
+
+        diff = subprocess.run(
+            ["git", "diff", "--no-color"],
+            capture_output=True, text=True,
+            cwd=self._context_builder._root,
+        ).stdout
+
+        staged = subprocess.run(
+            ["git", "diff", "--cached", "--no-color"],
+            capture_output=True, text=True,
+            cwd=self._context_builder._root,
+        ).stdout
+
+        combined = (diff + staged).strip()
+        if not combined:
+            self._console.print("  [dim]No hay cambios para revisar.[/dim]")
+            return
+
+        if len(combined) > 5000:
+            combined = combined[:5000] + "\n... [truncado]"
+
+        await self._send_message(
+            f"Revisa estos cambios de código. Da feedback conciso sobre:\n"
+            f"- Posibles bugs o errores\n"
+            f"- Mejoras de calidad/legibilidad\n"
+            f"- Problemas de seguridad\n"
+            f"- Si respeta la arquitectura del proyecto\n\n"
+            f"```diff\n{combined}\n```"
+        )
+
+    async def _handle_context(self) -> None:
+        """Show token context diagnostics."""
+        context = self._context_builder.build()
+        file_tree_size = len(context.get("file_tree", ""))
+        deps_size = len(context.get("dependencies", ""))
+        rules_size = len(context.get("project_rules", ""))
+
+        # Estimate token counts (rough: 1 token ≈ 4 chars)
+        def est(chars: int) -> str:
+            tokens = chars // 4
+            if tokens > 1000:
+                return f"~{tokens // 1000}K tokens"
+            return f"~{tokens} tokens"
+
+        lines = [
+            "",
+            "  [bold]Diagnostico de contexto[/bold]",
+            "",
+            f"  Conversacion:     #{self._conversation_id or 'nueva'}",
+            f"  Turnos:           {self._turn_count}",
+            f"  Coste acumulado:  ${self._total_cost:.4f}",
+            "",
+            "  [bold]Contexto enviado por turno:[/bold]",
+            f"  System prompt:    ~10K tokens (base)",
+            f"  File tree:        {est(file_tree_size)} ({file_tree_size} chars)",
+            f"  Dependencias:     {est(deps_size)} ({deps_size} chars)",
+            f"  Project rules:    {est(rules_size)} ({rules_size} chars)",
+        ]
+
+        # Check if architecture guide and skills are active
+        rag_info = await self._fetch_rag_info()
+        if rag_info and rag_info.get("has_architecture_guide"):
+            lines.append(f"  Guia arquitectura: ~1.5K tokens (del proyecto)")
+
+        if self._skill_service:
+            ctx = context.get("project_type", "")
+            auto_skill = self._skill_service.get_auto_skill_for_project(ctx)
+            if auto_skill:
+                skill_size = len(auto_skill.system_prompt_addition or "")
+                lines.append(f"  Skill activa:     {est(skill_size)} ({auto_skill.display_name})")
+
+        # Memory
+        try:
+            from ...driven.memory.local_memory import LocalMemory
+            mem = LocalMemory().get_all_memories()
+            if mem:
+                lines.append(f"  Memoria usuario:  {est(len(mem))}")
+        except Exception:
+            pass
+
+        lines.append("")
+        self._console.print("\n".join(lines))
 
     async def _fetch_startup_data(self) -> dict:
         """Fetch broadcast messages and version check.
