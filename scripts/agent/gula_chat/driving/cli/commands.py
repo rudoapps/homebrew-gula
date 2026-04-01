@@ -110,6 +110,12 @@ class SlashCommandRegistry:
             "analizar": self._cmd_analyze,
             "mode": self._cmd_mode,
             "modo": self._cmd_mode,
+            "remember": self._cmd_remember,
+            "recordar": self._cmd_remember,
+            "memories": self._cmd_memories,
+            "memoria": self._cmd_memories,
+            "forget": self._cmd_forget,
+            "olvidar": self._cmd_forget,
             # Subagent commands
             "subagents": self._cmd_subagents,
             "subagent": self._cmd_subagent,
@@ -224,6 +230,9 @@ class SlashCommandRegistry:
             "  /model <id>       Cambiar modelo\n"
             "  /analyze          Analizar arquitectura del proyecto\n"
             "  /mode <modo>      Permisos: auto|ask|plan\n"
+            "  /remember <texto> Guardar en memoria persistente\n"
+            "  /memories         Ver memorias guardadas\n"
+            "  /forget <archivo> Eliminar una memoria\n"
             "  /resume <id>      Retomar conversacion por ID\n"
             "  /undo             Deshacer ultimo cambio (stub)\n"
             "  /diff             Mostrar cambios recientes (stub)\n"
@@ -264,6 +273,45 @@ class SlashCommandRegistry:
                     help_text += f"\n  /{s.name:<16} {icon}{s.description}"
 
         return CommandResult(handled=True, output=help_text)
+
+    def _cmd_remember(self, args: str) -> CommandResult:
+        """Save a memory."""
+        text = args.strip()
+        if not text:
+            return CommandResult(handled=True, output="  [dim]Uso: /remember <lo que quieres que recuerde>[/dim]")
+        from ...driven.memory.local_memory import LocalMemory
+        mem = LocalMemory()
+        # Auto-detect type
+        if any(w in text.lower() for w in ["no hagas", "no uses", "siempre", "nunca", "prefiero"]):
+            mem_type = "feedback"
+        else:
+            mem_type = "user"
+        name = text[:50]
+        mem.save_memory(name, text, mem_type)
+        return CommandResult(handled=True, output=f"  [success]\u2713[/success] Guardado en memoria ({mem_type})")
+
+    def _cmd_memories(self, args: str) -> CommandResult:
+        """List saved memories."""
+        from ...driven.memory.local_memory import LocalMemory
+        memories = LocalMemory().list_memories()
+        if not memories:
+            return CommandResult(handled=True, output="  [dim]No hay memorias guardadas.[/dim]")
+        lines = ["", "  [bold]Memorias guardadas:[/bold]", ""]
+        for m in memories:
+            lines.append(f"  [dim]{m['file']}[/dim] — {m['name']}")
+        lines.append("")
+        lines.append("  [dim]Usa /forget <archivo> para eliminar[/dim]")
+        return CommandResult(handled=True, output="\n".join(lines))
+
+    def _cmd_forget(self, args: str) -> CommandResult:
+        """Delete a memory."""
+        filename = args.strip()
+        if not filename:
+            return CommandResult(handled=True, output="  [dim]Uso: /forget <nombre_archivo.md>[/dim]")
+        from ...driven.memory.local_memory import LocalMemory
+        if LocalMemory().delete_memory(filename):
+            return CommandResult(handled=True, output=f"  [success]\u2713[/success] Memoria eliminada: {filename}")
+        return CommandResult(handled=True, output=f"  [red]No encontrada: {filename}[/red]")
 
     def _cmd_mode(self, args: str) -> CommandResult:
         """Change permission mode."""

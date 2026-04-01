@@ -338,6 +338,19 @@ class InteractiveHandler:
 
         # Build full project context on every new prompt (matches bash behavior)
         project_context = self._context_builder.build()
+
+        # Inject persistent memory on first message of session
+        if self._is_first_message:
+            try:
+                from ...driven.memory.local_memory import LocalMemory
+                memory_content = LocalMemory().get_all_memories()
+                if memory_content:
+                    if not system_prompt_addition:
+                        system_prompt_addition = ""
+                    system_prompt_addition += f"\n\n# Memoria del usuario (preferencias guardadas)\n{memory_content}"
+            except Exception:
+                pass
+
         self._is_first_message = False
 
         # Extract git_remote_url for RAG (top-level field, like bash client)
