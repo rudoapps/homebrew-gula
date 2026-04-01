@@ -119,6 +119,8 @@ class SlashCommandRegistry:
             "commit": self._cmd_commit,
             "review": self._cmd_review,
             "context": self._cmd_context,
+            "changes": self._cmd_changes,
+            "cambios": self._cmd_changes,
             # Subagent commands
             "subagents": self._cmd_subagents,
             "subagent": self._cmd_subagent,
@@ -232,6 +234,7 @@ class SlashCommandRegistry:
             "  /models           Listar modelos disponibles\n"
             "  /model <id>       Cambiar modelo\n"
             "  /analyze          Analizar arquitectura del proyecto\n"
+            "  /changes          Archivos modificados en esta sesion\n"
             "  /commit [msg]     Commit con mensaje auto-generado o manual\n"
             "  /review           Code review de los cambios actuales\n"
             "  /context          Diagnostico de tokens y contexto\n"
@@ -318,6 +321,10 @@ class SlashCommandRegistry:
         if LocalMemory().delete_memory(filename):
             return CommandResult(handled=True, output=f"  [success]\u2713[/success] Memoria eliminada: {filename}")
         return CommandResult(handled=True, output=f"  [red]No encontrada: {filename}[/red]")
+
+    def _cmd_changes(self, args: str) -> CommandResult:
+        """Show files changed in this session."""
+        return CommandResult(handled=True, action="show_changes")
 
     def _cmd_commit(self, args: str) -> CommandResult:
         """Generate commit message from diff and commit."""

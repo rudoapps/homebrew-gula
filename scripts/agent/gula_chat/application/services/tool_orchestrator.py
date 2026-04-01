@@ -61,6 +61,8 @@ class ToolOrchestrator:
         progress: Optional callback for UI feedback.
     """
 
+    DENIAL_THRESHOLD = 3  # After this many denials, inject warning
+
     def __init__(
         self,
         executor: ToolExecutorPort,
@@ -73,11 +75,18 @@ class ToolOrchestrator:
         self._abort_event = asyncio.Event()
         self._read_cache: Dict[str, str] = {}
         self._thread_pool = ThreadPoolExecutor(max_workers=4)
+        self._denial_counts: Dict[str, int] = {}  # tool_name → consecutive denials
+        self._file_changes: List[Dict[str, str]] = []  # session file change log
 
     @property
     def read_cache(self) -> Dict[str, str]:
         """Expose the read_file cache for inspection."""
         return self._read_cache
+
+    @property
+    def file_changes(self) -> List[Dict[str, str]]:
+        """Log of all file changes in this session."""
+        return self._file_changes
 
     def request_abort(self) -> None:
         """Signal that all pending tool execution should abort."""
@@ -157,6 +166,27 @@ class ToolOrchestrator:
 
             result = await self._run_single(tc)
             results[tc.id] = result
+
+            # Track denials
+            if not result.success and "rechazada" in result.output.lower():
+                self._denial_counts[tc.name] = self._denial_counts.get(tc.name, 0) + 1
+                if self._denial_counts[tc.name] >= self.DENIAL_THRESHOLD:
+                    result.output += (
+                        f"\n\n[SISTEMA] El usuario ha rechazado {tc.name} "
+                        f"{self._denial_counts[tc.name]} veces consecutivas. "
+                        f"CAMBIA de estrategia: pregunta al usuario qué approach prefiere "
+                        f"o propón una alternativa diferente."
+                    )
+            elif result.success:
+                self._denial_counts.pop(tc.name, None)
+
+            # Track file changes for /changes
+            if tc.name in ("write_file", "edit_file", "move_file") and result.success:
+                path = tc.input.get("path", tc.input.get("file_path", ""))
+                self._file_changes.append({
+                    "action": tc.name.replace("_file", ""),
+                    "path": path,
+                })
 
             # Invalidate read cache on write/edit
             if tc.name in ("write_file", "edit_file") and result.success:

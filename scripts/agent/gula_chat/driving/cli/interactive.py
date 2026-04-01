@@ -295,6 +295,20 @@ class InteractiveHandler:
                         icon = icons.get(mode.value, "")
                         self._console.print(f"  {icon} Modo: [bold]{mode.value}[/bold]")
 
+                elif cmd_result.action == "show_changes":
+                    if self._tool_orchestrator:
+                        changes = self._tool_orchestrator.file_changes
+                        if not changes:
+                            self._console.print("  [dim]No hay cambios en esta sesion.[/dim]")
+                        else:
+                            self._console.print()
+                            self._console.print(f"  [bold]{len(changes)} archivos modificados:[/bold]")
+                            icons = {"write": "\u2795", "edit": "\u270f\ufe0f ", "move": "\u27a1\ufe0f "}
+                            for c in changes:
+                                icon = icons.get(c["action"], "\u2022")
+                                self._console.print(f"  {icon} [dim]{c['action']}[/dim] {c['path']}")
+                            self._console.print()
+
                 elif cmd_result.action == "commit_auto":
                     await self._handle_commit()
 
