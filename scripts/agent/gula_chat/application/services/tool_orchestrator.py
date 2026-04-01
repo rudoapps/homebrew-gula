@@ -57,9 +57,11 @@ class ToolOrchestrator:
         self,
         executor: ToolExecutorPort,
         progress: Optional[ToolProgressCallback] = None,
+        hook_runner: Optional[Any] = None,
     ) -> None:
         self._executor = executor
         self._progress = progress
+        self._hook_runner = hook_runner
         self._abort_event = asyncio.Event()
         self._read_cache: Dict[str, str] = {}
         self._thread_pool = ThreadPoolExecutor(max_workers=4)
@@ -187,7 +189,29 @@ class ToolOrchestrator:
                         )
                     return result
 
+            # Pre-tool hooks
+            if self._hook_runner:
+                pre_results = await self._hook_runner.run_hooks(
+                    "pre_tool_use", tool_call.name, tool_call.input
+                )
+                for hr in pre_results:
+                    if hr.blocked:
+                        return ToolResult(
+                            id=tool_call.id,
+                            name=tool_call.name,
+                            output=f"Bloqueado por hook '{hr.name}': {hr.stderr}",
+                            success=False,
+                        )
+
             result = await self._executor.execute(tool_call)
+
+            # Post-tool hooks
+            if self._hook_runner:
+                await self._hook_runner.run_hooks(
+                    "post_tool_use", tool_call.name, tool_call.input,
+                    tool_output=result.output[:500] if result.output else "",
+                )
+
         except Exception as exc:
             result = ToolResult(
                 id=tool_call.id,
