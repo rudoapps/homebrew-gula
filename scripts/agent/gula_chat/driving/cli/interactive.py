@@ -280,6 +280,21 @@ class InteractiveHandler:
                 elif cmd_result.action == "list_skills":
                     self._handle_list_skills()
 
+                elif cmd_result.action == "show_mode":
+                    if self._tool_orchestrator:
+                        mode = self._tool_orchestrator._executor.permission_mode.value
+                        self._console.print(f"  Modo actual: [bold]{mode}[/bold]")
+                        self._console.print("  [dim]Usa /mode <auto|ask|plan> para cambiar[/dim]")
+
+                elif cmd_result.action == "change_mode":
+                    if self._tool_orchestrator and cmd_result.action_data:
+                        from ...domain.entities.permission_mode import PermissionMode
+                        mode = PermissionMode(cmd_result.action_data)
+                        self._tool_orchestrator._executor.set_permission_mode(mode)
+                        icons = {"auto": "\u26a1", "ask": "\U0001f512", "plan": "\U0001f4cb"}
+                        icon = icons.get(mode.value, "")
+                        self._console.print(f"  {icon} Modo: [bold]{mode.value}[/bold]")
+
                 elif cmd_result.action == "analyze_architecture":
                     await self._run_architecture_analysis()
 

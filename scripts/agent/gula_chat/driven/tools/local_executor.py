@@ -22,6 +22,7 @@ from ...domain.entities.tool_metadata import (
 )
 from .path_validator import PathValidator, OutsideAllowedDirError
 from .file_backup import FileBackup
+from ...domain.entities.permission_mode import PermissionMode
 
 
 # Type alias for the approval callback
@@ -51,6 +52,25 @@ class LocalToolExecutor(ToolExecutorPort):
         self._validator = path_validator
         self._backup = file_backup
         self._request_approval = request_approval
+        self._permission_mode = PermissionMode.ASK
+
+    def set_permission_mode(self, mode: PermissionMode) -> None:
+        """Change the permission mode."""
+        self._permission_mode = mode
+
+    @property
+    def permission_mode(self) -> PermissionMode:
+        return self._permission_mode
+
+    async def _check_approval(self, title: str, detail: str) -> bool:
+        """Check approval based on current permission mode."""
+        if self._permission_mode == PermissionMode.AUTO:
+            return True
+        if self._permission_mode == PermissionMode.PLAN:
+            raise ToolDeniedError(f"[PLAN] {title}\n{detail}")
+        if self._request_approval:
+            return await self._check_approval(title, detail)
+        return True
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
         """Dispatch a tool call to the appropriate handler.
@@ -607,7 +627,7 @@ class LocalToolExecutor(ToolExecutorPort):
                 if sensitive:
                     detail = f"[SENSIBLE: {sensitive}]\n{detail}"
 
-            approved = await self._request_approval(title, detail)
+            approved = await self._check_approval(title, detail)
             if not approved:
                 raise ToolDeniedError("Operacion rechazada por el usuario")
 
@@ -690,7 +710,7 @@ class LocalToolExecutor(ToolExecutorPort):
             if sensitive:
                 detail = f"[SENSIBLE: {sensitive}]\n{detail}"
 
-            approved = await self._request_approval(title, detail)
+            approved = await self._check_approval(title, detail)
             if not approved:
                 raise ToolDeniedError("Operacion rechazada por el usuario")
 
@@ -732,7 +752,7 @@ class LocalToolExecutor(ToolExecutorPort):
             if script_content:
                 detail += f"\n\n── contenido del script ──\n{script_content}"
 
-            approved = await self._request_approval(
+            approved = await self._check_approval(
                 f"Ejecutar comando",
                 detail,
             )
@@ -1070,7 +1090,7 @@ class LocalToolExecutor(ToolExecutorPort):
             raise FileNotFoundError(f"No encontrado: {source}")
 
         if self._request_approval:
-            approved = await self._request_approval(
+            approved = await self._check_approval(
                 f"Mover archivo",
                 f"{source} → {destination}",
             )
@@ -1231,7 +1251,7 @@ class LocalToolExecutor(ToolExecutorPort):
         if not self._request_approval:
             return False
 
-        approved = await self._request_approval(
+        approved = await self._check_approval(
             f"Acceder a {exc.requested_dir}",
             (
                 f"El agente quiere acceder a '{exc.raw_path}' que esta fuera\n"

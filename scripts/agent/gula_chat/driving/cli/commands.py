@@ -108,6 +108,8 @@ class SlashCommandRegistry:
             "presupuesto": self._cmd_quota,
             "analyze": self._cmd_analyze,
             "analizar": self._cmd_analyze,
+            "mode": self._cmd_mode,
+            "modo": self._cmd_mode,
             # Subagent commands
             "subagents": self._cmd_subagents,
             "subagent": self._cmd_subagent,
@@ -221,6 +223,7 @@ class SlashCommandRegistry:
             "  /models           Listar modelos disponibles\n"
             "  /model <id>       Cambiar modelo\n"
             "  /analyze          Analizar arquitectura del proyecto\n"
+            "  /mode <modo>      Permisos: auto|ask|plan\n"
             "  /resume <id>      Retomar conversacion por ID\n"
             "  /undo             Deshacer ultimo cambio (stub)\n"
             "  /diff             Mostrar cambios recientes (stub)\n"
@@ -261,6 +264,18 @@ class SlashCommandRegistry:
                     help_text += f"\n  /{s.name:<16} {icon}{s.description}"
 
         return CommandResult(handled=True, output=help_text)
+
+    def _cmd_mode(self, args: str) -> CommandResult:
+        """Change permission mode."""
+        mode = args.strip().lower()
+        if not mode:
+            return CommandResult(handled=True, action="show_mode")
+        if mode not in ("auto", "ask", "plan"):
+            return CommandResult(
+                handled=True,
+                output="  [red]Modos disponibles: auto, ask, plan[/red]",
+            )
+        return CommandResult(handled=True, action="change_mode", action_data=mode)
 
     def _cmd_analyze(self, args: str) -> CommandResult:
         """Regenerate project architecture analysis."""
