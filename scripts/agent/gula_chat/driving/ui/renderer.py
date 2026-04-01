@@ -118,8 +118,12 @@ class SSERenderer:
         self._spinner.start(f"Conversacion #{event.conversation_id}{self._rag_indicator}{model_tag}")
 
     def _handle_thinking(self, event: ThinkingEvent) -> None:
+        # Flush any accumulated text before showing spinner
+        if self._text_chunks:
+            self._flush_remaining_text()
+            self._console.print()
         model_tag = f" ({event.model})" if event.model else ""
-        self._spinner.update(f"Pensando...{model_tag}")
+        self._spinner.start(f"Pensando...{model_tag}")
 
     def _handle_text(self, event: TextEvent) -> None:
         if not event.content:
