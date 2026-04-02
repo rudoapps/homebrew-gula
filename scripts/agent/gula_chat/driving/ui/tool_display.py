@@ -303,6 +303,19 @@ class ToolDisplay:
         """Alias for show_tool_complete (ToolProgressCallback protocol)."""
         self.show_tool_complete(name, input_dict, success, elapsed, output)
 
+        # OS notification for long commands (>30s)
+        if name == "run_command" and elapsed > 30:
+            try:
+                from ...driven.notifications.os_notify import send_notification
+                status = "completado" if success else "fallido"
+                cmd = input_dict.get("command", "")[:50]
+                send_notification(
+                    f"gula - Comando {status}",
+                    f"{cmd} ({elapsed:.0f}s)",
+                )
+            except Exception:
+                pass
+
     def on_parallel_summary(
         self,
         count: int,

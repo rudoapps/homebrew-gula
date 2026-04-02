@@ -192,6 +192,18 @@ class SSERenderer:
         summary = " · ".join(parts)
         self._console.print(f"  [dim]── {summary}[/dim]")
 
+        # OS notification for long operations (>15s)
+        if elapsed > 15:
+            try:
+                from ...driven.notifications.os_notify import send_notification
+                cost_str = f" (${event.session_cost:.4f})" if event.session_cost > 0 else ""
+                send_notification(
+                    "gula - Respuesta lista",
+                    f"Completado en {elapsed:.0f}s{cost_str}",
+                )
+            except Exception:
+                pass
+
         if event.max_iterations_reached:
             self._console.print(
                 "  [warning]Limite de iteraciones alcanzado[/warning]"
