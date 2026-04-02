@@ -124,8 +124,8 @@ class SlashCommandRegistry:
             # Subagent commands
             "subagents": self._cmd_subagents,
             "subagent": self._cmd_subagent,
-            # Subagent shortcuts
-            "review": self._cmd_subagent_shortcut,
+            # Subagent shortcuts (review is /review command, use /subagent review for subagent)
+            "code-review": self._cmd_subagent_shortcut,
             "test": self._cmd_subagent_shortcut,
             "explain": self._cmd_subagent_shortcut,
             "refactor": self._cmd_subagent_shortcut,

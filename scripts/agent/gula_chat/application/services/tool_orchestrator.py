@@ -88,6 +88,15 @@ class ToolOrchestrator:
         """Log of all file changes in this session."""
         return self._file_changes
 
+    @property
+    def permission_mode(self):
+        """Current permission mode."""
+        return self._executor.permission_mode
+
+    def set_permission_mode(self, mode) -> None:
+        """Set permission mode on the executor."""
+        self._executor.set_permission_mode(mode)
+
     def request_abort(self) -> None:
         """Signal that all pending tool execution should abort."""
         self._abort_event.set()
