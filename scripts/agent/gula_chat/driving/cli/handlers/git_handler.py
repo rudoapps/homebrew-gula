@@ -20,11 +20,11 @@ class GitHandler:
         """Commit changes with auto-generated or manual message."""
         diff_result = subprocess.run(
             ["git", "diff", "--stat"],
-            capture_output=True, text=True, cwd=self._root,
+            capture_output=True, text=True, cwd=self._root, timeout=30,
         )
         staged_result = subprocess.run(
             ["git", "diff", "--cached", "--stat"],
-            capture_output=True, text=True, cwd=self._root,
+            capture_output=True, text=True, cwd=self._root, timeout=30,
         )
 
         diff_stat = diff_result.stdout.strip() + staged_result.stdout.strip()
@@ -47,7 +47,7 @@ class GitHandler:
         subprocess.run(["git", "add", "-A"], cwd=self._root)
         result = subprocess.run(
             ["git", "commit", "-m", message],
-            capture_output=True, text=True, cwd=self._root,
+            capture_output=True, text=True, cwd=self._root, timeout=30,
         )
         if result.returncode == 0:
             self._console.print(f"  [success]\u2713[/success] {result.stdout.strip()}")
@@ -58,12 +58,12 @@ class GitHandler:
         """Review current git changes with AI."""
         diff = subprocess.run(
             ["git", "diff", "--no-color"],
-            capture_output=True, text=True, cwd=self._root,
+            capture_output=True, text=True, cwd=self._root, timeout=30,
         ).stdout
 
         staged = subprocess.run(
             ["git", "diff", "--cached", "--no-color"],
-            capture_output=True, text=True, cwd=self._root,
+            capture_output=True, text=True, cwd=self._root, timeout=30,
         ).stdout
 
         combined = (diff + staged).strip()

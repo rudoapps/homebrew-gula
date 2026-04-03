@@ -48,9 +48,14 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 4. Version consistency
+# 4. Cross-platform compatibility
 echo ""
-echo "  ── 4/4 Version check ──"
+echo "  ── 4/5 Compatibility tests ──"
+PYTHONPATH="$REPO_ROOT/scripts/agent" python3 scripts/agent/tests/test_compatibility.py || echo "  ⚠ Compatibility warnings found (review before Linux deploy)"
+
+# 5. Version consistency
+echo ""
+echo "  ── 5/5 Version check ──"
 VERSION=$(cat VERSION)
 FORMULA_VERSION=$(grep "refs/tags/v" Formula/gula.rb | sed 's/.*v\([0-9.]*\).*/\1/')
 echo "  VERSION file: $VERSION"
