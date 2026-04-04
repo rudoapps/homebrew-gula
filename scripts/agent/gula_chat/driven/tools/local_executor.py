@@ -40,6 +40,7 @@ class LocalToolExecutor(ToolExecutorPort):
         path_validator: PathValidator,
         file_backup: FileBackup,
         request_approval: Optional[ApprovalCallback] = None,
+        project_type: str = "unknown",
     ) -> None:
         self._validator = path_validator
         self._backup = file_backup
@@ -50,7 +51,7 @@ class LocalToolExecutor(ToolExecutorPort):
         self._file = FileToolExecutor(*args)
         self._search = SearchToolExecutor(*args)
         self._shell = ShellToolExecutor(*args)
-        self._code = CodeAnalysisToolExecutor(*args)
+        self._code = CodeAnalysisToolExecutor(*args, project_type=project_type)
         self._web = WebToolExecutor(*args)
 
         self._dispatch = {
@@ -73,6 +74,7 @@ class LocalToolExecutor(ToolExecutorPort):
             "symbols": self._code.symbols,
             "find_definition": self._code.find_definition,
             "find_references": self._code.find_references,
+            "hover_info": self._code.hover_info,
             # Web tools
             "web_fetch": self._web.web_fetch,
         }

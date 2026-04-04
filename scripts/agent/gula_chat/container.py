@@ -45,11 +45,15 @@ class Container:
         self._file_backup = FileBackup()
         self._tool_display = ToolDisplay()
 
+        # Detect project type for LSP server selection
+        project_type = self._project_context_builder.detect_project_type()
+
         # The approval callback bridges the driven executor to the UI layer
         self._tool_executor = LocalToolExecutor(
             path_validator=self._path_validator,
             file_backup=self._file_backup,
             request_approval=self._tool_display.show_approval_prompt,
+            project_type=project_type,
         )
 
         # ── Application services ────────────────────────────────────────

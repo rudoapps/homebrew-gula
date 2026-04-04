@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Set, Tuple
 
 # ── Tool classification ──────────────────────────────────────────────────
 
-PARALLEL_SAFE_TOOLS: Set[str] = {"read_file", "search_code", "list_files", "git_info"}
+PARALLEL_SAFE_TOOLS: Set[str] = {"read_file", "search_code", "list_files", "git_info", "hover_info"}
 """Tools that only read state and can safely run concurrently."""
 
 SEQUENTIAL_TOOLS: Set[str] = {"write_file", "edit_file", "run_command"}
@@ -22,6 +22,10 @@ TOOL_ICONS: Dict[str, str] = {
     "search_code": "\u25cb",    # white circle
     "run_command": "\u25b8",    # small right triangle
     "git_info": "\u25c7",       # white diamond
+    "symbols": "\u25cb",        # white circle
+    "find_definition": "\u25cb",# white circle
+    "find_references": "\u25cb",# white circle
+    "hover_info": "\u25cb",     # white circle
 }
 
 TOOL_VERBS: Dict[str, str] = {
@@ -32,6 +36,10 @@ TOOL_VERBS: Dict[str, str] = {
     "search_code": "Buscando",
     "run_command": "Ejecutando",
     "git_info": "Git",
+    "symbols": "Analizando",
+    "find_definition": "Buscando definicion",
+    "find_references": "Buscando referencias",
+    "hover_info": "Consultando tipo",
 }
 
 # ── Security limits ──────────────────────────────────────────────────────
@@ -159,6 +167,27 @@ def get_tool_detail(
         sub = input_dict.get("command", input_dict.get("subcommand", "status"))
         detail = sub
         action_msg = f"{verb} {detail}"
+
+    elif name == "symbols":
+        path = input_dict.get("path", "?")
+        detail = _short_path(path)
+        action_msg = f"{verb} {detail}"
+
+    elif name == "find_definition":
+        symbol = input_dict.get("symbol", "?")
+        detail = symbol
+        action_msg = f"{verb} de `{symbol}`"
+
+    elif name == "find_references":
+        symbol = input_dict.get("symbol", "?")
+        detail = symbol
+        action_msg = f"{verb} de `{symbol}`"
+
+    elif name == "hover_info":
+        path = input_dict.get("path", "?")
+        line = input_dict.get("line", "?")
+        detail = f"{_short_path(path)}:{line}"
+        action_msg = f"{verb} en {detail}"
 
     else:
         detail = name
