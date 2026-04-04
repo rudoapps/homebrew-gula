@@ -48,9 +48,18 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 4. Startup flow integration tests
+# 4. Functional end-to-end tests
 echo ""
-echo "  ── 4/6 Startup flow tests ──"
+echo "  ── 4/7 Functional tests ──"
+PYTHONPATH="$REPO_ROOT/scripts/agent" python3 scripts/agent/tests/test_functional.py
+if [ $? -ne 0 ]; then
+    echo "  ✗ Functional tests failed — aborting"
+    exit 1
+fi
+
+# 5. Startup flow integration tests
+echo ""
+echo "  ── 5/7 Startup flow tests ──"
 PYTHONPATH="$REPO_ROOT/scripts/agent" python3 scripts/agent/tests/test_startup_flow.py
 if [ $? -ne 0 ]; then
     echo "  ✗ Startup flow tests failed — aborting"
@@ -59,12 +68,12 @@ fi
 
 # 5. Cross-platform compatibility
 echo ""
-echo "  ── 5/6 Compatibility tests ──"
+echo "  ── 6/7 Compatibility tests ──"
 PYTHONPATH="$REPO_ROOT/scripts/agent" python3 scripts/agent/tests/test_compatibility.py || echo "  ⚠ Compatibility warnings found (review before Linux deploy)"
 
 # 5. Version consistency
 echo ""
-echo "  ── 6/6 Version check ──"
+echo "  ── 7/7 Version check ──"
 VERSION=$(cat VERSION)
 FORMULA_VERSION=$(grep "refs/tags/v" Formula/gula.rb | sed 's/.*v\([0-9.]*\).*/\1/')
 echo "  VERSION file: $VERSION"
