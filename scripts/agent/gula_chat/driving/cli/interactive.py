@@ -154,12 +154,47 @@ class InteractiveHandler:
         # Try to resume last conversation for this project
         self._conversation_id = self._config_port.get_project_conversation()
 
-        # Show spinner during startup (all network calls)
+        # Ensure auth is valid BEFORE concurrent startup (may need login UI)
+        from ...application.services.auth_service import AuthenticationError, ServerUnavailableError
+        try:
+            await self._auth_service.ensure_valid_token()
+        except ServerUnavailableError as exc:
+            api_data = {"_server_down": True, "_error": str(exc)}
+            rag_info = None
+            # Skip to server-down handler below
+            broadcast_messages = []
+            self._startup.track_broadcast_ids(broadcast_messages)
+            # Jump to retry loop
+            while api_data.get("_server_down"):
+                chosen = await select_option_async(
+                    [
+                        SelectOption(value="retry", label="Reintentar conexion"),
+                        SelectOption(value="exit", label="Salir"),
+                    ],
+                    title=f"\u26a0  {api_data.get('_error', 'El servidor no esta disponible')}",
+                )
+                if chosen != "retry":
+                    return 0
+                try:
+                    await self._auth_service.ensure_valid_token()
+                    break
+                except ServerUnavailableError as exc2:
+                    api_data = {"_server_down": True, "_error": str(exc2)}
+                except AuthenticationError:
+                    config = await self._startup.do_interactive_login()
+                    if config:
+                        break
+                    return 0
+        except AuthenticationError:
+            config = await self._startup.do_interactive_login()
+            if config is None:
+                return 0
+
+        # Now auth is valid — run startup tasks concurrently with spinner
         from ..ui.spinner import Spinner
         spinner = Spinner()
-        spinner.start("Conectando...")
+        spinner.start("Cargando...")
 
-        # Run startup tasks concurrently for speed
         async def _load_skills():
             if self._skill_service:
                 try:
@@ -173,13 +208,8 @@ class InteractiveHandler:
         async def _fetch_rag():
             return await self._startup.fetch_rag_info()
 
-        skills_task = asyncio.create_task(_load_skills())
-        api_task = asyncio.create_task(_fetch_api())
-        rag_task = asyncio.create_task(_fetch_rag())
-
-        # Wait for all concurrently
         api_data, rag_info, _ = await asyncio.gather(
-            api_task, rag_task, skills_task,
+            _fetch_api(), _fetch_rag(), _load_skills(),
             return_exceptions=True,
         )
 
