@@ -37,7 +37,10 @@ class StartupHandler:
         try:
             config = await self._auth_service.ensure_valid_token()
         except Exception:
-            return {}
+            # Auth already validated in _loop(), use current config as fallback
+            config = self._auth_service.get_config()
+            if not config.access_token:
+                return {}
 
         try:
             return await self._api_client.get_messages(

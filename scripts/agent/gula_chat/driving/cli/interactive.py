@@ -190,26 +190,28 @@ class InteractiveHandler:
             if config is None:
                 return 0
 
-        # Now auth is valid — run startup tasks concurrently with spinner
+        # Now auth is valid — run startup tasks sequentially but fast
+        # (concurrent auth calls cause race conditions on token refresh)
         from ..ui.spinner import Spinner
         spinner = Spinner()
         spinner.start("Cargando...")
 
-        async def _load_skills():
-            if self._skill_service:
-                try:
-                    await self._skill_service.load_skills()
-                except Exception:
-                    pass
+        # Load skills
+        if self._skill_service:
+            try:
+                await self._skill_service.load_skills()
+            except Exception:
+                pass
 
+        # Fetch API data and RAG concurrently (same token, no auth calls)
         async def _fetch_api():
             return await self._startup.fetch_startup_data(gula_version)
 
         async def _fetch_rag():
             return await self._startup.fetch_rag_info()
 
-        api_data, rag_info, _ = await asyncio.gather(
-            _fetch_api(), _fetch_rag(), _load_skills(),
+        api_data, rag_info = await asyncio.gather(
+            _fetch_api(), _fetch_rag(),
             return_exceptions=True,
         )
 
