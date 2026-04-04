@@ -154,31 +154,57 @@ class InteractiveHandler:
         # Try to resume last conversation for this project
         self._conversation_id = self._config_port.get_project_conversation()
 
-        # Load skills (best-effort, concurrent with startup data)
-        if self._skill_service:
-            try:
-                await self._skill_service.load_skills()
-            except Exception:
-                pass
+        # Show spinner during startup (all network calls)
+        from ..ui.spinner import Spinner
+        spinner = Spinner()
+        spinner.start("Conectando...")
 
-        # Fetch startup data with server-down retry loop
-        while True:
-            api_data = await self._startup.fetch_startup_data(gula_version)
+        # Run startup tasks concurrently for speed
+        async def _load_skills():
+            if self._skill_service:
+                try:
+                    await self._skill_service.load_skills()
+                except Exception:
+                    pass
 
-            if api_data.get("_server_down"):
-                self._console.print()
-                chosen = await select_option_async(
-                    [
-                        SelectOption(value="retry", label="Reintentar conexion"),
-                        SelectOption(value="exit", label="Salir"),
-                    ],
-                    title=f"\u26a0  {api_data.get('_error', 'El servidor no esta disponible')}",
-                )
-                if chosen == "retry":
-                    continue
+        async def _fetch_api():
+            return await self._startup.fetch_startup_data(gula_version)
+
+        async def _fetch_rag():
+            return await self._startup.fetch_rag_info()
+
+        skills_task = asyncio.create_task(_load_skills())
+        api_task = asyncio.create_task(_fetch_api())
+        rag_task = asyncio.create_task(_fetch_rag())
+
+        # Wait for all concurrently
+        api_data, rag_info, _ = await asyncio.gather(
+            api_task, rag_task, skills_task,
+            return_exceptions=True,
+        )
+
+        spinner.stop()
+
+        # Handle errors from gather
+        if isinstance(api_data, Exception):
+            api_data = {}
+        if isinstance(rag_info, Exception):
+            rag_info = None
+
+        # Server down retry loop
+        while api_data.get("_server_down"):
+            chosen = await select_option_async(
+                [
+                    SelectOption(value="retry", label="Reintentar conexion"),
+                    SelectOption(value="exit", label="Salir"),
+                ],
+                title=f"\u26a0  {api_data.get('_error', 'El servidor no esta disponible')}",
+            )
+            if chosen != "retry":
                 return 0
-
-            break
+            spinner.start("Reconectando...")
+            api_data = await self._startup.fetch_startup_data(gula_version)
+            spinner.stop()
 
         broadcast_messages = api_data.get("messages", [])
         self._startup.track_broadcast_ids(broadcast_messages)
@@ -190,9 +216,6 @@ class InteractiveHandler:
                 version_check.get("message", ""),
             )
             return 1
-
-        # Check RAG status for current project (best-effort)
-        rag_info = await self._startup.fetch_rag_info()
 
         # Detect auto-applied skill for this project type
         active_skill_name = None

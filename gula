@@ -462,7 +462,7 @@ if [[ "$COMMAND" == "ai" ]]; then
 
   # Auto-install Python dependencies if missing
   _missing_py_deps=()
-  for _dep in httpx rich prompt_toolkit pyyaml; do
+  for _dep in httpx rich prompt_toolkit yaml; do
     python3 -c "import $_dep" 2>/dev/null || _missing_py_deps+=("$_dep")
   done
   if [ ${#_missing_py_deps[@]} -gt 0 ]; then
