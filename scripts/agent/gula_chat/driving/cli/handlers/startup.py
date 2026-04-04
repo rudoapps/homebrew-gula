@@ -29,22 +29,15 @@ class StartupHandler:
     async def fetch_startup_data(self, gula_version: str) -> dict:
         """Fetch broadcast messages and version check.
 
+        Auth must be validated before calling this method.
         Returns {} on failure, or {"_server_down": True} if server unavailable.
         """
         import httpx
-        from ....application.services.auth_service import AuthenticationError, ServerUnavailableError
 
         try:
             config = await self._auth_service.ensure_valid_token()
-        except ServerUnavailableError as exc:
-            return {"_server_down": True, "_error": str(exc)}
-        except AuthenticationError:
-            try:
-                config = await self.do_interactive_login()
-            except Exception:
-                config = None
-            if config is None:
-                return {}
+        except Exception:
+            return {}
 
         try:
             return await self._api_client.get_messages(
