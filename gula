@@ -493,7 +493,7 @@ if [[ "$COMMAND" == "ai" ]]; then
   # ── Ensure venv with dependencies ─────────────────────────────────
   # Deps version stamp: bump this number when adding/changing Python dependencies.
   # The venv is recreated automatically when this changes.
-  _GULA_DEPS_VERSION="1"
+  _GULA_DEPS_VERSION="2"
   _gula_venv="$HOME/.config/gula-agent/venv"
   _gula_deps_stamp="$_gula_venv/.deps_version"
 
