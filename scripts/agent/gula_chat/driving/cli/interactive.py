@@ -459,6 +459,10 @@ class InteractiveHandler:
         _loop_history: List[str] = []
         _LOOP_THRESHOLD = 3  # Same call N times → break the loop
 
+        # Iteration guard: prevent runaway tool execution
+        _tool_iterations = 0
+        _MAX_TOOL_ITERATIONS = 30  # Max tool call rounds per user message
+
         while True:
             renderer = SSERenderer()
             # Show spinner immediately while waiting for server response
@@ -549,6 +553,35 @@ class InteractiveHandler:
             if pending_tool_event and self._tool_orchestrator:
                 self._console.print()
 
+                # ── Iteration guard ─────────────────────────────────
+                _tool_iterations += 1
+                if _tool_iterations > _MAX_TOOL_ITERATIONS:
+                    self._console.print(
+                        f"  [yellow]\u26a0 Limite de iteraciones alcanzado ({_MAX_TOOL_ITERATIONS}). "
+                        f"Finalizando turno.[/yellow]"
+                    )
+                    tool_results = [
+                        ToolResult(
+                            id=tc.id,
+                            name=tc.name,
+                            output=(
+                                f"[SISTEMA] LIMITE DE ITERACIONES: has ejecutado {_MAX_TOOL_ITERATIONS} "
+                                f"rondas de herramientas en este turno. DEBES responder al usuario ahora "
+                                f"con lo que ya sabes. NO llames mas herramientas."
+                            ),
+                            success=False,
+                        )
+                        for tc in pending_tool_event.tool_calls
+                    ]
+                    current_prompt = None
+                    current_tool_results = tool_results
+                    images_payload = None
+                    project_context = None
+                    git_remote_url = None
+                    system_prompt_addition = None
+                    self._console.print()
+                    continue
+
                 # ── Loop detection ──────────────────────────────────
                 import json as _json
                 _call_sigs = []
@@ -561,10 +594,28 @@ class InteractiveHandler:
                 _batch_sig = "|".join(sorted(_call_sigs))
                 _loop_history.append(_batch_sig)
 
-                # Check if the last N calls are identical
+                # Check 1: identical calls N times in a row
+                _is_loop = False
                 if len(_loop_history) >= _LOOP_THRESHOLD:
                     _recent = _loop_history[-_LOOP_THRESHOLD:]
                     if all(s == _recent[0] for s in _recent):
+                        _is_loop = True
+
+                # Check 2: same file read 5+ times (different offsets)
+                if not _is_loop and len(_loop_history) >= 5:
+                    _recent_5 = _loop_history[-5:]
+                    _read_paths = []
+                    for _sig in _recent_5:
+                        if _sig.startswith("read_file:"):
+                            try:
+                                _inp = _json.loads(_sig[10:])
+                                _read_paths.append(_inp.get("path", ""))
+                            except (ValueError, TypeError):
+                                pass
+                    if len(_read_paths) >= 5 and len(set(_read_paths)) == 1:
+                        _is_loop = True
+
+                if _is_loop:
                         self._console.print(
                             "  [yellow]\u26a0 Bucle detectado: el agente esta repitiendo "
                             "la misma operacion. Interrumpiendo.[/yellow]"
