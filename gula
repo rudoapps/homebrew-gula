@@ -529,19 +529,19 @@ if [[ "$COMMAND" == "ai" ]]; then
   fi
 
   # ── Auto-install LSP server for current project type (best-effort) ─
-  _lsp_install=$("$_gula_venv/bin/python" -c "
+  _lsp_pkg=$("$_gula_venv/bin/python" -c "
 import sys; sys.path.insert(0, '${scripts_dir}/agent')
-from gula_chat.driven.lsp.lsp_server_registry import get_install_info
+from gula_chat.driven.lsp.lsp_server_registry import get_pip_package
 from gula_chat.driven.context.project_context_builder import ProjectContextBuilder
 pt = ProjectContextBuilder().detect_project_type()
-cmd = get_install_info(pt) if pt else None
-print(cmd or '')
+pkg = get_pip_package(pt) if pt else None
+print(pkg or '')
 " 2>/dev/null)
-  if [ -n "$_lsp_install" ]; then
-    echo -e "  ${DIM}Instalando LSP server: $_lsp_install...${NC}"
-    eval "$_lsp_install" --quiet 2>/dev/null && \
-      echo -e "  ${GREEN}✓${NC} LSP server instalado" || \
-      echo -e "  ${DIM}LSP no disponible (instala manualmente: $_lsp_install)${NC}"
+  if [ -n "$_lsp_pkg" ]; then
+    echo -e "  ${DIM}Instalando LSP: $_lsp_pkg...${NC}"
+    "$_gula_venv/bin/pip" install --quiet "$_lsp_pkg" 2>/dev/null && \
+      echo -e "  ${GREEN}✓${NC} LSP instalado" || \
+      echo -e "  ${DIM}LSP no disponible (instala manualmente: pip install $_lsp_pkg)${NC}"
   fi
 
   PYTHONPATH="${scripts_dir}/agent" exec "$_gula_venv/bin/python" -m gula_chat "$@"

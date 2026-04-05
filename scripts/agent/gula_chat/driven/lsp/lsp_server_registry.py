@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import logging
 import shutil
-import subprocess
-import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -16,79 +14,65 @@ logger = logging.getLogger(__name__)
 class LSPServerConfig:
     """Configuration for an LSP server."""
     command: List[str]
-    install_cmd: Optional[str] = None  # pip/npm/brew command to install
+    pip_package: Optional[str] = None  # pip package name (installed in venv)
     fallback: Optional[List[str]] = None
-    fallback_install_cmd: Optional[str] = None
+    fallback_pip_package: Optional[str] = None
 
 
 _LSP_SERVERS: Dict[str, LSPServerConfig] = {
     "python": LSPServerConfig(
-        command=["pyright-langserver", "--stdio"],
-        install_cmd="pip3 install pyright",
+        command=["pyright", "--langserver", "--stdio"],
+        pip_package="pyright",
         fallback=["pylsp"],
-        fallback_install_cmd="pip3 install python-lsp-server",
+        fallback_pip_package="python-lsp-server",
     ),
     "python/django": LSPServerConfig(
-        command=["pyright-langserver", "--stdio"],
-        install_cmd="pip3 install pyright",
-        fallback=["pylsp"],
-        fallback_install_cmd="pip3 install python-lsp-server",
+        command=["pyright", "--langserver", "--stdio"],
+        pip_package="pyright",
     ),
     "python/fastapi": LSPServerConfig(
-        command=["pyright-langserver", "--stdio"],
-        install_cmd="pip3 install pyright",
-        fallback=["pylsp"],
-        fallback_install_cmd="pip3 install python-lsp-server",
+        command=["pyright", "--langserver", "--stdio"],
+        pip_package="pyright",
     ),
     "swift": LSPServerConfig(
         command=["sourcekit-lsp"],
-        # sourcekit-lsp comes with Xcode
+        # Comes with Xcode — no pip install
     ),
     "ios": LSPServerConfig(
         command=["sourcekit-lsp"],
     ),
     "kotlin": LSPServerConfig(
         command=["kotlin-language-server"],
-        install_cmd="brew install kotlin-language-server",
     ),
     "android": LSPServerConfig(
         command=["kotlin-language-server"],
-        install_cmd="brew install kotlin-language-server",
     ),
     "node": LSPServerConfig(
         command=["typescript-language-server", "--stdio"],
-        install_cmd="npm install -g typescript-language-server typescript",
     ),
     "node/react": LSPServerConfig(
         command=["typescript-language-server", "--stdio"],
-        install_cmd="npm install -g typescript-language-server typescript",
     ),
     "node/next": LSPServerConfig(
         command=["typescript-language-server", "--stdio"],
-        install_cmd="npm install -g typescript-language-server typescript",
     ),
     "node/vue": LSPServerConfig(
         command=["typescript-language-server", "--stdio"],
-        install_cmd="npm install -g typescript-language-server typescript",
     ),
     "node/express": LSPServerConfig(
         command=["typescript-language-server", "--stdio"],
-        install_cmd="npm install -g typescript-language-server typescript",
     ),
     "dart": LSPServerConfig(
         command=["dart", "language-server", "--protocol=lsp"],
-        # dart comes with Flutter/Dart SDK
     ),
     "flutter": LSPServerConfig(
         command=["dart", "language-server", "--protocol=lsp"],
     ),
     "go": LSPServerConfig(
         command=["gopls"],
-        install_cmd="go install golang.org/x/tools/gopls@latest",
     ),
     "rust": LSPServerConfig(
         command=["rust-analyzer"],
-        install_cmd="brew install rust-analyzer",
     ),
 }
 
@@ -108,49 +92,24 @@ def detect_lsp_command(project_type: str) -> Optional[List[str]]:
     return None
 
 
-def get_install_info(project_type: str) -> Optional[str]:
-    """Get the install command for the LSP server of a project type."""
+def get_pip_package(project_type: str) -> Optional[str]:
+    """Get the pip package name for the LSP server, or None if already installed or no pip package."""
     config = _LSP_SERVERS.get(project_type)
     if not config:
         return None
-    if shutil.which(config.command[0]):
-        return None  # Already installed
-    if config.fallback and shutil.which(config.fallback[0]):
-        return None  # Fallback available
-    return config.install_cmd or config.fallback_install_cmd
-
-
-def auto_install_lsp(project_type: str) -> bool:
-    """Attempt to install the LSP server for a project type.
-
-    Returns True if installed successfully.
-    """
-    config = _LSP_SERVERS.get(project_type)
-    if not config:
-        return False
 
     # Already available
     if shutil.which(config.command[0]):
-        return True
+        return None
     if config.fallback and shutil.which(config.fallback[0]):
-        return True
+        return None
 
-    # Try installing
-    install_cmd = config.install_cmd or config.fallback_install_cmd
-    if not install_cmd:
-        return False
+    return config.pip_package or config.fallback_pip_package
 
-    logger.info("Auto-installing LSP server: %s", install_cmd)
-    try:
-        result = subprocess.run(
-            install_cmd.split(),
-            capture_output=True, text=True, timeout=120,
-        )
-        if result.returncode == 0:
-            logger.info("LSP server installed successfully")
-            return True
-        logger.warning("LSP install failed: %s", result.stderr[:200])
-    except Exception as e:
-        logger.warning("LSP install error: %s", e)
 
-    return False
+def get_install_info(project_type: str) -> Optional[str]:
+    """Get human-readable install instruction."""
+    pkg = get_pip_package(project_type)
+    if pkg:
+        return f"pip install {pkg}"
+    return None
