@@ -131,17 +131,45 @@ gh release create "v${NEW_VERSION}" \
   --notes "Release notes in markdown..."
 ```
 
+## Python Dependencies (venv management)
+
+`gula ai` runs inside a dedicated venv at `~/.config/gula-agent/venv/`. Dependencies are
+defined in the `gula` script (the `pip install` line inside the venv setup block).
+
+A **deps version stamp** (`_GULA_DEPS_VERSION` variable in `gula`) controls when the venv
+is recreated. When the stamp changes, all users' venvs are automatically rebuilt on next launch.
+
+### When to bump `_GULA_DEPS_VERSION`
+
+**Bump it** (increment by 1) when:
+- Adding a new Python dependency to the `pip install` line
+- Removing a Python dependency
+- Changing a minimum version constraint (e.g., `httpx>=0.27`)
+- Upgrading Python minimum version requirement
+
+**Do NOT bump it** when:
+- Only changing Python source code (`.py` files) — the venv doesn't contain gula code
+- Changing non-Python files (bash scripts, Formula, etc.)
+
+The variable is near the top of the `# Manejar comando 'ai'` block in the `gula` script:
+```bash
+_GULA_DEPS_VERSION="1"  # ← bump this number
+```
+
 ## For Claude AI Sessions
 
 When asked to release a new version:
 
 1. **Read current version**: `cat VERSION`
 2. **Increment version**: Update VERSION file with new version number
-3. **Commit changes**: Include all modified files with descriptive message
-4. **Create git tag**: Tag must be `v` + VERSION content (e.g., VERSION=`0.0.279` → tag=`v0.0.279`)
-5. **Push to remote**: Push both main branch and tag
-6. **Update Formula**: Get SHA256 from tarball URL and update Formula/gula.rb
-7. **Push Formula update**: Commit and push the sha256 update
-8. **Create GitHub Release**: Use `gh release create` with a title in format `"v0.0.XXX - Brief description"` and markdown body. Look at previous releases (`gh release list` / `gh release view <tag>`) for style reference. Use emoji section headers (🚀 features, 🐛 fixes, ✏️ improvements, 🔧 tooling). Always include install section at the end.
+3. **Check if Python deps changed**: If any Python dependency was added/removed/changed
+   in the `gula` script's venv setup, bump `_GULA_DEPS_VERSION` (increment by 1).
+   If only `.py` source files changed, do NOT bump it.
+4. **Commit changes**: Include all modified files with descriptive message
+5. **Create git tag**: Tag must be `v` + VERSION content (e.g., VERSION=`0.0.279` → tag=`v0.0.279`)
+6. **Push to remote**: Push both main branch and tag
+7. **Update Formula**: Get SHA256 from tarball URL and update Formula/gula.rb
+8. **Push Formula update**: Commit and push the sha256 update
+9. **Create GitHub Release**: Use `gh release create` with a title in format `"v0.0.XXX - Brief description"` and markdown body. Look at previous releases (`gh release list` / `gh release view <tag>`) for style reference. Use emoji section headers (🚀 features, 🐛 fixes, ✏️ improvements, 🔧 tooling). Always include install section at the end.
 
 Users will receive the update automatically (auto-update runs every hour).

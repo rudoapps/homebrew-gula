@@ -491,8 +491,22 @@ if [[ "$COMMAND" == "ai" ]]; then
   fi
 
   # ── Ensure venv with dependencies ─────────────────────────────────
+  # Deps version stamp: bump this number when adding/changing Python dependencies.
+  # The venv is recreated automatically when this changes.
+  _GULA_DEPS_VERSION="1"
   _gula_venv="$HOME/.config/gula-agent/venv"
+  _gula_deps_stamp="$_gula_venv/.deps_version"
+
+  _needs_venv=false
   if [ ! -f "$_gula_venv/bin/python" ]; then
+    _needs_venv=true
+  elif [ ! -f "$_gula_deps_stamp" ] || [ "$(cat "$_gula_deps_stamp" 2>/dev/null)" != "$_GULA_DEPS_VERSION" ]; then
+    echo -e "  ${DIM}Actualizando entorno Python...${NC}"
+    rm -rf "$_gula_venv"
+    _needs_venv=true
+  fi
+
+  if [ "$_needs_venv" = true ]; then
     echo -e "  ${DIM}Creando entorno Python para gula ai...${NC}"
     "$_gula_python" -m venv "$_gula_venv" || {
       echo -e "${RED}Error: No se pudo crear el entorno virtual.${NC}"
@@ -504,6 +518,7 @@ if [[ "$COMMAND" == "ai" ]]; then
       rm -rf "$_gula_venv"
       exit 1
     }
+    echo "$_GULA_DEPS_VERSION" > "$_gula_deps_stamp"
     echo -e "  ${GREEN}✓${NC} Entorno Python configurado"
   fi
 
