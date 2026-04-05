@@ -221,7 +221,7 @@ class HttpxApiClient(ApiClientPort):
         """Fetch user quota information."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(
-                f"{api_url}/users/me/quota",
+                f"{api_url}/agent/quota",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
             response.raise_for_status()
