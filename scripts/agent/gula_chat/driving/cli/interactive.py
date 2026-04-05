@@ -182,12 +182,25 @@ class InteractiveHandler:
                 except ServerUnavailableError as exc2:
                     api_data = {"_server_down": True, "_error": str(exc2)}
                 except AuthenticationError:
-                    config = await self._startup.do_interactive_login()
+                    try:
+                        config = await self._startup.do_interactive_login()
+                    except ServerUnavailableError as exc3:
+                        api_data = {"_server_down": True, "_error": str(exc3)}
+                        continue
                     if config:
                         break
                     return 0
         except AuthenticationError:
-            config = await self._startup.do_interactive_login()
+            try:
+                config = await self._startup.do_interactive_login()
+            except ServerUnavailableError as exc:
+                self._console.print(
+                    f"  [yellow]\u26a0 {exc}[/yellow]"
+                )
+                self._console.print(
+                    "  [dim]El servidor no esta disponible. Intenta de nuevo en unos minutos.[/dim]"
+                )
+                return 1
             if config is None:
                 return 0
 
