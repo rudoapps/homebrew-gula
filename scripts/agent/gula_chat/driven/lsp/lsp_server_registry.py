@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -77,17 +78,37 @@ _LSP_SERVERS: Dict[str, LSPServerConfig] = {
 }
 
 
+def _which(binary: str) -> Optional[str]:
+    """Find a binary in PATH or in the current Python's venv bin."""
+    found = shutil.which(binary)
+    if found:
+        return found
+    # Also check the venv bin directory (pyright installed via venv pip)
+    import sys
+    venv_bin = os.path.join(os.path.dirname(sys.executable), binary)
+    if os.path.isfile(venv_bin) and os.access(venv_bin, os.X_OK):
+        return venv_bin
+    return None
+
+
 def detect_lsp_command(project_type: str) -> Optional[List[str]]:
     """Return the LSP server command for a project type, or None if unavailable."""
     config = _LSP_SERVERS.get(project_type)
     if not config:
         return None
 
-    if shutil.which(config.command[0]):
-        return list(config.command)
+    resolved = _which(config.command[0])
+    if resolved:
+        cmd = list(config.command)
+        cmd[0] = resolved  # Use full path
+        return cmd
 
-    if config.fallback and shutil.which(config.fallback[0]):
-        return list(config.fallback)
+    if config.fallback:
+        resolved = _which(config.fallback[0])
+        if resolved:
+            cmd = list(config.fallback)
+            cmd[0] = resolved
+            return cmd
 
     return None
 
