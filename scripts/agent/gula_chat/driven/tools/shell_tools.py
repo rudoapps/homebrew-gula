@@ -17,6 +17,64 @@ from ...domain.entities.tool_metadata import (
 )
 
 
+    # Patterns that indicate dangerous/destructive commands.
+# These ALWAYS require explicit approval even in auto-approve-turn mode.
+_DANGEROUS_PATTERNS = [
+    "rm -rf /",
+    "rm -rf /*",
+    "rm -rf ~",
+    "rm -rf ~/",
+    "rm -rf /Library",
+    "rm -rf /System",
+    "rm -rf /usr",
+    "rm -rf /bin",
+    "rm -rf /sbin",
+    "rm -rf /etc",
+    "rm -rf /var",
+    "rm -rf /Applications",
+    "rm -rf /opt",
+    "mkfs",
+    "dd if=",
+    ":(){:|:&};:",
+    "> /dev/sd",
+    "chmod -R 777 /",
+    "chown -R",
+    "sudo rm",
+    "sudo dd",
+    "sudo mkfs",
+]
+
+# System paths that should never be deleted or modified via rm/mv.
+_PROTECTED_PATHS = [
+    "/Library/Frameworks",
+    "/Library/Python",
+    "/System",
+    "/usr/local/Cellar",
+    "/usr/local/lib",
+    "/usr/bin",
+    "/usr/lib",
+    "/bin",
+    "/sbin",
+    "/etc",
+    "/var",
+    "/Applications",
+]
+
+
+def _is_dangerous_command(command: str) -> bool:
+    """Check if a command matches known dangerous patterns."""
+    cmd_lower = command.lower().strip()
+    for pattern in _DANGEROUS_PATTERNS:
+        if pattern.lower() in cmd_lower:
+            return True
+    # Check for rm/mv targeting protected paths
+    if any(kw in cmd_lower for kw in ("rm ", "rm\t", "mv ", "mv\t")):
+        for path in _PROTECTED_PATHS:
+            if path.lower() in cmd_lower:
+                return True
+    return False
+
+
 class ShellToolExecutor(BaseToolExecutor):
     """Handles shell command execution and git operations."""
 
@@ -32,6 +90,13 @@ class ShellToolExecutor(BaseToolExecutor):
 
         if not command:
             raise ValueError("Se requiere el parametro 'command'")
+
+        # Block dangerous commands — always require explicit approval
+        if _is_dangerous_command(command):
+            raise ToolDeniedError(
+                f"Comando bloqueado por seguridad: modifica rutas protegidas del sistema.\n"
+                f"Comando: {command}"
+            )
 
         # Check approval
         detail = f"$ {command}\n(timeout: {timeout}s)"
