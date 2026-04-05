@@ -14,6 +14,7 @@ from ...application.services.chat_service import ChatService
 from ...application.services.skill_service import SkillService
 from ...application.services.subagent_service import SubagentService
 from ...application.services.tool_orchestrator import ToolOrchestrator
+from ...domain.entities.tool_result import ToolResult
 from ...driven.context.project_context_builder import ProjectContextBuilder
 from ...driven.images.image_detector import ImageDetector
 from ...domain.entities.sse_event import (
@@ -454,6 +455,10 @@ class InteractiveHandler:
         current_prompt: Optional[str] = cleaned_prompt
         current_tool_results = None
 
+        # Loop detection: track repeated identical tool calls
+        _loop_history: List[str] = []
+        _LOOP_THRESHOLD = 3  # Same call N times → break the loop
+
         while True:
             renderer = SSERenderer()
             # Show spinner immediately while waiting for server response
@@ -543,6 +548,52 @@ class InteractiveHandler:
             # If we got a tool request event and have an orchestrator, execute tools
             if pending_tool_event and self._tool_orchestrator:
                 self._console.print()
+
+                # ── Loop detection ──────────────────────────────────
+                import json as _json
+                _call_sigs = []
+                for _tc in pending_tool_event.tool_calls:
+                    try:
+                        _sig = f"{_tc.name}:{_json.dumps(_tc.input, sort_keys=True)}"
+                    except (TypeError, ValueError):
+                        _sig = f"{_tc.name}:{str(_tc.input)}"
+                    _call_sigs.append(_sig)
+                _batch_sig = "|".join(sorted(_call_sigs))
+                _loop_history.append(_batch_sig)
+
+                # Check if the last N calls are identical
+                if len(_loop_history) >= _LOOP_THRESHOLD:
+                    _recent = _loop_history[-_LOOP_THRESHOLD:]
+                    if all(s == _recent[0] for s in _recent):
+                        self._console.print(
+                            "  [yellow]\u26a0 Bucle detectado: el agente esta repitiendo "
+                            "la misma operacion. Interrumpiendo.[/yellow]"
+                        )
+                        # Send an error result back to force the model to change approach
+                        tool_results = [
+                            ToolResult(
+                                id=tc.id,
+                                name=tc.name,
+                                output=(
+                                    f"[SISTEMA] BUCLE DETECTADO: has llamado a {tc.name} "
+                                    f"con los mismos parametros {_LOOP_THRESHOLD} veces consecutivas. "
+                                    f"DEBES cambiar de estrategia. Si necesitas leer mas lineas de un archivo, "
+                                    f"usa un offset DIFERENTE. Si el archivo no tiene mas contenido, ya lo has "
+                                    f"leido completo. Responde al usuario con lo que ya sabes."
+                                ),
+                                success=False,
+                            )
+                            for tc in pending_tool_event.tool_calls
+                        ]
+                        current_prompt = None
+                        current_tool_results = tool_results
+                        images_payload = None
+                        project_context = None
+                        git_remote_url = None
+                        system_prompt_addition = None
+                        _loop_history.clear()
+                        self._console.print()
+                        continue
 
                 try:
                     tool_results = await self._tool_orchestrator.execute_all(
