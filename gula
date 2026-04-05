@@ -460,39 +460,61 @@ fi
 if [[ "$COMMAND" == "ai" ]]; then
   shift  # Remove 'ai' from args
 
-  # Auto-install Python dependencies if missing
-  _missing_py_deps=()
-  for _dep in httpx rich prompt_toolkit yaml; do
-    python3 -c "import $_dep" 2>/dev/null || _missing_py_deps+=("$_dep")
+  # ── Resolve best Python (3.10+) ──────────────────────────────────
+  _gula_python=""
+  for _candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+    _path=$(command -v "$_candidate" 2>/dev/null)
+    if [ -n "$_path" ]; then
+      _ver=$("$_path" -c "import sys; print(sys.version_info[:2] >= (3,10))" 2>/dev/null)
+      if [ "$_ver" = "True" ]; then
+        _gula_python="$_path"
+        break
+      fi
+    fi
   done
-  if [ ${#_missing_py_deps[@]} -gt 0 ]; then
-    echo -e "  ${DIM}Instalando dependencias Python: ${_missing_py_deps[*]}...${NC}"
-    pip3 install --quiet httpx rich prompt-toolkit pyyaml 2>/dev/null || \
-      python3 -m pip install --quiet httpx rich prompt-toolkit pyyaml 2>/dev/null || {
-        echo -e "  ${RED}Error: No se pudieron instalar las dependencias Python.${NC}"
-        echo -e "  Ejecuta manualmente: ${BOLD}pip3 install httpx rich prompt-toolkit pyyaml${NC}"
-        exit 1
-      }
-    echo -e "  ${GREEN}✓${NC} Dependencias instaladas"
+  # Also check common paths explicitly (Homebrew macOS + Linux)
+  if [ -z "$_gula_python" ]; then
+    for _bp in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
+      if [ -x "$_bp" ]; then
+        _ver=$("$_bp" -c "import sys; print(sys.version_info[:2] >= (3,10))" 2>/dev/null)
+        if [ "$_ver" = "True" ]; then
+          _gula_python="$_bp"
+          break
+        fi
+      fi
+    done
+  fi
+  if [ -z "$_gula_python" ]; then
+    echo -e "${RED}Error: Se requiere Python 3.10 o superior.${NC}"
+    echo -e "Instala con: ${BOLD}brew install python@3.12${NC}"
+    exit 1
   fi
 
-  # Auto-install LSP server for the current project type (best-effort)
-  if ! python3 -c "
-import sys; sys.path.insert(0, '${scripts_dir}/agent')
-from gula_chat.driven.lsp.lsp_server_registry import detect_lsp_command
-from gula_chat.driven.context.project_context_builder import ProjectContextBuilder
-ctx = ProjectContextBuilder()
-pt = ctx.detect_project_type()
-if pt and not detect_lsp_command(pt):
-    from gula_chat.driven.lsp.lsp_server_registry import get_install_info
-    cmd = get_install_info(pt)
-    if cmd: print(cmd)
-    else: sys.exit(1)
-else: sys.exit(1)
-" 2>/dev/null; then
-    : # LSP already available or no install needed
-  else
-    _lsp_install=$(PYTHONPATH="${scripts_dir}/agent" python3 -c "
+  # ── Ensure venv with dependencies ─────────────────────────────────
+  _gula_venv="$HOME/.config/gula-agent/venv"
+  if [ ! -f "$_gula_venv/bin/python" ]; then
+    echo -e "  ${DIM}Creando entorno Python para gula ai...${NC}"
+    "$_gula_python" -m venv "$_gula_venv" || {
+      echo -e "${RED}Error: No se pudo crear el entorno virtual.${NC}"
+      exit 1
+    }
+    "$_gula_venv/bin/pip" install --quiet --upgrade pip 2>/dev/null
+    "$_gula_venv/bin/pip" install --quiet httpx rich prompt-toolkit pyyaml || {
+      echo -e "${RED}Error: No se pudieron instalar las dependencias.${NC}"
+      rm -rf "$_gula_venv"
+      exit 1
+    }
+    echo -e "  ${GREEN}✓${NC} Entorno Python configurado"
+  fi
+
+  # Quick check: verify httpx is importable, reinstall if broken
+  if ! "$_gula_venv/bin/python" -c "import httpx" 2>/dev/null; then
+    echo -e "  ${DIM}Reinstalando dependencias...${NC}"
+    "$_gula_venv/bin/pip" install --quiet --force-reinstall httpx rich prompt-toolkit pyyaml 2>/dev/null
+  fi
+
+  # ── Auto-install LSP server for current project type (best-effort) ─
+  _lsp_install=$("$_gula_venv/bin/python" -c "
 import sys; sys.path.insert(0, '${scripts_dir}/agent')
 from gula_chat.driven.lsp.lsp_server_registry import get_install_info
 from gula_chat.driven.context.project_context_builder import ProjectContextBuilder
@@ -500,15 +522,14 @@ pt = ProjectContextBuilder().detect_project_type()
 cmd = get_install_info(pt) if pt else None
 print(cmd or '')
 " 2>/dev/null)
-    if [ -n "$_lsp_install" ]; then
-      echo -e "  ${DIM}Instalando LSP server: $_lsp_install...${NC}"
-      eval "$_lsp_install" --quiet 2>/dev/null && \
-        echo -e "  ${GREEN}✓${NC} LSP server instalado" || \
-        echo -e "  ${DIM}LSP no disponible (instala manualmente: $_lsp_install)${NC}"
-    fi
+  if [ -n "$_lsp_install" ]; then
+    echo -e "  ${DIM}Instalando LSP server: $_lsp_install...${NC}"
+    eval "$_lsp_install" --quiet 2>/dev/null && \
+      echo -e "  ${GREEN}✓${NC} LSP server instalado" || \
+      echo -e "  ${DIM}LSP no disponible (instala manualmente: $_lsp_install)${NC}"
   fi
 
-  PYTHONPATH="${scripts_dir}/agent" exec python3 -m gula_chat "$@"
+  PYTHONPATH="${scripts_dir}/agent" exec "$_gula_venv/bin/python" -m gula_chat "$@"
 fi
 
 # Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
