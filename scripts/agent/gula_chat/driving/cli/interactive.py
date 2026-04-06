@@ -543,7 +543,7 @@ class InteractiveHandler:
                             renderer.finalize()
                             # Auto-retry with OpenAI fallback
                             if not self._fallback_model:
-                                self._fallback_model = "gpt-5.4"
+                                self._fallback_model = "o4-mini"
                             self._console.print(f"  [yellow]\u26a0 Sin creditos. Reintentando con {self._fallback_model}...[/yellow]")
                             break  # Break inner loop to retry with fallback model
                         renderer.render(event)
