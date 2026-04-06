@@ -541,11 +541,13 @@ class InteractiveHandler:
                     if isinstance(event, ErrorEvent):
                         if "credit" in event.error.lower() or "insufficient" in event.error.lower():
                             renderer.finalize()
-                            # Auto-retry with OpenAI fallback
+                            # Auto-retry with a non-Claude model
                             if not self._fallback_model:
-                                self._fallback_model = "o4-mini"
-                            self._console.print(f"  [yellow]\u26a0 Sin creditos. Reintentando con {self._fallback_model}...[/yellow]")
-                            break  # Break inner loop to retry with fallback model
+                                self._fallback_model = await self._find_openai_fallback()
+                            if self._fallback_model:
+                                self._console.print(f"  [yellow]\u26a0 Sin creditos. Reintentando con {self._fallback_model}...[/yellow]")
+                                break
+                            # No fallback found — show error normally
                         renderer.render(event)
                         turn_complete = True
                         continue
@@ -856,6 +858,23 @@ class InteractiveHandler:
         skills = self._skill_service.list_skills()
         output = format_skills_display(skills)
         self._console.print(output)
+
+    async def _find_openai_fallback(self) -> Optional[str]:
+        """Find an available non-Claude model from the backend."""
+        try:
+            config = await self._auth_service.ensure_valid_token()
+            data = await self._api_client.get_models(
+                api_url=config.api_url,
+                access_token=config.access_token,
+            )
+            models = data if isinstance(data, list) else data.get("models", [])
+            # Pick the first available non-Claude model
+            for m in models:
+                if m.get("available") and m.get("provider") != "Claude":
+                    return m.get("id")
+        except Exception:
+            pass
+        return None
 
     def _show_exit_summary(self) -> None:
         """Display a session summary on exit."""
