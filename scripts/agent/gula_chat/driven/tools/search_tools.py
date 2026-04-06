@@ -126,10 +126,16 @@ class SearchToolExecutor(BaseToolExecutor):
                 for name in files:
                     if name.startswith("."):
                         continue
-                    if pattern and not fnmatch.fnmatch(name, pattern):
-                        continue
-                    full = os.path.join(root, name)
-                    rel = os.path.relpath(full, cwd)
+                    if pattern:
+                        # Strip **/ prefix — fnmatch only matches basenames
+                        clean_pattern = pattern.lstrip("*").lstrip("/") if "**" in pattern else pattern
+                        full = os.path.join(root, name)
+                        rel = os.path.relpath(full, cwd)
+                        if not fnmatch.fnmatch(name, clean_pattern) and not fnmatch.fnmatch(rel, pattern):
+                            continue
+                    else:
+                        full = os.path.join(root, name)
+                        rel = os.path.relpath(full, cwd)
                     matches.append(rel)
                     if len(matches) >= MAX_SEARCH_RESULTS:
                         break
