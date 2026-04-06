@@ -24,6 +24,7 @@ from ...domain.entities.sse_event import (
     ErrorEvent,
     TextEvent,
     ToolRequestsEvent,
+    ProviderFallbackEvent,
 )
 from ..ui.console import get_console
 from ..ui.header import SessionHeader
@@ -116,6 +117,7 @@ class InteractiveHandler:
         self._is_first_message: bool = True
         self._last_broadcast_id: Optional[int] = None
         self._last_complete_max_iterations: bool = False
+        self._fallback_model: Optional[str] = None  # Set when provider falls back
 
         # Specialized handlers
         self._startup = StartupHandler(auth_service, api_client, self._context_builder)
@@ -488,12 +490,16 @@ class InteractiveHandler:
             turn_complete = False
 
             try:
+                # Use fallback model if primary provider failed earlier
+                _model_override = self._fallback_model or None
+
                 async for event in self._chat_service.send_message(
                     prompt=current_prompt,
                     conversation_id=self._conversation_id,
                     tool_results=current_tool_results,
                     project_context=project_context,
                     images=images_payload,
+                    model=_model_override,
                     git_remote_url=git_remote_url,
                     gula_version=gula_version,
                     system_prompt_addition=system_prompt_addition,
@@ -518,6 +524,10 @@ class InteractiveHandler:
                     # Accumulate text for /copy
                     if isinstance(event, TextEvent) and event.content:
                         text_chunks.append(event.content)
+
+                    # Track provider fallback — use fallback model for remaining turns
+                    if isinstance(event, ProviderFallbackEvent) and event.new_model:
+                        self._fallback_model = event.new_model
 
                     # Handle tool requests
                     if isinstance(event, ToolRequestsEvent) and event.tool_calls:
