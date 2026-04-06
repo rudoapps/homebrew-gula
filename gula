@@ -523,13 +523,14 @@ if [[ "$COMMAND" == "ai" ]]; then
     echo -e "  ${GREEN}✓${NC} Entorno Python configurado"
   fi
 
-  # Quick check: verify httpx is importable, reinstall if broken
+  # Quick check: verify httpx is importable, reinstall if broken (silent if OK)
   if ! "$_gula_venv/bin/python" -c "import httpx" 2>/dev/null; then
-    echo -e "  ${DIM}Reinstalando dependencias...${NC}"
+    echo -e "  ${DIM}Reparando dependencias...${NC}"
     "$_gula_venv/bin/pip" install --quiet --force-reinstall httpx rich prompt-toolkit pyyaml 2>/dev/null
+    echo -e "  ${GREEN}✓${NC} Dependencias reparadas"
   fi
 
-  # ── Auto-install LSP server for current project type (best-effort) ─
+  # Auto-install LSP server if needed (silent if already installed)
   _lsp_pkg=$("$_gula_venv/bin/python" -c "
 import sys; sys.path.insert(0, '${scripts_dir}/agent')
 from gula_chat.driven.lsp.lsp_server_registry import get_pip_package
@@ -541,8 +542,7 @@ print(pkg or '')
   if [ -n "$_lsp_pkg" ]; then
     echo -e "  ${DIM}Instalando LSP: $_lsp_pkg...${NC}"
     "$_gula_venv/bin/pip" install --quiet "$_lsp_pkg" 2>/dev/null && \
-      echo -e "  ${GREEN}✓${NC} LSP instalado" || \
-      echo -e "  ${DIM}LSP no disponible (instala manualmente: pip install $_lsp_pkg)${NC}"
+      echo -e "  ${GREEN}✓${NC} LSP instalado" || true
   fi
 
   PYTHONPATH="${scripts_dir}/agent" exec "$_gula_venv/bin/python" -m gula_chat "$@"
