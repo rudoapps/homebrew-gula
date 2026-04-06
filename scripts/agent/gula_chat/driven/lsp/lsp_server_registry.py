@@ -119,10 +119,10 @@ def get_pip_package(project_type: str) -> Optional[str]:
     if not config:
         return None
 
-    # Already available
-    if shutil.which(config.command[0]):
+    # Already available (check venv bin too)
+    if _which(config.command[0]):
         return None
-    if config.fallback and shutil.which(config.fallback[0]):
+    if config.fallback and _which(config.fallback[0]):
         return None
 
     return config.pip_package or config.fallback_pip_package
