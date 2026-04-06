@@ -132,20 +132,24 @@ class ShellToolExecutor(BaseToolExecutor):
             stderr_lines: List[str] = []
             start_time = time.time()
             last_display = ""
+            _frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+            _frame_idx = [0]
 
             def _update_display(text: str) -> None:
                 nonlocal last_display
                 last_display = text
                 elapsed = time.time() - start_time
-                display = text[:100] + "..." if len(text) > 100 else text
-                sys.stderr.write(f"\r\033[K  \033[2m{display} ({elapsed:.0f}s)\033[0m")
+                display = text[:80] + "..." if len(text) > 80 else text
+                frame = _frames[_frame_idx[0] % len(_frames)]
+                _frame_idx[0] += 1
+                sys.stderr.write(f"\r\033[K  \033[36m{frame}\033[0m \033[2m{display} ({elapsed:.0f}s)\033[0m")
                 sys.stderr.flush()
 
             async def _read_stream(stream, collector):
                 buf = ""
                 while True:
                     try:
-                        chunk = await asyncio.wait_for(stream.read(4096), timeout=2.0)
+                        chunk = await asyncio.wait_for(stream.read(4096), timeout=0.5)
                     except asyncio.TimeoutError:
                         _update_display(last_display or "Ejecutando...")
                         continue
