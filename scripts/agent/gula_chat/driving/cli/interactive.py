@@ -476,24 +476,11 @@ class InteractiveHandler:
         _tool_iterations = 0
         _MAX_TOOL_ITERATIONS = 30  # Max tool call rounds per user message
 
-        # Esc listener for aborting during execution
-        from .escape_listener import EscapeListener
-        _esc = EscapeListener()
-        _esc.start()
-
         while True:
-            # Check Esc abort
-            if _esc.abort_requested:
-                _esc.stop()
-                self._console.print()
-                self._console.print("  [yellow]\u26a0 Interrumpido (Esc)[/yellow]")
-                self._console.print()
-                return
-
             renderer = SSERenderer()
             # Show spinner immediately while waiting for server response
             if current_tool_results is not None:
-                renderer.show_waiting_spinner("Procesando resultados... [dim](Esc para parar)[/dim]")
+                renderer.show_waiting_spinner("Procesando resultados... [dim](Ctrl+C para parar)[/dim]")
             else:
                 renderer.show_waiting_spinner("Enviando...")
             text_chunks: List[str] = []
@@ -683,14 +670,6 @@ class InteractiveHandler:
                     self._tool_orchestrator.request_abort()
                     return
 
-                # Check Esc abort after tool execution
-                if _esc.abort_requested:
-                    _esc.stop()
-                    self._console.print()
-                    self._console.print("  [yellow]\u26a0 Interrumpido (Esc)[/yellow]")
-                    self._console.print()
-                    return
-
                 # Loop: send tool results back, no new prompt, images, or context
                 current_prompt = None
                 current_tool_results = tool_results
@@ -714,8 +693,6 @@ class InteractiveHandler:
             # No more tool requests or turn is complete
             if turn_complete or not pending_tool_event:
                 break
-
-        _esc.stop()
 
         # If max iterations was reached, offer to continue
         if self._last_complete_max_iterations:
