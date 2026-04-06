@@ -139,7 +139,13 @@ class ShellToolExecutor(BaseToolExecutor):
                 nonlocal last_display
                 last_display = text
                 elapsed = time.time() - start_time
-                display = text[:80] + "..." if len(text) > 80 else text
+                # Strip ANSI codes and Rich markup from display
+                import re as _re
+                clean = _re.sub(r'\033\[[0-9;]*m', '', text)
+                clean = _re.sub(r'\[/?[a-z_.]+\]', '', clean)
+                display = clean.strip()[:80]
+                if not display:
+                    display = "Ejecutando..."
                 frame = _frames[_frame_idx[0] % len(_frames)]
                 _frame_idx[0] += 1
                 sys.stderr.write(f"\r\033[K  \033[36m{frame}\033[0m \033[2m{display} ({elapsed:.0f}s)\033[0m")
