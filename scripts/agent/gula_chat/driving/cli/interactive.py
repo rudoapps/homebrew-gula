@@ -537,8 +537,15 @@ class InteractiveHandler:
                         renderer.render(event)
                         continue
 
-                    # Handle errors as terminal
+                    # Handle errors — auto-retry with fallback on credit errors
                     if isinstance(event, ErrorEvent):
+                        if "credit" in event.error.lower() or "insufficient" in event.error.lower():
+                            renderer.finalize()
+                            # Auto-retry with OpenAI fallback
+                            if not self._fallback_model:
+                                self._fallback_model = "gpt-5.4"
+                            self._console.print(f"  [yellow]\u26a0 Sin creditos. Reintentando con {self._fallback_model}...[/yellow]")
+                            break  # Break inner loop to retry with fallback model
                         renderer.render(event)
                         turn_complete = True
                         continue
