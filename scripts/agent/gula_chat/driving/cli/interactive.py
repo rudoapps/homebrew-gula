@@ -540,14 +540,14 @@ class InteractiveHandler:
                     # Handle errors — auto-retry with fallback on credit errors
                     if isinstance(event, ErrorEvent):
                         if "credit" in event.error.lower() or "insufficient" in event.error.lower():
-                            renderer.finalize()
-                            # Auto-retry with a non-Claude model
+                            # Only auto-retry once — if we already have a fallback, don't loop
                             if not self._fallback_model:
+                                renderer.finalize()
                                 self._fallback_model = await self._find_openai_fallback()
-                            if self._fallback_model:
-                                self._console.print(f"  [yellow]\u26a0 Sin creditos. Reintentando con {self._fallback_model}...[/yellow]")
-                                break
-                            # No fallback found — show error normally
+                                if self._fallback_model:
+                                    self._console.print(f"  [yellow]\u26a0 Sin creditos. Reintentando con {self._fallback_model}...[/yellow]")
+                                    break
+                            # Already retried or no fallback — show error
                         renderer.render(event)
                         turn_complete = True
                         continue
@@ -868,9 +868,10 @@ class InteractiveHandler:
                 access_token=config.access_token,
             )
             models = data if isinstance(data, list) else data.get("models", [])
-            # Pick the first available non-Claude model
+            # Pick the first available non-Claude model (case-insensitive)
             for m in models:
-                if m.get("available") and m.get("provider") != "Claude":
+                provider = (m.get("provider") or "").lower()
+                if m.get("available") and "claude" not in provider:
                     return m.get("id")
         except Exception:
             pass
