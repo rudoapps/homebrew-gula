@@ -149,21 +149,37 @@ class SSERenderer:
         if event.conversation_id:
             self._conversation_id = event.conversation_id
 
-        # Phase 1: Display tool calls but don't execute them
+        # Phase 1: Display tool calls
         if event.tool_calls:
             self._console.print()
-            for tc in event.tool_calls:
+            count = len(event.tool_calls)
+
+            if count <= 3:
+                # Few tools — show full detail
+                for tc in event.tool_calls:
+                    self._console.print(
+                        f"  [agent.tool]\u2192 Tool:[/agent.tool] "
+                        f"[agent.tool_name]{tc.name}[/agent.tool_name]"
+                    )
+                    if tc.input:
+                        import json
+                        preview = json.dumps(tc.input, ensure_ascii=False)
+                        if len(preview) > 100:
+                            preview = preview[:97] + "..."
+                        self._console.print(f"    [dim]{preview}[/dim]")
+            else:
+                # Many tools — compact summary
+                tool_names = [tc.name for tc in event.tool_calls]
+                unique = sorted(set(tool_names))
+                counts = {n: tool_names.count(n) for n in unique}
+                summary_parts = []
+                for name, c in counts.items():
+                    summary_parts.append(f"{name}" + (f" x{c}" if c > 1 else ""))
+                sep = " \u00b7 "
                 self._console.print(
-                    f"  [agent.tool]\u2192 Tool:[/agent.tool] "
-                    f"[agent.tool_name]{tc.name}[/agent.tool_name]"
+                    f"  [agent.tool]\u2192 {count} tools:[/agent.tool] "
+                    f"[dim]{sep.join(summary_parts)}[/dim]"
                 )
-                # Show a compact preview of the input
-                if tc.input:
-                    import json
-                    preview = json.dumps(tc.input, ensure_ascii=False)
-                    if len(preview) > 100:
-                        preview = preview[:97] + "..."
-                    self._console.print(f"    [dim]{preview}[/dim]")
 
     def _handle_complete(self, event: CompleteEvent) -> None:
         self._flush_remaining_text()
