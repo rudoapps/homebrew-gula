@@ -317,8 +317,13 @@ class InteractiveHandler:
 
                 # Handle command actions
                 if cmd_result.action == "new_conversation":
+                    # Save summary of current conversation as memory
+                    if self._conversation_id and self._turn_count > 2:
+                        self._save_conversation_summary()
+
                     self._conversation_id = None
                     self._is_first_message = True
+                    self._fallback_model = None
                     self._config_port.clear_project_conversation()
                     self._context_builder.rebuild()
                     self._header.show_new_conversation()
@@ -689,8 +694,19 @@ class InteractiveHandler:
                     self._tool_orchestrator.request_abort()
                     return
 
-                # Loop: send tool results back, no new prompt, images, or context
+                # Detect failed test/build commands — inject auto-fix hint
+                _has_test_failure = False
+                for _tr in tool_results:
+                    if _tr.name == "run_command" and _tr.output and "exit code:" in _tr.output.lower():
+                        if any(kw in _tr.output.lower() for kw in ["failed", "error", "failure", "traceback"]):
+                            _has_test_failure = True
+                            break
+
+                # Loop: send tool results back
                 current_prompt = None
+                if _has_test_failure:
+                    # Inject auto-fix instruction so LLM acts without waiting
+                    current_prompt = "[SISTEMA] El comando falló. Lee el error, arregla el código y vuelve a ejecutar. NO pares a explicar."
                 current_tool_results = tool_results
                 images_payload = None
                 project_context = None
@@ -858,6 +874,40 @@ class InteractiveHandler:
         skills = self._skill_service.list_skills()
         output = format_skills_display(skills)
         self._console.print(output)
+
+    def _save_conversation_summary(self) -> None:
+        """Save a summary of the current conversation as persistent memory."""
+        try:
+            from ...driven.memory.local_memory import LocalMemory
+            import time as _time
+
+            summary_parts = [
+                f"Conversacion #{self._conversation_id}",
+                f"{self._turn_count} turnos",
+                f"${self._total_cost:.4f}",
+            ]
+
+            # Include file changes if available
+            if self._tool_orchestrator:
+                changes = self._tool_orchestrator.file_changes
+                if changes:
+                    files = [c["path"] for c in changes[:10]]
+                    summary_parts.append(f"Archivos: {', '.join(files)}")
+
+            # Include last response snippet
+            if self._last_response:
+                snippet = self._last_response[:200].replace("\n", " ")
+                summary_parts.append(f"Ultimo: {snippet}")
+
+            content = " | ".join(summary_parts)
+            date = _time.strftime("%Y-%m-%d")
+            LocalMemory().save_memory(
+                f"conv-{self._conversation_id}-{date}",
+                content,
+                "project",
+            )
+        except Exception:
+            pass  # Best-effort, don't break /new if memory fails
 
     async def _find_openai_fallback(self) -> Optional[str]:
         """Find an available non-Claude model from the backend."""

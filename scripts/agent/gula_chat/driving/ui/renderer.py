@@ -49,6 +49,8 @@ class SSERenderer:
         self._model: str = ""
         self._rag_indicator: str = ""
         self._conversation_id: Optional[int] = None
+        self._session_cost: float = 0.0
+        self._session_tokens: int = 0
 
     def render(self, event: SSEEvent) -> None:
         """Render a single SSE event to the console.
@@ -115,7 +117,7 @@ class SSERenderer:
             self._rag_indicator = " [RAG]"
 
         model_tag = f" ({event.model})" if event.model else ""
-        self._spinner.start(f"Conversacion #{event.conversation_id}{self._rag_indicator}{model_tag}")
+        self._spinner.start(f"#{event.conversation_id}{self._rag_indicator}{model_tag}")
 
     def _handle_thinking(self, event: ThinkingEvent) -> None:
         # Flush any accumulated text before showing spinner
@@ -123,7 +125,8 @@ class SSERenderer:
             self._flush_remaining_text()
             self._console.print()
         model_tag = f" ({event.model})" if event.model else ""
-        self._spinner.start(f"Pensando...{model_tag}")
+        cost_tag = f" · ${self._session_cost:.4f}" if self._session_cost > 0 else ""
+        self._spinner.start(f"Pensando...{model_tag}{cost_tag}")
 
     def _handle_text(self, event: TextEvent) -> None:
         if not event.content:
@@ -148,6 +151,12 @@ class SSERenderer:
 
         if event.conversation_id:
             self._conversation_id = event.conversation_id
+
+        # Track running cost
+        if event.session_cost > 0:
+            self._session_cost = event.session_cost
+        if event.session_tokens > 0:
+            self._session_tokens = event.session_tokens
 
         # Phase 1: Display tool calls
         if event.tool_calls:
