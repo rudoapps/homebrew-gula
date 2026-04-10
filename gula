@@ -467,18 +467,39 @@ if [[ "$COMMAND" == "ai" ]]; then
   echo -e "  ${DIM}[gula] iniciando agente...${NC}" >&2
 
   # ── Resolve best Python (3.10+) ──────────────────────────────────
+  # Prefer Homebrew's python@3.12 (declared as a formula dependency,
+  # so it's guaranteed to exist on installs via brew). Fall back to
+  # any other Python 3.10+ on PATH if for some reason it's missing.
   _gula_python=""
-  for _candidate in python3.13 python3.12 python3.11 python3.10 python3; do
-    _path=$(command -v "$_candidate" 2>/dev/null)
-    if [ -n "$_path" ]; then
-      _ver=$("$_path" -c "import sys; print(sys.version_info[:2] >= (3,10))" 2>/dev/null)
-      if [ "$_ver" = "True" ]; then
-        _gula_python="$_path"
-        break
-      fi
+  _brew_py_paths=(
+    "$HOMEBREW_PREFIX/opt/python@3.12/bin/python3.12"
+    "$HOMEBREW_PREFIX/opt/python@3.12/libexec/bin/python3"
+    "$HOMEBREW_PREFIX/bin/python3.12"
+    "/opt/homebrew/opt/python@3.12/bin/python3.12"
+    "/home/linuxbrew/.linuxbrew/opt/python@3.12/bin/python3.12"
+  )
+  for _bp in "${_brew_py_paths[@]}"; do
+    if [ -x "$_bp" ]; then
+      _gula_python="$_bp"
+      break
     fi
   done
-  # Also check common paths explicitly (Homebrew macOS + Linux)
+
+  # Fallback: scan PATH for any python 3.10+
+  if [ -z "$_gula_python" ]; then
+    for _candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+      _path=$(command -v "$_candidate" 2>/dev/null)
+      if [ -n "$_path" ]; then
+        _ver=$("$_path" -c "import sys; print(sys.version_info[:2] >= (3,10))" 2>/dev/null)
+        if [ "$_ver" = "True" ]; then
+          _gula_python="$_path"
+          break
+        fi
+      fi
+    done
+  fi
+
+  # Last-resort: common system paths
   if [ -z "$_gula_python" ]; then
     for _bp in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
       if [ -x "$_bp" ]; then
@@ -490,11 +511,13 @@ if [[ "$COMMAND" == "ai" ]]; then
       fi
     done
   fi
+
   if [ -z "$_gula_python" ]; then
     echo -e "${RED}Error: Se requiere Python 3.10 o superior.${NC}"
     echo -e "Instala con: ${BOLD}brew install python@3.12${NC}"
     exit 1
   fi
+  echo -e "  ${DIM}[gula] python detectado: $_gula_python${NC}" >&2
 
   # ── Ensure venv with dependencies ─────────────────────────────────
   # ⚠️  BUMP THIS NUMBER when adding/changing Python dependencies.

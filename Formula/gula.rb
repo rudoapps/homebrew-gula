@@ -7,6 +7,7 @@ class Gula < Formula
 
   depends_on "go" => :build
   depends_on "jq"
+  depends_on "python@3.12"  # Required by gula ai (CLI agent)
   depends_on "glow" => :recommended  # For better markdown/table rendering
 
   def install
