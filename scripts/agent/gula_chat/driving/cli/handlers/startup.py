@@ -208,7 +208,9 @@ class StartupHandler:
                 "  [dim]Esperando autenticacion en el navegador...[/dim]",
                 spinner="dots",
             ):
-                config = await self._auth_service.login()
+                config = await self._auth_service.login(
+                    on_url_ready=self._show_login_url
+                )
             self._console.print("  [green]\u2713[/green] Sesion iniciada correctamente")
             self._console.print()
             return config
@@ -220,6 +222,22 @@ class StartupHandler:
             self._console.print(f"  [red]\u2717 Error de autenticacion: {exc}[/red]")
             self._console.print()
             return None
+
+    def _show_login_url(self, url: str, opened: bool) -> None:
+        """Display the login URL so the user can open it manually if needed."""
+        self._console.print()
+        if opened:
+            self._console.print(
+                "  [dim]Si el navegador no se abrio automaticamente, "
+                "abre este enlace:[/dim]"
+            )
+        else:
+            self._console.print(
+                "  [yellow]No se pudo abrir el navegador automaticamente. "
+                "Abre este enlace manualmente:[/yellow]"
+            )
+        self._console.print(f"  [cyan]{url}[/cyan]")
+        self._console.print()
 
     def track_broadcast_ids(self, messages: List[dict]) -> None:
         """Update last seen broadcast ID."""

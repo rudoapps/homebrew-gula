@@ -86,11 +86,16 @@ class AuthService:
             )
         return await self._do_refresh(config)
 
-    async def login(self) -> AppConfig:
+    async def login(self, on_url_ready=None) -> AppConfig:
         """Perform interactive browser-based login.
 
         Creates a CLI auth session, opens the browser for the user to log in,
         then polls until the session completes or times out.
+
+        Args:
+            on_url_ready: Optional callback ``(url, opened)`` invoked once the
+                login URL is ready, where ``opened`` is True if the browser
+                was launched successfully.
 
         Returns:
             Updated AppConfig with fresh tokens.
@@ -111,7 +116,12 @@ class AuthService:
 
         # Step 2: Open browser
         login_url = f"{api_url}/cli-auth/login?session={session_id}"
-        self._open_browser(login_url)
+        opened = self._open_browser(login_url)
+        if on_url_ready is not None:
+            try:
+                on_url_ready(login_url, opened)
+            except Exception:
+                pass
 
         # Step 3: Poll for completion
         for _ in range(self.LOGIN_MAX_ATTEMPTS):
@@ -148,20 +158,67 @@ class AuthService:
         )
 
     @staticmethod
-    def _open_browser(url: str) -> None:
-        """Open URL in the default browser, cross-platform."""
-        system = platform.system()
+    def _is_wsl() -> bool:
+        """Detect if we're running inside Windows Subsystem for Linux."""
+        import os
+        if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSLENV"):
+            return True
         try:
-            if system == "Darwin":
-                subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            elif system == "Linux":
-                subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            elif system == "Windows":
-                subprocess.Popen(["cmd", "/c", "start", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            with open("/proc/version", "r") as f:
+                return "microsoft" in f.read().lower()
+        except OSError:
+            return False
+
+    @staticmethod
+    def _open_browser(url: str) -> bool:
+        """Open URL in the default browser, cross-platform.
+
+        Returns True on success, False if no opener succeeded.
+        """
+        import shutil
+
+        system = platform.system()
+
+        def _try(cmd: list) -> bool:
+            try:
+                subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return True
+            except (OSError, FileNotFoundError):
+                return False
+
+        if system == "Darwin":
+            if _try(["open", url]):
+                return True
+        elif system == "Windows":
+            if _try(["cmd", "/c", "start", "", url]):
+                return True
+        elif system == "Linux":
+            # On WSL, xdg-open delegates to gio which fails. Use the
+            # Windows shell instead so the URL opens in the host browser.
+            if AuthService._is_wsl():
+                # wslview (from wslu) is the cleanest option if installed.
+                if shutil.which("wslview") and _try(["wslview", url]):
+                    return True
+                # Fall back to invoking Windows' cmd.exe via WSL interop.
+                if shutil.which("cmd.exe") and _try(["cmd.exe", "/c", "start", "", url]):
+                    return True
+                if shutil.which("powershell.exe") and _try(
+                    ["powershell.exe", "-NoProfile", "-Command", f"Start-Process '{url}'"]
+                ):
+                    return True
             else:
-                webbrowser.open(url)
+                if shutil.which("xdg-open") and _try(["xdg-open", url]):
+                    return True
+
+        # Last resort: stdlib webbrowser
+        try:
+            return webbrowser.open(url)
         except Exception:
-            webbrowser.open(url)
+            return False
 
     @staticmethod
     def _is_token_expired(token: str, margin_seconds: int = 60) -> bool:
