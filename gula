@@ -460,6 +460,12 @@ fi
 if [[ "$COMMAND" == "ai" ]]; then
   shift  # Remove 'ai' from args
 
+  # Disable EXIT trap immediately — we don't want cleanup_on_exit firing
+  # silently when something goes wrong in this code path.
+  trap - EXIT
+
+  echo -e "  ${DIM}[gula] iniciando agente...${NC}" >&2
+
   # ── Resolve best Python (3.10+) ──────────────────────────────────
   _gula_python=""
   for _candidate in python3.13 python3.12 python3.11 python3.10 python3; do
@@ -494,7 +500,7 @@ if [[ "$COMMAND" == "ai" ]]; then
   # ⚠️  BUMP THIS NUMBER when adding/changing Python dependencies.
   # The venv is deleted and recreated when this changes.
   # Without bumping, existing users keep the old venv and miss new deps.
-  _GULA_DEPS_VERSION="2"
+  _GULA_DEPS_VERSION="3"
   _gula_venv="$HOME/.config/gula-agent/venv"
   _gula_deps_stamp="$_gula_venv/.deps_version"
 
@@ -505,6 +511,15 @@ if [[ "$COMMAND" == "ai" ]]; then
     echo -e "  ${DIM}Actualizando entorno Python...${NC}"
     rm -rf "$_gula_venv"
     _needs_venv=true
+  else
+    # Validate the existing venv's Python version is 3.10+
+    _venv_py_ok=$("$_gula_venv/bin/python" -c "import sys; print(sys.version_info[:2] >= (3,10))" 2>/dev/null)
+    if [ "$_venv_py_ok" != "True" ]; then
+      _venv_py_ver=$("$_gula_venv/bin/python" -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>/dev/null || echo "?")
+      echo -e "  ${YELLOW}Venv existente usa Python $_venv_py_ver, se requiere 3.10+. Recreando...${NC}"
+      rm -rf "$_gula_venv"
+      _needs_venv=true
+    fi
   fi
 
   if [ "$_needs_venv" = true ]; then
@@ -553,24 +568,18 @@ print(pkg or '')
       echo -e "  ${GREEN}✓${NC} LSP instalado" || true
   fi
 
-  # Disable bash EXIT trap before exec — exec replaces this process,
-  # but on some systems (WSL) failed exec can leave the trap firing
-  # without showing the underlying error.
-  trap - EXIT
+  echo -e "  ${DIM}[gula] python=$_gula_venv/bin/python${NC}" >&2
 
-  if [ "${GULA_DIAGNOSE:-}" = "1" ]; then
-    echo -e "  ${DIM}[diag] python: $_gula_venv/bin/python${NC}"
-    echo -e "  ${DIM}[diag] $("$_gula_venv/bin/python" --version 2>&1)${NC}"
-    echo -e "  ${DIM}[diag] PYTHONPATH=${scripts_dir}/agent${NC}"
-    echo -e "  ${DIM}[diag] launching gula_chat...${NC}"
+  # Run python WITHOUT exec so we can detect silent exits and surface
+  # the exit code. exec on WSL has been observed to swallow startup errors.
+  PYTHONPATH="${scripts_dir}/agent" "$_gula_venv/bin/python" -m gula_chat "$@"
+  _gula_rc=$?
+
+  if [ $_gula_rc -ne 0 ]; then
+    echo -e "${RED}[gula] gula_chat termino con codigo $_gula_rc${NC}" >&2
+    echo -e "${YELLOW}Si esto persiste, prueba: rm -rf '$_gula_venv' && gula ai${NC}" >&2
   fi
-
-  PYTHONPATH="${scripts_dir}/agent" exec "$_gula_venv/bin/python" -m gula_chat "$@"
-
-  # If we reach here, exec failed
-  echo -e "${RED}Error: No se pudo iniciar gula_chat (exec fallido).${NC}"
-  echo -e "${YELLOW}Intenta: rm -rf '$_gula_venv' && gula ai${NC}"
-  exit 1
+  exit $_gula_rc
 fi
 
 # Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
