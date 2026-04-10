@@ -523,10 +523,18 @@ if [[ "$COMMAND" == "ai" ]]; then
     echo -e "  ${GREEN}✓${NC} Entorno Python configurado"
   fi
 
-  # Quick check: verify httpx is importable, reinstall if broken (silent if OK)
-  if ! "$_gula_venv/bin/python" -c "import httpx" 2>/dev/null; then
+  # Quick check: verify python+core deps are importable, reinstall if broken
+  _venv_check_err=$("$_gula_venv/bin/python" -c "import httpx, rich, prompt_toolkit, yaml" 2>&1)
+  if [ -n "$_venv_check_err" ]; then
     echo -e "  ${DIM}Reparando dependencias...${NC}"
-    "$_gula_venv/bin/pip" install --quiet --force-reinstall httpx rich prompt-toolkit pyyaml 2>/dev/null
+    if [ -n "$_venv_check_err" ]; then
+      echo -e "  ${DIM}(motivo: $(echo "$_venv_check_err" | tail -1))${NC}"
+    fi
+    "$_gula_venv/bin/pip" install --quiet --force-reinstall httpx rich prompt-toolkit pyyaml || {
+      echo -e "${RED}Error: No se pudieron reparar las dependencias.${NC}"
+      echo -e "${YELLOW}Intenta: rm -rf '$_gula_venv' && gula ai${NC}"
+      exit 1
+    }
     echo -e "  ${GREEN}✓${NC} Dependencias reparadas"
   fi
 
@@ -545,7 +553,24 @@ print(pkg or '')
       echo -e "  ${GREEN}✓${NC} LSP instalado" || true
   fi
 
+  # Disable bash EXIT trap before exec — exec replaces this process,
+  # but on some systems (WSL) failed exec can leave the trap firing
+  # without showing the underlying error.
+  trap - EXIT
+
+  if [ "${GULA_DIAGNOSE:-}" = "1" ]; then
+    echo -e "  ${DIM}[diag] python: $_gula_venv/bin/python${NC}"
+    echo -e "  ${DIM}[diag] $("$_gula_venv/bin/python" --version 2>&1)${NC}"
+    echo -e "  ${DIM}[diag] PYTHONPATH=${scripts_dir}/agent${NC}"
+    echo -e "  ${DIM}[diag] launching gula_chat...${NC}"
+  fi
+
   PYTHONPATH="${scripts_dir}/agent" exec "$_gula_venv/bin/python" -m gula_chat "$@"
+
+  # If we reach here, exec failed
+  echo -e "${RED}Error: No se pudo iniciar gula_chat (exec fallido).${NC}"
+  echo -e "${YELLOW}Intenta: rm -rf '$_gula_venv' && gula ai${NC}"
+  exit 1
 fi
 
 # Manejar comandos del agente AI directamente: gula chat, gula login, gula setup
