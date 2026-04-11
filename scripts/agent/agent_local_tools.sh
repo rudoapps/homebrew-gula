@@ -1265,14 +1265,21 @@ PYEOF
         echo -e "${DIM}💾 Backup creado: $(basename "$backup_path")${NC}" >&2
     fi
 
-    # Perform the actual replacement and write the file
+    # Perform the actual replacement, write the file, and capture a window of
+    # post-edit context (~10 lines around the change). The agent uses that
+    # context to verify the edit and chain follow-up edits without re-reading
+    # — see conv 219 (2026-04-11) for the re-read loop this was solving.
     local write_result
     write_result=$(python3 - "$input_file" "$resolved_path" << 'PYEOF'
 import json
 import sys
+import base64
 
 input_file = sys.argv[1]
 resolved_path = sys.argv[2]
+
+CONTEXT_LINES = 10
+MAX_TOTAL_LINES = 60
 
 try:
     with open(input_file, 'r') as f:
@@ -1289,7 +1296,38 @@ try:
     with open(resolved_path, 'w') as f:
         f.write(new_content)
 
-    print(f"OK:{len(new_content)}")
+    # Build a line-numbered window around the inserted region.
+    context_block = ""
+    if new_string:
+        pos = new_content.find(new_string)
+        if pos != -1:
+            prefix = new_content[:pos]
+            start_line = prefix.count("\n") + 1
+            new_string_line_count = max(1, new_string.count("\n") + 1)
+            end_line = start_line + new_string_line_count - 1
+
+            all_lines = new_content.split("\n")
+            total_lines = len(all_lines)
+
+            window_start = max(1, start_line - CONTEXT_LINES)
+            window_end = min(total_lines, end_line + CONTEXT_LINES)
+
+            if window_end - window_start + 1 > MAX_TOTAL_LINES:
+                window_end = window_start + MAX_TOTAL_LINES - 1
+
+            width = len(str(window_end))
+            ctx_lines = [
+                f"  (lineas {window_start}-{window_end} de {total_lines}, "
+                f"'>' marca las lineas modificadas)"
+            ]
+            for ln in range(window_start, window_end + 1):
+                marker = ">" if start_line <= ln <= end_line else " "
+                ctx_lines.append(f"{ln:>{width}} {marker} {all_lines[ln - 1]}")
+            context_block = "\n".join(ctx_lines)
+
+    # base64 to keep the shell parser happy regardless of newlines/quotes
+    encoded = base64.b64encode(context_block.encode("utf-8")).decode("ascii")
+    print(f"OK:{len(new_content)}:{encoded}")
 except Exception as e:
     print(f"ERROR:{e}")
 PYEOF
@@ -1300,7 +1338,14 @@ PYEOF
         return 1
     fi
 
-    local written_len="${write_result#OK:}"
+    # Parse OK:<len>:<base64_context>
+    local rest="${write_result#OK:}"
+    local written_len="${rest%%:*}"
+    local context_b64="${rest#*:}"
+    local post_edit_context=""
+    if [ -n "$context_b64" ]; then
+        post_edit_context=$(echo "$context_b64" | base64 -d 2>/dev/null || echo "")
+    fi
 
     # Audit log
     audit_log "EDIT_FILE" "$path ($written_len bytes, search & replace)"
@@ -1378,7 +1423,12 @@ PYEOF
 
     echo "" >&2
 
-    echo "Archivo editado: $path ($written_len bytes)"
+    if [ -n "$post_edit_context" ]; then
+        printf 'Archivo editado: %s (%s bytes)\n\nContexto post-edit (%s):\n%s\n' \
+            "$path" "$written_len" "$path" "$post_edit_context"
+    else
+        echo "Archivo editado: $path ($written_len bytes)"
+    fi
 }
 
 # Ejecuta un comando en terminal
