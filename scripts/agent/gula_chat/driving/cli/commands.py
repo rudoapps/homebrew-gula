@@ -182,10 +182,15 @@ class SlashCommandRegistry:
         return CommandResult(handled=True, should_continue=False)
 
     def _cmd_new(self, args: str) -> CommandResult:
-        """Start a new conversation."""
+        """Start a new conversation.
+
+        The "new conversation" banner is rendered by the header
+        (`HeaderRenderer.show_new_conversation`) when interactive.py picks
+        up the `new_conversation` action — so we deliberately leave
+        `output` empty to avoid printing the message twice.
+        """
         return CommandResult(
             handled=True,
-            output="Nueva conversacion iniciada.",
             action="new_conversation",
         )
 
