@@ -170,10 +170,25 @@ class FileToolExecutor(BaseToolExecutor):
         with open(resolved, "w", encoding="utf-8") as f:
             f.write(new_content)
 
-        return (
+        # Post-edit context: return ~20 lines around the change so the agent
+        # doesn't have to re-read the file. Avoids the "edit → re-read → edit
+        # → re-read" loop seen on bulk-edit sessions (conv 219, 2026-04-11
+        # had 9 reads of smtp/adapter.py because each edit forced a fresh
+        # read). For replace_all we show context around the FIRST match;
+        # the agent can grep for the rest if needed.
+        context_block = _build_post_edit_context(
+            new_content=new_content,
+            new_string=new_string,
+            context_lines=10,
+        )
+
+        message = (
             f"Archivo editado: {rel} "
             f"(+{added}/-{removed} lineas, {count} coincidencia(s))"
         )
+        if context_block:
+            message += f"\n\nContexto post-edit ({rel}):\n{context_block}"
+        return message
 
     async def move_file(self, inp: Dict[str, Any]) -> str:
         """Move or rename a file/directory."""
@@ -341,6 +356,56 @@ def _build_diff_detail(old: str, new: str) -> str:
         parts = parts[:30]
         parts.append("  ... (truncado)")
     return "\n".join(parts)
+
+
+def _build_post_edit_context(
+    new_content: str,
+    new_string: str,
+    context_lines: int = 10,
+    max_total_lines: int = 60,
+) -> str:
+    """Return ~context_lines of post-edit content around the inserted region.
+
+    Lets the agent verify the edit and chain follow-up edits without re-reading
+    the file. Returns line-numbered output (matching read_file format) so the
+    agent can reference exact line numbers.
+    """
+    if not new_content or not new_string:
+        return ""
+
+    pos = new_content.find(new_string)
+    if pos == -1:
+        # new_string was empty after a deletion, or a fuzzy replace was used.
+        # Skip context — caller will fall back to grep/read.
+        return ""
+
+    # Convert byte offset to (start_line, end_line) of the new_string.
+    prefix = new_content[:pos]
+    start_line = prefix.count("\n") + 1  # 1-indexed
+    new_string_line_count = max(1, new_string.count("\n") + (1 if new_string else 0))
+    end_line = start_line + new_string_line_count - 1
+
+    all_lines = new_content.split("\n")
+    total_lines = len(all_lines)
+
+    window_start = max(1, start_line - context_lines)
+    window_end = min(total_lines, end_line + context_lines)
+
+    # Bound the total slice in case the edit itself is huge
+    if window_end - window_start + 1 > max_total_lines:
+        window_end = window_start + max_total_lines - 1
+
+    width = len(str(window_end))
+    out_lines: List[str] = []
+    for ln in range(window_start, window_end + 1):
+        marker = ">" if start_line <= ln <= end_line else " "
+        out_lines.append(f"{ln:>{width}} {marker} {all_lines[ln - 1]}")
+
+    header = (
+        f"  (lineas {window_start}-{window_end} de {total_lines}, "
+        f"'>' marca las lineas modificadas)"
+    )
+    return header + "\n" + "\n".join(out_lines)
 
 
 def _build_write_diff(current: str, new: str) -> str:
