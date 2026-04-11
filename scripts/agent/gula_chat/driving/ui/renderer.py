@@ -22,6 +22,7 @@ from ...domain.entities.sse_event import (
     ProviderFallbackEvent,
     NoProvidersAvailableEvent,
     RepairedEvent,
+    InternalCallEvent,
 )
 from .console import get_console
 from .markdown import render_markdown
@@ -88,6 +89,8 @@ class SSERenderer:
             self._handle_no_providers(event)
         elif isinstance(event, RepairedEvent):
             self._handle_repaired(event)
+        elif isinstance(event, InternalCallEvent):
+            self._handle_internal_call(event)
 
     def finalize(self) -> None:
         """Clean up any remaining state (flush text, stop spinner)."""
@@ -207,12 +210,20 @@ class SSERenderer:
             parts.append(f"{event.session_tokens:,} tokens")
 
         if event.session_cost > 0:
-            parts.append(f"${event.session_cost:.4f}")
+            session_str = f"${event.session_cost:.4f}"
+            if event.session_internal_cost > 0:
+                session_str += (
+                    f" (+${event.session_internal_cost:.4f} internal)"
+                )
+            parts.append(session_str)
 
         parts.append(f"{elapsed:.1f}s")
 
         if event.total_cost > 0:
-            parts.append(f"total: ${event.total_cost:.4f}")
+            total_str = f"total: ${event.total_cost:.4f}"
+            if event.total_internal_cost > 0:
+                total_str += f" (+${event.total_internal_cost:.4f} internal)"
+            parts.append(total_str)
 
         summary = " · ".join(parts)
         self._console.print(f"  [dim]── {summary}[/dim]")
@@ -256,6 +267,41 @@ class SSERenderer:
 
     def _handle_rate_limited(self, event: RateLimitedEvent) -> None:
         self._spinner.stop(event.message or "Rate limit alcanzado", "info")
+
+    def _handle_internal_call(self, event: InternalCallEvent) -> None:
+        """Show a one-liner for an internal LLM call (compaction, classifier,
+        RAG enhancer, subagent, …) so the user can see where time/cost goes."""
+        # Map caller code → human label + emoji
+        labels = {
+            "compaction": ("🧠", "compaction"),
+            "rag_enhancer_or_classifier": ("🏷", "classifier/RAG enhancer"),
+            "rag_architecture_guide": ("📐", "RAG architecture guide"),
+            "subagent": ("🤖", "subagent"),
+            "subagent_fallback": ("🤖", "subagent (fallback)"),
+            "llm_router": ("🔀", "llm router"),
+            "llm_router_fallback": ("🔀", "llm router (fallback)"),
+        }
+        emoji, label = labels.get(event.caller, ("⚙", event.caller or "internal"))
+
+        # Don't disturb the spinner — write a quiet inline line.
+        was_spinning = (
+            self._spinner.is_running() if hasattr(self._spinner, "is_running") else False
+        )
+        if was_spinning:
+            self._spinner.stop()
+
+        model_tag = f" ({event.model_id})" if event.model_id else ""
+        cost_tag = f" · ${event.cost:.4f}" if event.cost > 0 else ""
+        tok_tag = (
+            f" · {event.total_tokens:,} tok" if event.total_tokens > 0 else ""
+        )
+        self._console.print(
+            f"  [dim]{emoji} {label}{model_tag}{tok_tag}{cost_tag}[/dim]"
+        )
+
+        if was_spinning:
+            # Restart a generic spinner — the next event will replace it
+            self._spinner.start("Pensando...")
 
     def _handle_rag_search(self, event: RagSearchEvent) -> None:
         query_preview = event.query[:60]

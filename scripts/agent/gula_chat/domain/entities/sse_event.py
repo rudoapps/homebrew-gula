@@ -60,6 +60,11 @@ class CompleteEvent(SSEEvent):
     session_cost: float = 0.0
     session_input_tokens: int = 0
     session_output_tokens: int = 0
+    # Cost of internal LLM calls (compaction, classifier, RAG enhancer, …)
+    # NOT included in `session_cost`/`total_cost`. Surface separately so the
+    # CLI can show "$X main + $Y internal".
+    session_internal_cost: float = 0.0
+    total_internal_cost: float = 0.0
     max_iterations_reached: bool = False
     truncation_stats: Dict[str, Any] = field(default_factory=dict)
 
@@ -70,6 +75,29 @@ class CompleteEvent(SSEEvent):
     @property
     def session_tokens(self) -> int:
         return self.session_input_tokens + self.session_output_tokens
+
+
+@dataclass(frozen=True)
+class InternalCallEvent(SSEEvent):
+    """An internal LLM call (compaction, classifier, RAG enhancer, subagent…)
+    just completed. Used by the CLI to surface where time/cost is going."""
+
+    caller: str = ""
+    model_id: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    cost: float = 0.0
+
+    @property
+    def total_tokens(self) -> int:
+        return (
+            self.input_tokens
+            + self.output_tokens
+            + self.cache_creation_tokens
+            + self.cache_read_tokens
+        )
 
 
 @dataclass(frozen=True)

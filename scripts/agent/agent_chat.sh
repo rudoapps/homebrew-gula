@@ -1197,6 +1197,11 @@ ${content}"
             local new_conv_id=$(json_get "$response" "conversation_id" 2>/dev/null || echo "")
             local msg_cost=$(json_get_num "$response" "total_cost" 2>/dev/null || echo "0")
             local session_cost=$(json_get_num "$response" "session_cost" 2>/dev/null || echo "0")
+            # Internal cost (compaction, classifier, RAG enhancer, …) — NOT
+            # included in session_cost/total_cost. Surfaced so the user sees
+            # the FULL spend (cuadra con la consola de Anthropic).
+            local session_internal_cost=$(json_get_num "$response" "session_internal_cost" 2>/dev/null || echo "0")
+            local total_internal_cost=$(json_get_num "$response" "total_internal_cost" 2>/dev/null || echo "0")
             local msg_elapsed=$(json_get_num "$response" "elapsed_time" 2>/dev/null || echo "0")
             local msg_tokens=$(json_get_num "$response" "total_tokens" 2>/dev/null || echo "0")
             local session_tokens=$(json_get_num "$response" "session_tokens" 2>/dev/null || echo "0")
@@ -1257,7 +1262,15 @@ ${content}"
                 [ -z "$session_cost" ] && session_cost=0
                 local session_cost_fmt=$(format_cost "${session_cost:-0}")
                 [ -n "$summary_parts" ] && summary_parts="$summary_parts · "
-                summary_parts="${summary_parts}\$${session_cost_fmt} · ${session_tokens} tokens"
+                summary_parts="${summary_parts}\$${session_cost_fmt}"
+                # Append "(+$X internal)" if internal traffic was tracked.
+                # awk comparison is locale-safe for floats.
+                local has_internal=$(awk -v v="${session_internal_cost:-0}" 'BEGIN { print (v+0 > 0) ? "1" : "0" }')
+                if [ "$has_internal" = "1" ]; then
+                    local internal_fmt=$(format_cost "${session_internal_cost:-0}")
+                    summary_parts="${summary_parts} (+\$${internal_fmt} internal)"
+                fi
+                summary_parts="${summary_parts} · ${session_tokens} tokens"
             fi
 
             # Tools count

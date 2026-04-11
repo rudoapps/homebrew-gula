@@ -1577,6 +1577,10 @@ try:
                 result["total_tokens"] = parsed.get("total_input_tokens", 0) + parsed.get("total_output_tokens", 0)
                 result["session_cost"] = parsed.get("session_cost", 0)
                 result["session_tokens"] = parsed.get("session_input_tokens", 0) + parsed.get("session_output_tokens", 0)
+                # Internal LLM cost (compaction, classifier, RAG enhancer, …)
+                # tracked separately so the user sees the FULL spend.
+                result["session_internal_cost"] = parsed.get("session_internal_cost", 0)
+                result["total_internal_cost"] = parsed.get("total_internal_cost", 0)
                 result["max_iterations_reached"] = parsed.get("max_iterations_reached", False)
                 result["truncation_stats"] = parsed.get("truncation_stats", {})
 
@@ -1676,6 +1680,47 @@ try:
                 # Show message but restart spinner (more events may come)
                 spinner.stop(f"⚠️ Conversacion recuperada (estaba interrumpida)", "info")
                 spinner.start("Continuando...")
+
+            elif event_type == "internal_call":
+                # Internal LLM call completed (compaction, task classifier,
+                # RAG enhancer, subagent, …). Show a one-liner so the user
+                # sees where time/cost is going. The cost is NOT in
+                # session_cost — it's in session_internal_cost (complete event).
+                ic_caller = parsed.get("caller", "internal")
+                ic_model = parsed.get("model_id", "")
+                ic_cost = parsed.get("cost", 0.0)
+                ic_tokens = (
+                    parsed.get("input_tokens", 0)
+                    + parsed.get("output_tokens", 0)
+                    + parsed.get("cache_creation_tokens", 0)
+                    + parsed.get("cache_read_tokens", 0)
+                )
+
+                ic_labels = {
+                    "compaction": ("🧠", "compaction"),
+                    "rag_enhancer_or_classifier": ("🏷", "classifier/RAG enhancer"),
+                    "rag_architecture_guide": ("📐", "RAG architecture guide"),
+                    "subagent": ("🤖", "subagent"),
+                    "subagent_fallback": ("🤖", "subagent (fallback)"),
+                    "llm_router": ("🔀", "llm router"),
+                    "llm_router_fallback": ("🔀", "llm router (fallback)"),
+                }
+                ic_emoji, ic_label = ic_labels.get(ic_caller, ("⚙", ic_caller))
+
+                ic_was_spinning = spinner.running
+                if ic_was_spinning:
+                    spinner.stop()
+
+                ic_model_tag = f" {DIM}({ic_model}){NC}" if ic_model else ""
+                ic_cost_tag = f" {DIM}· ${ic_cost:.4f}{NC}" if ic_cost > 0 else ""
+                ic_tok_tag = f" {DIM}· {ic_tokens:,} tok{NC}" if ic_tokens > 0 else ""
+                sys.stderr.write(
+                    f"  {DIM}{ic_emoji} {ic_label}{NC}{ic_model_tag}{ic_tok_tag}{ic_cost_tag}\n"
+                )
+                sys.stderr.flush()
+
+                if ic_was_spinning:
+                    spinner.start("Pensando...")
 
             elif event_type == "error":
                 result["error"] = parsed.get("error", "Unknown error")

@@ -22,6 +22,7 @@ from ...domain.entities.sse_event import (
     ProviderFallbackEvent,
     NoProvidersAvailableEvent,
     RepairedEvent,
+    InternalCallEvent,
 )
 from ...domain.entities.tool_call import ToolCall
 
@@ -153,8 +154,21 @@ def _build_event(event_type: str, data: Dict[str, Any]) -> Optional[SSEEvent]:
             session_cost=data.get("session_cost", 0.0),
             session_input_tokens=data.get("session_input_tokens", 0),
             session_output_tokens=data.get("session_output_tokens", 0),
+            session_internal_cost=data.get("session_internal_cost", 0.0),
+            total_internal_cost=data.get("total_internal_cost", 0.0),
             max_iterations_reached=data.get("max_iterations_reached", False),
             truncation_stats=data.get("truncation_stats", {}),
+        )
+
+    if event_type == "internal_call":
+        return InternalCallEvent(
+            caller=data.get("caller", ""),
+            model_id=data.get("model_id", ""),
+            input_tokens=data.get("input_tokens", 0),
+            output_tokens=data.get("output_tokens", 0),
+            cache_creation_tokens=data.get("cache_creation_tokens", 0),
+            cache_read_tokens=data.get("cache_read_tokens", 0),
+            cost=data.get("cost", 0.0),
         )
 
     if event_type == "error":
