@@ -251,22 +251,76 @@ class ToolDisplay:
         self._console.print(panel)
 
     def _render_flat_detail(self, detail: str) -> None:
-        """Render detail as flat colored lines (original behavior)."""
-        in_script_block = False
-        for line in detail.split("\n"):
+        """Render detail as flat colored lines (original behavior).
+
+        Script blocks (── contenido del script ──) are rendered inside a
+        Rich Panel with syntax highlighting for better readability.
+        """
+        lines = detail.split("\n")
+        i = 0
+        while i < len(lines):
+            line = lines[i]
             if line.startswith("── contenido del script"):
-                in_script_block = True
-                self._console.print(f"  [bold cyan]{line}[/bold cyan]")
-            elif in_script_block:
-                self._console.print(f"  [yellow]{line}[/yellow]")
+                # Collect all script lines until end of detail
+                script_lines = []
+                i += 1
+                while i < len(lines):
+                    script_lines.append(lines[i])
+                    i += 1
+
+                # Detect language from content (simple heuristic)
+                script_text = "\n".join(script_lines)
+                lang = "python"
+                if script_text.lstrip().startswith(("#!/bin/bash", "#!/bin/sh", "set -")):
+                    lang = "bash"
+                elif script_text.lstrip().startswith(("{", "[")):
+                    lang = "json"
+
+                try:
+                    from rich.syntax import Syntax
+                    # Show with line numbers inside a panel
+                    total_lines = len(script_lines)
+                    max_preview = 30
+                    preview = "\n".join(script_lines[:max_preview])
+                    syntax = Syntax(
+                        preview,
+                        lang,
+                        line_numbers=True,
+                        theme="monokai",
+                        word_wrap=True,
+                    )
+                    title = f" contenido ({total_lines} lineas) "
+                    if total_lines > max_preview:
+                        title += f"— mostrando {max_preview} "
+                    code_panel = Panel(
+                        syntax,
+                        title=title,
+                        title_align="left",
+                        border_style="dim",
+                        padding=(0, 1),
+                    )
+                    self._console.print(code_panel)
+                    if total_lines > max_preview:
+                        self._console.print(
+                            f"  [dim]... +{total_lines - max_preview} "
+                            f"lineas mas (pulsa 'd' para ver todo)[/dim]"
+                        )
+                except ImportError:
+                    # Fallback if Syntax not available
+                    for sl in script_lines:
+                        self._console.print(f"  [yellow]{sl}[/yellow]")
             elif line.startswith("  - "):
                 self._console.print(f"  [red]{line}[/red]")
+                i += 1
             elif line.startswith("  + "):
                 self._console.print(f"  [green]{line}[/green]")
+                i += 1
             elif line.lstrip().startswith("@@"):
                 self._console.print(f"  [cyan]{line}[/cyan]")
+                i += 1
             else:
                 self._console.print(f"  [dim]{line}[/dim]")
+                i += 1
 
     def reset_turn_approval(self) -> None:
         """Reset auto-approval at the start of a new turn."""
