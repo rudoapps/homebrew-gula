@@ -77,6 +77,14 @@ class ToolDisplay:
             if summary:
                 self._console.print(f"  [dim]  {summary}[/dim]")
 
+        # Show compact edit details for edit_file / write_file so the
+        # user can see WHAT changed even in auto-approve mode.
+        if name in ("edit_file", "write_file") and output and success:
+            edit_summary = _extract_edit_summary(output)
+            if edit_summary:
+                for line in edit_summary:
+                    self._console.print(f"  [dim]  {line}[/dim]")
+
     def show_parallel_summary(
         self,
         count: int,
@@ -331,6 +339,45 @@ class ToolDisplay:
         self._console.print(f"  [bold cyan]\u2139 {count} archivos a modificar:[/bold cyan]")
         for line in summary.strip().split("\n"):
             self._console.print(f"  [dim]{line.strip()}[/dim]")
+
+
+def _extract_edit_summary(output: str) -> list[str]:
+    """Extract a compact summary of an edit_file / write_file result.
+
+    For edit_file (which now includes post-edit context lines marked with
+    '>'), returns those modified lines so the user sees WHAT changed at a
+    glance — even in auto-approve mode where the diff dialog was skipped.
+
+    For write_file, returns the first 3 lines of the new file content.
+
+    Returns:
+        A list of display lines (max ~5), or [] if nothing useful.
+    """
+    lines = output.split("\n")
+
+    # edit_file with post-edit context — look for '>' marked lines
+    modified = [
+        l.strip()
+        for l in lines
+        if len(l) > 3 and l.lstrip()[:1].isdigit() and ">" in l
+    ]
+    if modified:
+        # Show up to 5 modified lines
+        result = modified[:5]
+        remaining = len(modified) - 5
+        if remaining > 0:
+            result.append(f"... (+{remaining} lineas modificadas)")
+        return result
+
+    # write_file — show first 3 content lines (skip the "Archivo creado" header)
+    content_lines = [l for l in lines[1:] if l.strip()]
+    if content_lines:
+        preview = content_lines[:3]
+        if len(content_lines) > 3:
+            preview.append("...")
+        return preview
+
+    return []
 
 
 def _extract_command_summary(output: str) -> str:

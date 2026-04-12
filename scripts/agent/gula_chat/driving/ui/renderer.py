@@ -284,9 +284,10 @@ class SSERenderer:
         emoji, label = labels.get(event.caller, ("⚙", event.caller or "internal"))
 
         # Don't disturb the spinner — write a quiet inline line.
-        was_spinning = (
-            self._spinner.is_running() if hasattr(self._spinner, "is_running") else False
-        )
+        # IMPORTANT: Spinner.is_running is a @property (not a method).
+        # Calling it with () → 'bool' object is not callable.
+        # See test_spinner_is_running_is_property in the test suite.
+        was_spinning = getattr(self._spinner, "is_running", False)
         if was_spinning:
             self._spinner.stop()
 
