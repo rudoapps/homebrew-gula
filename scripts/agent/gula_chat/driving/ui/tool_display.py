@@ -161,8 +161,11 @@ class ToolDisplay:
 
         self._console.print()
 
-        # Render diff as a Rich Panel if we have file metadata for edit/write
-        if file_meta and tool_name in ("edit_file", "write_file"):
+        # Render diff as a Rich Panel if we have file metadata. The mere
+        # presence of file_meta proves this is a file operation (edit/write)
+        # — don't check tool_name because it's actually the title string
+        # ("Escribir foo.py"), not the tool name ("write_file").
+        if file_meta:
             self._render_diff_panel(tool_name, detail, file_meta)
         else:
             # Fallback: flat rendering for non-file tools (run_command, etc.)
