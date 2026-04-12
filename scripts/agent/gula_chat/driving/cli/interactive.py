@@ -487,7 +487,7 @@ class InteractiveHandler:
             renderer = SSERenderer()
             # Show spinner immediately while waiting for server response
             if current_tool_results is not None:
-                renderer.show_waiting_spinner("Procesando resultados... [dim](Ctrl+C para parar)[/dim]")
+                renderer.show_waiting_spinner("Procesando resultados...")
             else:
                 renderer.show_waiting_spinner("Enviando...")
             text_chunks: List[str] = []
