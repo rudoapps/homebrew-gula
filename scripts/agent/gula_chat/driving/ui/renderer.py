@@ -128,7 +128,7 @@ class SSERenderer:
             self._flush_remaining_text()
             self._console.print()
         model_tag = f" ({event.model})" if event.model else ""
-        cost_tag = f" · ${self._session_cost:.4f}" if self._session_cost > 0 else ""
+        cost_tag = f" · ${float(self._session_cost or 0):.4f}" if self._session_cost else ""
         self._spinner.start(f"Pensando...{model_tag}{cost_tag}")
 
     def _handle_text(self, event: TextEvent) -> None:
@@ -209,20 +209,23 @@ class SSERenderer:
         if event.session_tokens > 0:
             parts.append(f"{event.session_tokens:,} tokens")
 
-        if event.session_cost > 0:
-            session_str = f"${event.session_cost:.4f}"
-            if event.session_internal_cost > 0:
-                session_str += (
-                    f" (+${event.session_internal_cost:.4f} internal)"
-                )
+        _sc = float(event.session_cost or 0)
+        _sic = float(event.session_internal_cost or 0)
+        _tc = float(event.total_cost or 0)
+        _tic = float(event.total_internal_cost or 0)
+
+        if _sc > 0:
+            session_str = f"${_sc:.4f}"
+            if _sic > 0:
+                session_str += f" (+${_sic:.4f} internal)"
             parts.append(session_str)
 
         parts.append(f"{elapsed:.1f}s")
 
-        if event.total_cost > 0:
-            total_str = f"total: ${event.total_cost:.4f}"
-            if event.total_internal_cost > 0:
-                total_str += f" (+${event.total_internal_cost:.4f} internal)"
+        if _tc > 0:
+            total_str = f"total: ${_tc:.4f}"
+            if _tic > 0:
+                total_str += f" (+${_tic:.4f} internal)"
             parts.append(total_str)
 
         summary = " · ".join(parts)
@@ -232,7 +235,7 @@ class SSERenderer:
         if elapsed > 15:
             try:
                 from ...driven.notifications.os_notify import send_notification
-                cost_str = f" (${event.session_cost:.4f})" if event.session_cost > 0 else ""
+                cost_str = f" (${float(event.session_cost or 0):.4f})" if event.session_cost else ""
                 send_notification(
                     "gula - Respuesta lista",
                     f"Completado en {elapsed:.0f}s{cost_str}",
@@ -255,13 +258,13 @@ class SSERenderer:
         self._console.print(
             f"  [cost.warning]Has usado {event.usage_percent:.0f}% "
             f"de tu limite mensual "
-            f"(${event.remaining:.2f} restante de ${event.monthly_limit:.2f})[/cost.warning]"
+            f"(${float(event.remaining or 0):.2f} restante de ${float(event.monthly_limit or 0):.2f})[/cost.warning]"
         )
 
     def _handle_cost_limit(self, event: CostLimitExceededEvent) -> None:
         self._spinner.stop(
             f"Limite de coste mensual alcanzado "
-            f"(${event.current_cost:.2f} / ${event.monthly_limit:.2f})",
+            f"(${float(event.current_cost or 0):.2f} / ${float(event.monthly_limit or 0):.2f})",
             "error",
         )
 
@@ -292,7 +295,7 @@ class SSERenderer:
             self._spinner.stop()
 
         model_tag = f" ({event.model_id})" if event.model_id else ""
-        cost_tag = f" · ${event.cost:.4f}" if event.cost > 0 else ""
+        cost_tag = f" · ${float(event.cost or 0):.4f}" if event.cost else ""
         tok_tag = (
             f" · {event.total_tokens:,} tok" if event.total_tokens > 0 else ""
         )
