@@ -188,7 +188,15 @@ class ToolDisplay:
         detail: str,
         file_meta: Dict[str, str],
     ) -> None:
-        """Render a Rich Panel with colored diff lines."""
+        """Render a Rich Panel with diff lines using background colors.
+
+        - Added lines:   dark green background
+        - Removed lines: dark red background
+        - Context lines: dim (no background)
+
+        For new files, shows the first lines with green background and
+        syntax highlighting via Rich Syntax.
+        """
         filename = file_meta.get("filename", "")
         old_content = file_meta.get("old_content", "")
         new_content = file_meta.get("new_content", "")
@@ -196,23 +204,37 @@ class ToolDisplay:
         is_new_file = not old_content
 
         if is_new_file:
-            # New file — show first few lines of content
-            new_lines = new_content.split("\n")
-            added = len(new_lines)
-            title = f" crear {filename} (+{added}) "
+            # New file — use Syntax with full highlighting
+            from rich.syntax import Syntax
 
-            body = Text()
-            preview_count = min(_MAX_NEW_FILE_PREVIEW_LINES, len(new_lines))
-            for i in range(preview_count):
-                body.append(f"  {i + 1:>4}  ", style="dim")
-                body.append(f"+ {new_lines[i]}\n", style="green")
-            if len(new_lines) > preview_count:
-                body.append(
-                    f"        ... {len(new_lines) - preview_count} lineas mas\n",
-                    style="dim",
+            ext = os.path.splitext(filename)[1].lstrip(".")
+            lang = _detect_language(ext)
+            new_lines = new_content.split("\n")
+            total = len(new_lines)
+            title = f" crear {filename} ({total} lineas) "
+
+            max_preview = _MAX_INLINE_DIFF_LINES
+            preview = "\n".join(new_lines[:max_preview])
+
+            try:
+                syntax = Syntax(
+                    preview, lang,
+                    line_numbers=True, theme="monokai", word_wrap=True,
                 )
+                if total > max_preview:
+                    from rich.console import Group
+                    hint = Text(
+                        f"\n  ... +{total - max_preview} lineas mas"
+                        f"  (pulsa 'd' para ver todo)",
+                        style="dim",
+                    )
+                    body = Group(syntax, hint)
+                else:
+                    body = syntax
+            except Exception:
+                body = Text(preview)
         else:
-            # Edit or rewrite — build diff lines
+            # Edit/rewrite — diff with background colors
             diff_lines = _compute_diff_lines(old_content, new_content)
             added = sum(1 for t, _ in diff_lines if t == "+")
             removed = sum(1 for t, _ in diff_lines if t == "-")
@@ -220,29 +242,32 @@ class ToolDisplay:
 
             body = Text()
             truncated = len(diff_lines) > _MAX_INLINE_DIFF_LINES
-            visible = diff_lines[:_MAX_INLINE_DIFF_LINES] if truncated else diff_lines
+            visible = (
+                diff_lines[:_MAX_INLINE_DIFF_LINES] if truncated else diff_lines
+            )
 
-            line_num = 1
-            for typ, text in visible:
-                num_str = f"  {line_num:>4}  "
+            width = len(str(len(visible)))
+            for i, (typ, text) in enumerate(visible, 1):
+                num = f" {i:>{width}}  "
                 if typ == "-":
-                    body.append(num_str, style="dim")
-                    body.append(f"- {text}\n", style="red")
+                    body.append(num, style="dim on #3a1a1a")
+                    body.append(f"- {text}", style="on #3a1a1a")
+                    body.append("\n")
                 elif typ == "+":
-                    body.append(num_str, style="dim")
-                    body.append(f"+ {text}\n", style="green")
+                    body.append(num, style="dim on #1a3a1a")
+                    body.append(f"+ {text}", style="on #1a3a1a")
+                    body.append("\n")
                 else:
-                    body.append(num_str, style="dim")
+                    body.append(num, style="dim")
                     body.append(f"  {text}\n", style="dim")
-                line_num += 1
 
             if truncated:
                 remaining = len(diff_lines) - _MAX_INLINE_DIFF_LINES
                 body.append(
-                    f"        ... {remaining} lineas mas",
+                    f"\n  ... {remaining} lineas mas"
+                    f"  (pulsa 'd' para ver todo)\n",
                     style="dim",
                 )
-                body.append("  (pulsa 'd' para ver todo)\n", style="dim")
 
         panel = Panel(
             body,
@@ -645,6 +670,19 @@ class ToolDisplay:
         self._console.print(f"  [bold cyan]\u2139 {count} archivos a modificar:[/bold cyan]")
         for line in summary.strip().split("\n"):
             self._console.print(f"  [dim]{line.strip()}[/dim]")
+
+
+def _detect_language(ext: str) -> str:
+    """Map file extension to Rich Syntax language identifier."""
+    return {
+        "py": "python", "js": "javascript", "ts": "typescript",
+        "tsx": "tsx", "jsx": "jsx", "rb": "ruby", "go": "go",
+        "rs": "rust", "java": "java", "kt": "kotlin",
+        "swift": "swift", "sh": "bash", "yml": "yaml",
+        "yaml": "yaml", "json": "json", "toml": "toml",
+        "md": "markdown", "sql": "sql", "html": "html",
+        "css": "css", "xml": "xml",
+    }.get(ext, "text")
 
 
 def _extract_file_meta(detail: str) -> Optional[Dict[str, str]]:
