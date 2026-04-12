@@ -274,34 +274,28 @@ class SSERenderer:
     def _handle_internal_call(self, event: InternalCallEvent) -> None:
         """Show a one-liner for an internal LLM call (compaction, classifier,
         RAG enhancer, subagent, …) so the user can see where time/cost goes."""
-        # Map caller code → human label + emoji
+        # Map caller code → human-readable label + emoji.
+        # Labels in Spanish, no model name, no token count — user only
+        # cares about what's happening and how much it costs.
         labels = {
-            "compaction": ("🧠", "compaction"),
-            "rag_enhancer_or_classifier": ("🏷", "classifier/RAG enhancer"),
-            "rag_architecture_guide": ("📐", "RAG architecture guide"),
-            "subagent": ("🤖", "subagent"),
-            "subagent_fallback": ("🤖", "subagent (fallback)"),
-            "llm_router": ("🔀", "llm router"),
-            "llm_router_fallback": ("🔀", "llm router (fallback)"),
+            "compaction": ("🧠", "Compactando contexto"),
+            "rag_enhancer_or_classifier": ("🏷 ", "Clasificando tarea"),
+            "rag_architecture_guide": ("📐", "Analizando arquitectura"),
+            "subagent": ("🤖", "Subagente trabajando"),
+            "subagent_fallback": ("🤖", "Subagente trabajando"),
+            "llm_router": ("🔀", "Enrutando modelo"),
+            "llm_router_fallback": ("🔀", "Enrutando modelo"),
         }
-        emoji, label = labels.get(event.caller, ("⚙", event.caller or "internal"))
+        emoji, label = labels.get(
+            event.caller, ("⚙", event.caller or "Procesando")
+        )
 
-        # Don't disturb the spinner — write a quiet inline line.
-        # IMPORTANT: Spinner.is_running is a @property (not a method).
-        # Calling it with () → 'bool' object is not callable.
-        # See test_spinner_is_running_is_property in the test suite.
         was_spinning = getattr(self._spinner, "is_running", False)
         if was_spinning:
             self._spinner.stop()
 
-        model_tag = f" ({event.model_id})" if event.model_id else ""
-        cost_tag = f" · ${float(event.cost or 0):.4f}" if event.cost else ""
-        tok_tag = (
-            f" · {event.total_tokens:,} tok" if event.total_tokens > 0 else ""
-        )
-        self._console.print(
-            f"  [dim]{emoji} {label}{model_tag}{tok_tag}{cost_tag}[/dim]"
-        )
+        cost_tag = f" · ${float(event.cost or 0):.3f}" if event.cost else ""
+        self._console.print(f"  [dim]{emoji} {label}{cost_tag}[/dim]")
 
         if was_spinning:
             # Restart a generic spinner — the next event will replace it

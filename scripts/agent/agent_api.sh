@@ -1697,13 +1697,13 @@ try:
                 )
 
                 ic_labels = {
-                    "compaction": ("🧠", "compaction"),
-                    "rag_enhancer_or_classifier": ("🏷", "classifier/RAG enhancer"),
-                    "rag_architecture_guide": ("📐", "RAG architecture guide"),
-                    "subagent": ("🤖", "subagent"),
-                    "subagent_fallback": ("🤖", "subagent (fallback)"),
-                    "llm_router": ("🔀", "llm router"),
-                    "llm_router_fallback": ("🔀", "llm router (fallback)"),
+                    "compaction": ("🧠", "Compactando contexto"),
+                    "rag_enhancer_or_classifier": ("🏷 ", "Clasificando tarea"),
+                    "rag_architecture_guide": ("📐", "Analizando arquitectura"),
+                    "subagent": ("🤖", "Subagente trabajando"),
+                    "subagent_fallback": ("🤖", "Subagente trabajando"),
+                    "llm_router": ("🔀", "Enrutando modelo"),
+                    "llm_router_fallback": ("🔀", "Enrutando modelo"),
                 }
                 ic_emoji, ic_label = ic_labels.get(ic_caller, ("⚙", ic_caller))
 
@@ -1711,11 +1711,9 @@ try:
                 if ic_was_spinning:
                     spinner.stop()
 
-                ic_model_tag = f" {DIM}({ic_model}){NC}" if ic_model else ""
-                ic_cost_tag = f" {DIM}· ${ic_cost:.4f}{NC}" if ic_cost > 0 else ""
-                ic_tok_tag = f" {DIM}· {ic_tokens:,} tok{NC}" if ic_tokens > 0 else ""
+                ic_cost_tag = f" {DIM}· ${ic_cost:.3f}{NC}" if ic_cost > 0 else ""
                 sys.stderr.write(
-                    f"  {DIM}{ic_emoji} {ic_label}{NC}{ic_model_tag}{ic_tok_tag}{ic_cost_tag}\n"
+                    f"  {DIM}{ic_emoji} {ic_label}{NC}{ic_cost_tag}\n"
                 )
                 sys.stderr.flush()
 
