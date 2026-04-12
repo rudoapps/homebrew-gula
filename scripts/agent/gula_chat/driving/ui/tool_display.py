@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
+
+from rich.panel import Panel
+from rich.text import Text
 
 from ...domain.entities.tool_metadata import get_tool_detail
 from .console import get_console
@@ -14,6 +22,14 @@ from .spinner import Spinner
 _ALLOW = "allow"
 _ALLOW_ALWAYS = "allow_always"
 _REJECT = "reject"
+
+# Re-use the marker from file_tools to extract embedded metadata
+_FILE_META_MARKER = "\x00__FILE_META__\x00"
+
+# Maximum diff lines shown inline before truncation
+_MAX_INLINE_DIFF_LINES = 20
+# Maximum lines of new content shown for write_file (new file)
+_MAX_NEW_FILE_PREVIEW_LINES = 5
 
 
 class ToolDisplay:
@@ -138,16 +154,110 @@ class ToolDisplay:
             )
             return True
 
+        # Extract embedded file metadata if present
+        file_meta = _extract_file_meta(detail)
+        if file_meta:
+            detail = _strip_file_meta(detail)
+
         self._console.print()
 
-        # Show the operation detail (diff lines / script content)
+        # Render diff as a Rich Panel if we have file metadata for edit/write
+        if file_meta and tool_name in ("edit_file", "write_file"):
+            self._render_diff_panel(tool_name, detail, file_meta)
+        else:
+            # Fallback: flat rendering for non-file tools (run_command, etc.)
+            self._render_flat_detail(detail)
+
+        self._console.print()
+
+        # Interactive selector (with 'd' and 'e' support when file_meta exists)
+        result = self._show_selector(tool_name, file_meta=file_meta, raw_detail=detail)
+
+        if result == _ALLOW_ALWAYS:
+            self._auto_approve_turn = True
+            return True
+
+        return result == _ALLOW
+
+    def _render_diff_panel(
+        self,
+        tool_name: str,
+        detail: str,
+        file_meta: Dict[str, str],
+    ) -> None:
+        """Render a Rich Panel with colored diff lines."""
+        filename = file_meta.get("filename", "")
+        old_content = file_meta.get("old_content", "")
+        new_content = file_meta.get("new_content", "")
+
+        is_new_file = not old_content
+
+        if is_new_file:
+            # New file — show first few lines of content
+            new_lines = new_content.split("\n")
+            added = len(new_lines)
+            title = f" crear {filename} (+{added}) "
+
+            body = Text()
+            preview_count = min(_MAX_NEW_FILE_PREVIEW_LINES, len(new_lines))
+            for i in range(preview_count):
+                body.append(f"  {i + 1:>4}  ", style="dim")
+                body.append(f"+ {new_lines[i]}\n", style="green")
+            if len(new_lines) > preview_count:
+                body.append(
+                    f"        ... {len(new_lines) - preview_count} lineas mas\n",
+                    style="dim",
+                )
+        else:
+            # Edit or rewrite — build diff lines
+            diff_lines = _compute_diff_lines(old_content, new_content)
+            added = sum(1 for t, _ in diff_lines if t == "+")
+            removed = sum(1 for t, _ in diff_lines if t == "-")
+            title = f" edit {filename} (+{added}/-{removed}) "
+
+            body = Text()
+            truncated = len(diff_lines) > _MAX_INLINE_DIFF_LINES
+            visible = diff_lines[:_MAX_INLINE_DIFF_LINES] if truncated else diff_lines
+
+            line_num = 1
+            for typ, text in visible:
+                num_str = f"  {line_num:>4}  "
+                if typ == "-":
+                    body.append(num_str, style="dim")
+                    body.append(f"- {text}\n", style="red")
+                elif typ == "+":
+                    body.append(num_str, style="dim")
+                    body.append(f"+ {text}\n", style="green")
+                else:
+                    body.append(num_str, style="dim")
+                    body.append(f"  {text}\n", style="dim")
+                line_num += 1
+
+            if truncated:
+                remaining = len(diff_lines) - _MAX_INLINE_DIFF_LINES
+                body.append(
+                    f"        ... {remaining} lineas mas",
+                    style="dim",
+                )
+                body.append("  (pulsa 'd' para ver todo)\n", style="dim")
+
+        panel = Panel(
+            body,
+            title=title,
+            title_align="left",
+            border_style="dim",
+            padding=(0, 1),
+        )
+        self._console.print(panel)
+
+    def _render_flat_detail(self, detail: str) -> None:
+        """Render detail as flat colored lines (original behavior)."""
         in_script_block = False
         for line in detail.split("\n"):
             if line.startswith("── contenido del script"):
                 in_script_block = True
                 self._console.print(f"  [bold cyan]{line}[/bold cyan]")
             elif in_script_block:
-                # Script content — show with syntax coloring hint
                 self._console.print(f"  [yellow]{line}[/yellow]")
             elif line.startswith("  - "):
                 self._console.print(f"  [red]{line}[/red]")
@@ -158,23 +268,22 @@ class ToolDisplay:
             else:
                 self._console.print(f"  [dim]{line}[/dim]")
 
-        self._console.print()
-
-        # Interactive selector
-        result = self._show_selector(tool_name)
-
-        if result == _ALLOW_ALWAYS:
-            self._auto_approve_turn = True
-            return True
-
-        return result == _ALLOW
-
     def reset_turn_approval(self) -> None:
         """Reset auto-approval at the start of a new turn."""
         self._auto_approve_turn = False
 
-    def _show_selector(self, tool_name: str) -> str:
+    def _show_selector(
+        self,
+        tool_name: str,
+        file_meta: Optional[Dict[str, str]] = None,
+        raw_detail: str = "",
+    ) -> str:
         """Show an interactive selector using keyboard arrows.
+
+        Args:
+            tool_name: The tool requesting approval.
+            file_meta: Optional file metadata for diff/editor actions.
+            raw_detail: The raw diff detail string (for pager).
 
         Returns:
             One of _ALLOW, _ALLOW_ALWAYS, or _REJECT.
@@ -184,6 +293,13 @@ class ToolDisplay:
             (_ALLOW_ALWAYS, "Permitir todo", "cyan", "resto del turno sin preguntar"),
             (_REJECT, "Rechazar", "red", "cancelar esta accion"),
         ]
+
+        # Add diff/editor options when file metadata is available
+        has_file_options = file_meta is not None
+        if has_file_options:
+            options.append(("diff", "Diff (d)", "yellow", "ver diff completo"))
+            options.append(("editor", "Editor (e)", "yellow", "abrir en editor"))
+
         selected = 0
 
         # Hide cursor
@@ -205,7 +321,7 @@ class ToolDisplay:
                     for i, (_, label, color, desc) in enumerate(options):
                         if i == selected:
                             line_parts.append(
-                                f"\033[1m❯ {label}\033[0m \033[2m({desc})\033[0m"
+                                f"\033[1m\u276f {label}\033[0m \033[2m({desc})\033[0m"
                             )
                         else:
                             line_parts.append(f"\033[2m  {label}\033[0m")
@@ -217,6 +333,26 @@ class ToolDisplay:
                     # Read key
                     ch = sys.stdin.read(1)
                     if ch == "\r" or ch == "\n":
+                        value = options[selected][0]
+                        if value == "diff" and has_file_options:
+                            # Restore terminal, open pager, then loop back
+                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                            sys.stderr.write("\r\033[K\033[?25h")
+                            sys.stderr.flush()
+                            self._open_pager(raw_detail, file_meta)
+                            tty.setraw(fd)
+                            sys.stderr.write("\033[?25l")
+                            sys.stderr.flush()
+                            continue
+                        elif value == "editor" and has_file_options:
+                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                            sys.stderr.write("\r\033[K\033[?25h")
+                            sys.stderr.flush()
+                            self._open_editor_diff(file_meta)
+                            tty.setraw(fd)
+                            sys.stderr.write("\033[?25l")
+                            sys.stderr.flush()
+                            continue
                         break
                     elif ch == "\x1b":
                         seq = sys.stdin.read(2)
@@ -224,6 +360,26 @@ class ToolDisplay:
                             selected = max(0, selected - 1)
                         elif seq == "[C":  # Right arrow
                             selected = min(len(options) - 1, selected + 1)
+                    elif ch == "d" and has_file_options:
+                        # Direct shortcut: open pager
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                        sys.stderr.write("\r\033[K\033[?25h")
+                        sys.stderr.flush()
+                        self._open_pager(raw_detail, file_meta)
+                        tty.setraw(fd)
+                        sys.stderr.write("\033[?25l")
+                        sys.stderr.flush()
+                        continue
+                    elif ch == "e" and has_file_options:
+                        # Direct shortcut: open editor diff
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                        sys.stderr.write("\r\033[K\033[?25h")
+                        sys.stderr.flush()
+                        self._open_editor_diff(file_meta)
+                        tty.setraw(fd)
+                        sys.stderr.write("\033[?25l")
+                        sys.stderr.flush()
+                        continue
                     elif ch == "q" or ch == "\x03":  # q or Ctrl+C
                         selected = 2  # Reject
                         break
@@ -244,6 +400,99 @@ class ToolDisplay:
         self._console.print(f"  [{choice_color}]{choice_label}[/{choice_color}]")
 
         return choice_value
+
+    def _open_pager(self, raw_detail: str, file_meta: Dict[str, str]) -> None:
+        """Open the full diff in a pager (delta > bat > $PAGER > less)."""
+        filename = file_meta.get("filename", "file")
+        old_content = file_meta.get("old_content", "")
+        new_content = file_meta.get("new_content", "")
+
+        # Generate a unified diff for the pager
+        import difflib
+
+        old_lines = old_content.splitlines(keepends=True)
+        new_lines = new_content.splitlines(keepends=True)
+        diff_text = "".join(difflib.unified_diff(
+            old_lines, new_lines,
+            fromfile=f"a/{filename}", tofile=f"b/{filename}",
+        ))
+
+        if not diff_text:
+            diff_text = raw_detail  # Fallback to the raw detail
+
+        # Write diff to temp file
+        try:
+            tmp = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".diff", prefix="gula-diff-",
+                delete=False, encoding="utf-8",
+            )
+            tmp.write(diff_text)
+            tmp.close()
+
+            # Try pagers in order of preference
+            pager_cmd = _find_pager()
+            if pager_cmd:
+                try:
+                    subprocess.run(pager_cmd + [tmp.name], check=False)
+                except (OSError, subprocess.SubprocessError):
+                    self._console.print(
+                        "  [warning]No se pudo abrir el pager[/warning]"
+                    )
+            else:
+                self._console.print(
+                    "  [warning]No se encontro pager (delta, bat, less)[/warning]"
+                )
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
+    def _open_editor_diff(self, file_meta: Dict[str, str]) -> None:
+        """Open old/new content in an editor's diff view."""
+        filename = file_meta.get("filename", "file")
+        old_content = file_meta.get("old_content", "")
+        new_content = file_meta.get("new_content", "")
+
+        ext = os.path.splitext(filename)[1] or ".txt"
+        before_path = None
+        after_path = None
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"-before{ext}", prefix="gula-diff-",
+                delete=False, encoding="utf-8",
+            ) as f:
+                f.write(old_content)
+                before_path = f.name
+
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"-after{ext}", prefix="gula-diff-",
+                delete=False, encoding="utf-8",
+            ) as f:
+                f.write(new_content)
+                after_path = f.name
+
+            editor_cmd = _find_diff_editor(before_path, after_path)
+            if editor_cmd:
+                try:
+                    subprocess.run(editor_cmd, check=False)
+                except (OSError, subprocess.SubprocessError):
+                    self._console.print(
+                        "  [warning]No se pudo abrir el editor[/warning]"
+                    )
+            else:
+                self._console.print(
+                    "  [warning]No se encontro editor diff "
+                    "(code, cursor, opendiff, vimdiff)[/warning]"
+                )
+        finally:
+            for p in (before_path, after_path):
+                if p:
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass
 
     def _show_simple_prompt(self) -> str:
         """Fallback simple text prompt."""
@@ -339,6 +588,108 @@ class ToolDisplay:
         self._console.print(f"  [bold cyan]\u2139 {count} archivos a modificar:[/bold cyan]")
         for line in summary.strip().split("\n"):
             self._console.print(f"  [dim]{line.strip()}[/dim]")
+
+
+def _extract_file_meta(detail: str) -> Optional[Dict[str, str]]:
+    """Extract embedded file metadata from the detail string.
+
+    Returns a dict with 'filename', 'old_content', 'new_content' or None.
+    """
+    if _FILE_META_MARKER not in detail:
+        return None
+    try:
+        start = detail.index(_FILE_META_MARKER) + len(_FILE_META_MARKER)
+        end = detail.index(_FILE_META_MARKER, start)
+        return json.loads(detail[start:end])
+    except (ValueError, json.JSONDecodeError):
+        return None
+
+
+def _strip_file_meta(detail: str) -> str:
+    """Remove the embedded file metadata prefix from the detail string."""
+    if _FILE_META_MARKER not in detail:
+        return detail
+    try:
+        end = detail.index(_FILE_META_MARKER, detail.index(_FILE_META_MARKER) + 1)
+        return detail[end + len(_FILE_META_MARKER):]
+    except ValueError:
+        return detail
+
+
+def _compute_diff_lines(old_content: str, new_content: str) -> list:
+    """Compute diff lines as (type, text) tuples.
+
+    type is one of '+', '-', or ' ' (context).
+    """
+    import difflib
+
+    old_lines = old_content.splitlines(keepends=False)
+    new_lines = new_content.splitlines(keepends=False)
+
+    result = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(
+        None, old_lines, new_lines
+    ).get_opcodes():
+        if tag == "equal":
+            # Show up to 2 context lines around changes
+            lines = old_lines[i1:i2]
+            if len(lines) > 4 and result:
+                # Show 2 lines of context at start and end, skip middle
+                for line in lines[:2]:
+                    result.append((" ", line))
+                result.append((" ", "..."))
+                for line in lines[-2:]:
+                    result.append((" ", line))
+            else:
+                for line in lines:
+                    result.append((" ", line))
+        elif tag == "replace":
+            for line in old_lines[i1:i2]:
+                result.append(("-", line))
+            for line in new_lines[j1:j2]:
+                result.append(("+", line))
+        elif tag == "delete":
+            for line in old_lines[i1:i2]:
+                result.append(("-", line))
+        elif tag == "insert":
+            for line in new_lines[j1:j2]:
+                result.append(("+", line))
+
+    return result
+
+
+def _find_pager() -> Optional[list]:
+    """Find the best available pager command. Returns a list of args."""
+    for cmd in ("delta", "bat", "batcat"):
+        if shutil.which(cmd):
+            return [cmd]
+    # Try $PAGER
+    pager_env = os.environ.get("PAGER")
+    if pager_env and shutil.which(pager_env.split()[0]):
+        return pager_env.split()
+    # Fallback
+    if shutil.which("less"):
+        return ["less", "-R"]
+    return None
+
+
+def _find_diff_editor(
+    before_path: str, after_path: str
+) -> Optional[list]:
+    """Find the best available diff editor and return the command list."""
+    # VS Code
+    if shutil.which("code"):
+        return ["code", "--wait", "--diff", before_path, after_path]
+    # Cursor
+    if shutil.which("cursor"):
+        return ["cursor", "--wait", "--diff", before_path, after_path]
+    # macOS FileMerge
+    if shutil.which("opendiff"):
+        return ["opendiff", before_path, after_path]
+    # vimdiff
+    if shutil.which("vimdiff"):
+        return ["vimdiff", before_path, after_path]
+    return None
 
 
 def _extract_edit_summary(output: str) -> list[str]:

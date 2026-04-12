@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import fnmatch
+import json
 import os
 import re
 from typing import Any, Dict, List, Optional
 
 from .base import BaseToolExecutor, ToolDeniedError, MAX_CONTENT_PREVIEW
 from ...domain.entities.tool_metadata import MAX_FILE_SIZE
+
+# Marker used to embed file metadata in the detail string so the UI layer
+# can extract old/new content for the editor diff and Rich panel rendering
+# without changing the ApprovalCallback signature.
+_FILE_META_MARKER = "\x00__FILE_META__\x00"
 
 
 class FileToolExecutor(BaseToolExecutor):
@@ -80,6 +86,13 @@ class FileToolExecutor(BaseToolExecutor):
                 preview += "\n..."
             title = f"Crear {os.path.relpath(resolved, self._validator.working_dir)}"
             detail = f"Nuevo archivo ({len(content)} caracteres):\n{preview}"
+            # Embed metadata for UI (new file — no old content)
+            meta = _encode_file_meta(
+                filename=os.path.relpath(resolved, self._validator.working_dir),
+                old_content="",
+                new_content=content,
+            )
+            detail = meta + detail
         else:
             rel = os.path.relpath(resolved, self._validator.working_dir)
             title = f"Escribir {rel}"
@@ -89,6 +102,13 @@ class FileToolExecutor(BaseToolExecutor):
             sensitive = self._validator.is_sensitive(resolved)
             if sensitive:
                 detail = f"[SENSIBLE: {sensitive}]\n{detail}"
+            # Embed metadata for UI
+            meta = _encode_file_meta(
+                filename=rel,
+                old_content=current_content,
+                new_content=content,
+            )
+            detail = meta + detail
 
         approved = await self._check_approval(title, detail)
         if not approved:
@@ -160,6 +180,14 @@ class FileToolExecutor(BaseToolExecutor):
         sensitive = self._validator.is_sensitive(resolved)
         if sensitive:
             detail = f"[SENSIBLE: {sensitive}]\n{detail}"
+
+        # Embed metadata for UI (old/new content for editor diff)
+        meta = _encode_file_meta(
+            filename=rel,
+            old_content=current,
+            new_content=new_content,
+        )
+        detail = meta + detail
 
         approved = await self._check_approval(title, detail)
         if not approved:
@@ -343,6 +371,20 @@ def _fuzzy_find_and_replace(
         return content.replace(original_old, new_string, 1)
 
     return None
+
+
+def _encode_file_meta(filename: str, old_content: str, new_content: str) -> str:
+    """Encode file metadata as a hidden prefix in the detail string.
+
+    The UI layer (ToolDisplay) will strip this prefix before rendering
+    and use the metadata for the editor diff ('e' key) and pager ('d' key).
+    """
+    meta = json.dumps({
+        "filename": filename,
+        "old_content": old_content,
+        "new_content": new_content,
+    }, ensure_ascii=False)
+    return f"{_FILE_META_MARKER}{meta}{_FILE_META_MARKER}"
 
 
 def _build_diff_detail(old: str, new: str) -> str:
