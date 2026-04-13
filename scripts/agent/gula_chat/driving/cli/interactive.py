@@ -481,7 +481,7 @@ class InteractiveHandler:
 
         # Iteration guard: prevent runaway tool execution
         _tool_iterations = 0
-        _MAX_TOOL_ITERATIONS = 30  # Max tool call rounds per user message
+        _MAX_TOOL_ITERATIONS = 15  # Max tool call rounds per user message
 
         while True:
             renderer = SSERenderer()
