@@ -28,7 +28,7 @@ from ...domain.entities.sse_event import (
 )
 from ..ui.console import get_console
 from ..ui.header import SessionHeader
-from ..ui.renderer import SSERenderer
+from ..ui.renderer import SSERenderer, _make_collapse_state
 from ..ui.selector import SelectOption, select_option, select_option_async
 from ..ui.tool_display import ToolDisplay
 from .commands import (
@@ -104,7 +104,8 @@ class InteractiveHandler:
         self._skill_service = skill_service
         self._tool_orchestrator = tool_orchestrator
         self._context_builder = project_context_builder or ProjectContextBuilder()
-        self._tool_display = ToolDisplay()
+        self._collapse_state = _make_collapse_state()
+        self._tool_display = ToolDisplay(collapse_state=self._collapse_state)
         self._image_detector = ImageDetector()
         self._console = get_console()
 
@@ -484,7 +485,7 @@ class InteractiveHandler:
         _MAX_TOOL_ITERATIONS = 15  # Max tool call rounds per user message
 
         while True:
-            renderer = SSERenderer()
+            renderer = SSERenderer(collapse_state=self._collapse_state)
             # Show spinner immediately while waiting for server response
             if current_tool_results is not None:
                 renderer.show_waiting_spinner("Procesando resultados...")

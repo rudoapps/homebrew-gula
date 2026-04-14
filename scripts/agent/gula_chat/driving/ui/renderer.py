@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 import time
-from typing import List, Optional
+from collections import Counter
+from typing import Any, Dict, List, Optional
 
 from ...domain.entities.sse_event import (
     SSEEvent,
@@ -29,6 +31,16 @@ from .markdown import render_markdown
 from .spinner import Spinner
 
 
+def _make_collapse_state() -> Dict[str, Any]:
+    """Create a new collapse state dict shared between renderer and tool_display."""
+    return {
+        "lines_since_collapse_point": 0,
+        "collapse_tool_summary": "",
+        "is_collapsible": False,
+        "has_errors": False,
+    }
+
+
 class SSERenderer:
     """Renders SSE events to the terminal using Rich.
 
@@ -36,7 +48,7 @@ class SSERenderer:
     summary panels to produce output matching the gula agent UX.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, collapse_state: Optional[Dict[str, Any]] = None) -> None:
         self._console = get_console()
         self._spinner = Spinner()
         self._start_time: float = time.time()
@@ -52,6 +64,9 @@ class SSERenderer:
         self._conversation_id: Optional[int] = None
         self._session_cost: float = 0.0
         self._session_tokens: int = 0
+
+        # Collapse state (shared with ToolDisplay)
+        self._collapse: Dict[str, Any] = collapse_state or _make_collapse_state()
 
     def render(self, event: SSEEvent) -> None:
         """Render a single SSE event to the console.
@@ -123,6 +138,9 @@ class SSERenderer:
         self._spinner.start(f"#{event.conversation_id}{self._rag_indicator}{model_tag}")
 
     def _handle_thinking(self, event: ThinkingEvent) -> None:
+        # Collapse previous tool output before showing spinner
+        self._try_collapse()
+
         # Flush any accumulated text before showing spinner
         if self._text_chunks:
             self._flush_remaining_text()
@@ -136,6 +154,9 @@ class SSERenderer:
             return
 
         if not self._streaming:
+            # Collapse previous tool output before starting text stream
+            self._try_collapse()
+
             self._streaming = True
             if not self._model and event.model:
                 self._model = event.model
@@ -161,15 +182,30 @@ class SSERenderer:
         if event.session_tokens > 0:
             self._session_tokens = event.session_tokens
 
+        # Build collapse summary BEFORE printing tool call lines
+        if event.tool_calls:
+            tool_names = [tc.name for tc in event.tool_calls]
+            counts = Counter(tool_names)
+            parts = [f"{name} x{c}" if c > 1 else name for name, c in counts.items()]
+            count = len(event.tool_calls)
+            self._collapse["collapse_tool_summary"] = (
+                f"{count} tools ({', '.join(parts)})"
+                if count > 1
+                else parts[0]
+            )
+            self._collapse["is_collapsible"] = True
+            self._collapse["has_errors"] = False
+            self._collapse["lines_since_collapse_point"] = 0
+
         # Phase 1: Display tool calls
         if event.tool_calls:
-            self._console.print()
+            self._collapse_print()  # blank line
             count = len(event.tool_calls)
 
             if count <= 3:
                 # Few tools — show full detail
                 for tc in event.tool_calls:
-                    self._console.print(
+                    self._collapse_print(
                         f"  [agent.tool]\u2192 Tool:[/agent.tool] "
                         f"[agent.tool_name]{tc.name}[/agent.tool_name]"
                     )
@@ -178,17 +214,17 @@ class SSERenderer:
                         preview = json.dumps(tc.input, ensure_ascii=False)
                         if len(preview) > 100:
                             preview = preview[:97] + "..."
-                        self._console.print(f"    [dim]{preview}[/dim]")
+                        self._collapse_print(f"    [dim]{preview}[/dim]")
             else:
                 # Many tools — compact summary
                 tool_names = [tc.name for tc in event.tool_calls]
                 unique = sorted(set(tool_names))
-                counts = {n: tool_names.count(n) for n in unique}
+                cnts = {n: tool_names.count(n) for n in unique}
                 summary_parts = []
-                for name, c in counts.items():
+                for name, c in cnts.items():
                     summary_parts.append(f"{name}" + (f" x{c}" if c > 1 else ""))
                 sep = " \u00b7 "
-                self._console.print(
+                self._collapse_print(
                     f"  [agent.tool]\u2192 {count} tools:[/agent.tool] "
                     f"[dim]{sep.join(summary_parts)}[/dim]"
                 )
@@ -375,6 +411,53 @@ class SSERenderer:
             "Conversacion recuperada (estaba interrumpida)", "info"
         )
         self._spinner.start("Continuando...")
+
+    # ── Collapse helpers ─────────────────────────────────────────────────
+
+    def _collapse_print(self, *args: Any, **kwargs: Any) -> None:
+        """Print via Rich console and increment the collapse line counter."""
+        self._console.print(*args, **kwargs)
+        self._collapse["lines_since_collapse_point"] += 1
+
+    def _try_collapse(self) -> None:
+        """Collapse previous tool output into a one-liner if applicable."""
+        cs = self._collapse
+        if not cs["is_collapsible"] or cs["lines_since_collapse_point"] <= 0:
+            return
+
+        # Don't collapse if there were errors — keep them visible
+        if cs["has_errors"]:
+            cs["is_collapsible"] = False
+            cs["lines_since_collapse_point"] = 0
+            return
+
+        n = cs["lines_since_collapse_point"]
+        summary = cs["collapse_tool_summary"]
+
+        # If parallel_summary didn't add elapsed time, use the last tool's elapsed
+        if "\u00b7" not in summary and cs.get("_last_elapsed"):
+            summary += f" \u00b7 {cs['_last_elapsed']}"
+
+        # Flush Rich's internal buffer before using raw ANSI codes
+        self._console.file.flush()  # type: ignore[union-attr]
+
+        try:
+            # Move cursor up and clear each line
+            for _ in range(n):
+                sys.stderr.write("\033[A\033[2K")
+            sys.stderr.flush()
+        except OSError:
+            # Terminal doesn't support ANSI escape codes — skip collapse
+            cs["is_collapsible"] = False
+            cs["lines_since_collapse_point"] = 0
+            return
+
+        # Print the collapsed summary
+        self._console.print(f"  [dim]\u25b8 {summary}[/dim]")
+
+        # Reset collapse state
+        cs["is_collapsible"] = False
+        cs["lines_since_collapse_point"] = 0
 
     # ── Internal helpers ────────────────────────────────────────────────
 

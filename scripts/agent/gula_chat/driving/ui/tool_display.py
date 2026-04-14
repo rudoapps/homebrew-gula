@@ -39,10 +39,11 @@ class ToolDisplay:
     summaries, approval prompts, and diff displays.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, collapse_state: Optional[Dict[str, Any]] = None) -> None:
         self._console = get_console()
         self._spinner = Spinner()
         self._auto_approve_turn: bool = False
+        self._collapse: Optional[Dict[str, Any]] = collapse_state
 
     def show_tool_start(self, name: str, input_dict: Dict[str, Any]) -> None:
         """Show that a tool is about to start executing.
@@ -76,13 +77,25 @@ class ToolDisplay:
 
         self._spinner.stop()
 
+        # For single-tool case, add elapsed and detail to collapse summary
+        if self._collapse and self._collapse["is_collapsible"]:
+            # Build a richer single-tool summary: "read_file config/settings.py"
+            if detail:
+                self._collapse["collapse_tool_summary"] = f"{name} {detail}"
+            # Elapsed will be appended by show_parallel_summary for multi-tool;
+            # for single tool, store it now (may be overwritten by parallel_summary)
+            self._collapse["_last_elapsed"] = elapsed_str
+
         if success:
-            self._console.print(
+            self._collapse_print(
                 f"  [success]\u2713[/success] [agent.tool]{action_msg}[/agent.tool] "
                 f"[dim]({elapsed_str})[/dim]"
             )
         else:
-            self._console.print(
+            # Mark errors so we don't collapse them
+            if self._collapse:
+                self._collapse["has_errors"] = True
+            self._collapse_print(
                 f"  [error]\u2717[/error] [agent.tool]{action_msg}[/agent.tool] "
                 f"[dim]({elapsed_str})[/dim]"
             )
@@ -91,7 +104,7 @@ class ToolDisplay:
         if name == "run_command" and output:
             summary = _extract_command_summary(output)
             if summary:
-                self._console.print(f"  [dim]  {summary}[/dim]")
+                self._collapse_print(f"  [dim]  {summary}[/dim]")
 
         # Show compact edit details for edit_file / write_file so the
         # user can see WHAT changed even in auto-approve mode.
@@ -99,7 +112,7 @@ class ToolDisplay:
             edit_summary = _extract_edit_summary(output)
             if edit_summary:
                 for line in edit_summary:
-                    self._console.print(f"  [dim]  {line}[/dim]")
+                    self._collapse_print(f"  [dim]  {line}[/dim]")
 
     def show_parallel_summary(
         self,
@@ -117,13 +130,19 @@ class ToolDisplay:
         self._spinner.stop()
         elapsed_str = f"{elapsed:.1f}s"
 
+        # Update collapse summary with elapsed time
+        if self._collapse:
+            self._collapse["collapse_tool_summary"] += f" \u00b7 {elapsed_str}"
+            if has_errors:
+                self._collapse["has_errors"] = True
+
         if has_errors:
-            self._console.print(
+            self._collapse_print(
                 f"  [warning]\u25cb[/warning] [agent.tool]{count} herramientas "
                 f"en paralelo[/agent.tool] [dim]({elapsed_str}, con errores)[/dim]"
             )
         else:
-            self._console.print(
+            self._collapse_print(
                 f"  [success]\u2713[/success] [agent.tool]{count} herramientas "
                 f"en paralelo[/agent.tool] [dim]({elapsed_str})[/dim]"
             )
@@ -146,6 +165,10 @@ class ToolDisplay:
             True if the user approved, False otherwise.
         """
         self._spinner.stop()
+
+        # Approval prompts must NOT be collapsed — user needs to see the diff
+        if self._collapse:
+            self._collapse["is_collapsible"] = False
 
         # Auto-approve if user selected "Permitir todo el turno"
         if self._auto_approve_turn:
@@ -624,6 +647,12 @@ class ToolDisplay:
             self._console.print(f"    [red]{line}[/red]")
         for line in new_lines:
             self._console.print(f"    [green]{line}[/green]")
+
+    def _collapse_print(self, *args: Any, **kwargs: Any) -> None:
+        """Print via Rich console and increment the collapse line counter."""
+        self._console.print(*args, **kwargs)
+        if self._collapse:
+            self._collapse["lines_since_collapse_point"] += 1
 
     # ── Protocol aliases for ToolProgressCallback ────────────────────────
 
