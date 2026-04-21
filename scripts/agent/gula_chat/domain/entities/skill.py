@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Optional
 
 
@@ -20,6 +21,12 @@ class Skill:
         allowed_tools: Tool name whitelist. None means all tools allowed.
         icon: Optional emoji/icon for display.
         category: Grouping category (e.g. "testing", "devops").
+        path: Filesystem root of the skill when loaded from a folder
+            (SKILL.md style). Used to expand ${CLAUDE_SKILL_DIR} /
+            ${GULA_SKILL_DIR} at resolve time so skills can reference
+            bundled resources.
+        pack: Marketplace pack this skill belongs to (e.g. "angular").
+            Enables `pack:skill` namespacing when slugs collide.
     """
 
     name: str
@@ -32,6 +39,8 @@ class Skill:
     icon: str = ""
     category: str = "general"
     auto_apply_project_type: str = ""
+    path: Optional[Path] = None
+    pack: Optional[str] = None
 
 
 @dataclass

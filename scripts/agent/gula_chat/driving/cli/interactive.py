@@ -11,6 +11,7 @@ from ...application.ports.driven.clipboard_port import ClipboardPort
 from ...application.ports.driven.config_port import ConfigPort
 from ...application.services.auth_service import AuthService
 from ...application.services.chat_service import ChatService
+from ...application.services.marketplace_service import MarketplaceService
 from ...application.services.skill_service import SkillService
 from ...application.services.subagent_service import SubagentService
 from ...application.services.tool_orchestrator import ToolOrchestrator
@@ -92,6 +93,7 @@ class InteractiveHandler:
         api_client: ApiClientPort,
         subagent_service: SubagentService,
         skill_service: Optional[SkillService] = None,
+        marketplace_service: Optional[MarketplaceService] = None,
         tool_orchestrator: Optional[ToolOrchestrator] = None,
         project_context_builder: Optional[ProjectContextBuilder] = None,
     ) -> None:
@@ -102,6 +104,7 @@ class InteractiveHandler:
         self._api_client = api_client
         self._subagent_service = subagent_service
         self._skill_service = skill_service
+        self._marketplace_service = marketplace_service
         self._tool_orchestrator = tool_orchestrator
         self._context_builder = project_context_builder or ProjectContextBuilder()
         self._collapse_state = _make_collapse_state()
@@ -136,6 +139,7 @@ class InteractiveHandler:
             api_client=api_client,
             subagent_service=subagent_service,
             skill_service=skill_service,
+            marketplace_service=marketplace_service,
             get_last_response=lambda: self._last_response,
             get_total_cost=lambda: self._total_cost,
             get_conversation_id=lambda: self._conversation_id,
@@ -366,6 +370,15 @@ class InteractiveHandler:
 
                 elif cmd_result.action == "list_skills":
                     self._handle_list_skills()
+
+                elif cmd_result.action == "reload_skills":
+                    if cmd_result.action_data:
+                        self._console.print(cmd_result.action_data)
+                    if self._skill_service:
+                        try:
+                            await self._skill_service.reload()
+                        except Exception as exc:
+                            self._console.print(f"  [yellow]Skills recargadas con error: {exc}[/yellow]")
 
                 elif cmd_result.action == "show_mode":
                     if self._tool_orchestrator:

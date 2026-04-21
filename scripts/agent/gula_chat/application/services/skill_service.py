@@ -35,32 +35,49 @@ class SkillService:
         self._api_client = api_client
         self._skills: Dict[str, Skill] = {}
 
+    async def reload(self) -> None:
+        """Discard loaded skills and reload from all sources."""
+        self._skills.clear()
+        await self.load_skills()
+
     async def load_skills(self) -> None:
         """Load and merge skills from all sources."""
         from ...driven.skills.yaml_loader import load_skills_from_directory
+        from ...driven.skills.markdown_loader import load_skills_from_markdown
 
         # 1. Backend skills (lowest priority — loaded first, overwritten later)
         backend = await self._fetch_backend_skills()
         for s in backend:
-            self._skills[s.name] = s
+            self._register(s)
 
-        # 2. User-global skills
+        # 2. User-global skills (YAML + SKILL.md folders)
         user_dir = Path.home() / ".config" / "gula-agent" / "skills"
         for s in load_skills_from_directory(user_dir, source="user"):
-            self._skills[s.name] = s
+            self._register(s)
+        for s in load_skills_from_markdown(user_dir, source="user"):
+            self._register(s)
 
         # 3. Project-local skills (highest priority)
         project_dir = Path.cwd() / ".gula" / "skills"
         for s in load_skills_from_directory(project_dir, source="project"):
-            self._skills[s.name] = s
+            self._register(s)
+        for s in load_skills_from_markdown(project_dir, source="project"):
+            self._register(s)
+
+    def _register(self, skill: Skill) -> None:
+        """Store a skill under both `pack:name` and bare `name` (last wins)."""
+        if skill.pack:
+            self._skills[f"{skill.pack}:{skill.name}"] = skill
+        self._skills[skill.name] = skill
 
     def get_skill(self, name: str) -> Optional[Skill]:
         """Get a skill by name."""
         return self._skills.get(name)
 
     def list_skills(self) -> List[Skill]:
-        """Return all loaded skills sorted by category then name."""
-        return sorted(self._skills.values(), key=lambda s: (s.category, s.name))
+        """Return all loaded skills sorted by category then name (de-duplicated)."""
+        seen: Dict[int, Skill] = {id(s): s for s in self._skills.values()}
+        return sorted(seen.values(), key=lambda s: (s.category, s.pack or "", s.name))
 
     def get_auto_skill_for_project(self, project_type: str) -> Optional[Skill]:
         """Find the skill that auto-applies for a project type."""
@@ -89,12 +106,18 @@ class SkillService:
         if not skill:
             return None
 
+        template = skill.prompt_template
+        if skill.path is not None:
+            skill_dir = str(skill.path)
+            template = template.replace("${CLAUDE_SKILL_DIR}", skill_dir)
+            template = template.replace("${GULA_SKILL_DIR}", skill_dir)
+
         # Use format_map with a defaultdict to handle missing placeholders
         placeholders = defaultdict(str, input=args.strip())
         try:
-            expanded = skill.prompt_template.format_map(placeholders)
+            expanded = template.format_map(placeholders)
         except (KeyError, ValueError):
-            expanded = skill.prompt_template.replace("{input}", args.strip())
+            expanded = template.replace("{input}", args.strip())
 
         return SkillResolution(
             expanded_prompt=expanded,

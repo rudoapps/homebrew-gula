@@ -528,16 +528,38 @@ class ProjectContextBuilder:
     # ── project rules ────────────────────────────────────────────────────
 
     def _read_project_rules(self) -> str:
-        """Read the first project rules file found (max 300 lines)."""
+        """Read project rules (max 300 lines total).
+
+        Sources, concatenated in order:
+          1. The first legacy single-file rule (`.claude-project`,
+             `CLAUDE.md`, or `.agent-rules`).
+          2. Every `.gula/rules/*.md` — populated by skill `install-rules`
+             commands from marketplace packs.
+        """
+        max_lines = 300
+        collected: List[str] = []
+
         for name in _RULES_FILES:
             candidate = self._root / name
             if candidate.is_file():
                 try:
-                    lines = candidate.read_text(errors="replace").splitlines()[:300]
-                    return "\n".join(lines)
+                    collected.extend(candidate.read_text(errors="replace").splitlines())
                 except OSError:
                     pass
-        return ""
+                break
+
+        rules_dir = self._root / ".gula" / "rules"
+        if rules_dir.is_dir():
+            for rule_file in sorted(rules_dir.glob("*.md")):
+                if len(collected) >= max_lines:
+                    break
+                try:
+                    collected.append(f"# {rule_file.name}")
+                    collected.extend(rule_file.read_text(errors="replace").splitlines())
+                except OSError:
+                    pass
+
+        return "\n".join(collected[:max_lines])
 
     # ── utility ──────────────────────────────────────────────────────────
 

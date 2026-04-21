@@ -36,12 +36,25 @@ class App:
         if argv is None:
             argv = sys.argv[1:]
 
+        if argv and argv[0] == "--skills":
+            return self._run_skills(argv[1:])
+
         args = self._parse_args(argv)
 
         if args.prompt:
             return self._run_single(args)
         else:
             return self._run_interactive()
+
+    def _run_skills(self, argv: List[str]) -> int:
+        """Run a single `gula skills ...` subcommand."""
+        from .skills_cli import SkillsCliHandler
+
+        handler = SkillsCliHandler(
+            marketplace_service=self._container.marketplace_service,
+            skill_service=self._container.skill_service,
+        )
+        return handler.run(argv)
 
     def _run_interactive(self) -> int:
         """Run interactive REPL mode."""
@@ -55,6 +68,7 @@ class App:
             api_client=self._container.api_client,
             subagent_service=self._container.subagent_service,
             skill_service=self._container.skill_service,
+            marketplace_service=self._container.marketplace_service,
             tool_orchestrator=self._container.tool_orchestrator,
             project_context_builder=self._container.project_context_builder,
         )

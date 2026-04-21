@@ -174,6 +174,7 @@ show_help() {
   echo ""
   echo -e "${BOLD}  ai${NC}       Inicia el agente AI (modo Python)"
   echo -e "${BOLD}  chat${NC}     Inicia conversacion con el agente AI (modo bash)"
+  echo -e "${BOLD}  skills${NC}   Gestiona skills del agente (install/uninstall/update)"
   echo -e "${BOLD}  login${NC}    Inicia sesion en el agente AI"
   echo -e "${BOLD}  setup${NC}    Instala dependencias del agente AI"
   echo -e "${BOLD}  list${NC}     Lista módulos disponibles para el proyecto actual"
@@ -263,6 +264,9 @@ show_help() {
   echo "  gula chat                                       # Modo interactivo (bash)"
   echo "  gula chat \"Hola\"                                # Mensaje unico"
   echo "  gula chat --continue                            # Continuar ultima conversacion"
+  echo "  gula skills marketplace add <url> <nombre>      # Clonar marketplace"
+  echo "  gula skills install <pack>[@<mp>]               # Instalar pack de skills"
+  echo "  gula skills list                                # Listar skills cargados"
   echo ""
   echo -e "${BOLD}TIPOS DE PROYECTO SOPORTADOS:${NC}"
   echo ""
@@ -457,14 +461,22 @@ if [[ "$COMMAND" == "validate" && "${2:-}" == "--staged" ]]; then
 fi
 
 # Manejar comando 'ai' — cliente Python
-if [[ "$COMMAND" == "ai" ]]; then
-  shift  # Remove 'ai' from args
+# `gula skills ...` es un alias de `gula ai --skills ...` para operaciones
+# de marketplace/packs sin entrar al REPL.
+if [[ "$COMMAND" == "ai" || "$COMMAND" == "skills" ]]; then
+  _gula_skills_prefix=()
+  if [[ "$COMMAND" == "skills" ]]; then
+    _gula_skills_prefix=(--skills)
+  fi
+  shift  # Remove command from args
 
   # Disable EXIT trap immediately — we don't want cleanup_on_exit firing
   # silently when something goes wrong in this code path.
   trap - EXIT
 
-  echo -e "  ${DIM}[gula] iniciando agente...${NC}" >&2
+  if [[ "$COMMAND" == "ai" ]]; then
+    echo -e "  ${DIM}[gula] iniciando agente...${NC}" >&2
+  fi
 
   # ── Resolve best Python (3.10+) ──────────────────────────────────
   # Prefer Homebrew's python@3.12 (declared as a formula dependency,
@@ -595,7 +607,7 @@ print(pkg or '')
 
   # Run python WITHOUT exec so we can detect silent exits and surface
   # the exit code. exec on WSL has been observed to swallow startup errors.
-  PYTHONPATH="${scripts_dir}/agent" "$_gula_venv/bin/python" -m gula_chat "$@"
+  PYTHONPATH="${scripts_dir}/agent" "$_gula_venv/bin/python" -m gula_chat "${_gula_skills_prefix[@]}" "$@"
   _gula_rc=$?
 
   if [ $_gula_rc -ne 0 ]; then

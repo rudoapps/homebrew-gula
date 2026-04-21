@@ -9,6 +9,7 @@ from ...application.ports.driven.api_client_port import ApiClientPort
 from ...application.ports.driven.clipboard_port import ClipboardPort
 from ...application.ports.driven.config_port import ConfigPort
 from ...application.services.auth_service import AuthService
+from ...application.services.marketplace_service import MarketplaceError, MarketplaceService
 from ...application.services.skill_service import SkillService
 from ...application.services.subagent_service import SubagentService
 from ..ui.console import get_console
@@ -72,6 +73,7 @@ class SlashCommandRegistry:
         api_client: ApiClientPort,
         subagent_service: SubagentService,
         skill_service: Optional[SkillService] = None,
+        marketplace_service: Optional[MarketplaceService] = None,
         get_last_response: Callable[[], str] = lambda: "",
         get_total_cost: Callable[[], float] = lambda: 0.0,
         get_conversation_id: Callable[[], Optional[int]] = lambda: None,
@@ -82,6 +84,7 @@ class SlashCommandRegistry:
         self._api_client = api_client
         self._subagent_service = subagent_service
         self._skill_service = skill_service
+        self._marketplace_service = marketplace_service
         self._get_last_response = get_last_response
         self._get_total_cost = get_total_cost
         self._get_conversation_id = get_conversation_id
@@ -480,16 +483,143 @@ class SlashCommandRegistry:
         )
 
     def _cmd_skills(self, args: str) -> CommandResult:
-        """List available skills."""
+        """Dispatch skill subcommands.
+
+        Usage:
+          /skills                              Listar skills cargadas
+          /skills marketplace add <url> [name] Clonar un marketplace
+          /skills marketplace list             Ver marketplaces
+          /skills marketplace remove <name>    Eliminar marketplace
+          /skills install <pack>[@<mp>]        Instalar pack
+          /skills uninstall <pack>             Desinstalar pack
+          /skills update [<mp>|all]            git pull del marketplace
+          /skills installed                    Ver packs instalados
+        """
         if not self._skill_service:
             return CommandResult(handled=True, output="Skills no disponibles.")
-        skills = self._skill_service.list_skills()
-        if not skills:
-            return CommandResult(handled=True, output="No hay skills cargadas.")
+
+        parts = args.strip().split()
+        sub = parts[0].lower() if parts else ""
+        rest = parts[1:]
+
+        if not sub or sub == "list":
+            if not self._skill_service.list_skills():
+                return CommandResult(handled=True, output="No hay skills cargadas. Usa /skills install <pack>@<marketplace>.")
+            return CommandResult(handled=True, action="list_skills")
+
+        if sub == "marketplace":
+            return self._handle_marketplace(rest)
+        if sub == "install":
+            return self._handle_install(rest)
+        if sub == "uninstall":
+            return self._handle_uninstall(rest)
+        if sub == "update":
+            return self._handle_update(rest)
+        if sub == "installed":
+            return self._handle_installed()
+
         return CommandResult(
             handled=True,
-            action="list_skills",
+            output=(
+                "Subcomando desconocido. Usa uno de:\n"
+                "  /skills                          listar cargadas\n"
+                "  /skills marketplace add <url>    clonar marketplace\n"
+                "  /skills marketplace list         ver marketplaces\n"
+                "  /skills marketplace remove <n>   eliminar marketplace\n"
+                "  /skills install <pack>[@<mp>]    instalar pack\n"
+                "  /skills uninstall <pack>         desinstalar pack\n"
+                "  /skills update [<mp>|all]        actualizar marketplace\n"
+                "  /skills installed                listar packs instalados"
+            ),
         )
+
+    def _handle_marketplace(self, rest: List[str]) -> CommandResult:
+        if not self._marketplace_service:
+            return CommandResult(handled=True, output="Marketplace no disponible.")
+        if not rest:
+            return CommandResult(handled=True, output="Uso: /skills marketplace {add|list|remove} ...")
+        op = rest[0].lower()
+        try:
+            if op == "add" and len(rest) >= 2:
+                url = rest[1]
+                name = rest[2] if len(rest) >= 3 else None
+                resolved = self._marketplace_service.add_marketplace(url, name=name)
+                return CommandResult(handled=True, output=f"Marketplace '{resolved}' añadido.")
+            if op == "list":
+                mps = self._marketplace_service.list_marketplaces()
+                if not mps:
+                    return CommandResult(handled=True, output="No hay marketplaces.")
+                lines = [f"  {name}  {m.url}  ({m.commit or '—'})" for name, m in mps.items()]
+                return CommandResult(handled=True, output="Marketplaces:\n" + "\n".join(lines))
+            if op == "remove" and len(rest) >= 2:
+                uninstalled = self._marketplace_service.remove_marketplace(rest[1])
+                msg = f"Marketplace '{rest[1]}' eliminado."
+                if uninstalled:
+                    msg += f" Packs desinstalados: {', '.join(uninstalled)}."
+                return CommandResult(handled=True, output=msg)
+        except MarketplaceError as exc:
+            return CommandResult(handled=True, output=f"Error: {exc}")
+        return CommandResult(handled=True, output="Uso: /skills marketplace {add <url> [name]|list|remove <name>}")
+
+    def _handle_install(self, rest: List[str]) -> CommandResult:
+        if not self._marketplace_service:
+            return CommandResult(handled=True, output="Marketplace no disponible.")
+        if not rest:
+            return CommandResult(handled=True, output="Uso: /skills install <pack>[@<marketplace>]")
+        try:
+            pack = self._marketplace_service.install_pack(rest[0])
+        except MarketplaceError as exc:
+            return CommandResult(handled=True, output=f"Error: {exc}")
+        return CommandResult(
+            handled=True,
+            action="reload_skills",
+            action_data=f"Pack '{pack.name}' instalado desde '{pack.marketplace}'.",
+        )
+
+    def _handle_uninstall(self, rest: List[str]) -> CommandResult:
+        if not self._marketplace_service or not rest:
+            return CommandResult(handled=True, output="Uso: /skills uninstall <pack>")
+        try:
+            self._marketplace_service.uninstall_pack(rest[0])
+        except MarketplaceError as exc:
+            return CommandResult(handled=True, output=f"Error: {exc}")
+        return CommandResult(
+            handled=True,
+            action="reload_skills",
+            action_data=f"Pack '{rest[0]}' desinstalado.",
+        )
+
+    def _handle_update(self, rest: List[str]) -> CommandResult:
+        if not self._marketplace_service:
+            return CommandResult(handled=True, output="Marketplace no disponible.")
+        target = rest[0] if rest else None
+        try:
+            results = self._marketplace_service.update(target)
+        except MarketplaceError as exc:
+            return CommandResult(handled=True, output=f"Error: {exc}")
+        if not results:
+            return CommandResult(handled=True, output="Nada que actualizar.")
+        lines = [
+            f"  {name}: {old or '—'} → {new or '—'}" + (" (sin cambios)" if old == new else "")
+            for name, old, new in results
+        ]
+        return CommandResult(
+            handled=True,
+            action="reload_skills",
+            action_data="Actualizado:\n" + "\n".join(lines),
+        )
+
+    def _handle_installed(self) -> CommandResult:
+        if not self._marketplace_service:
+            return CommandResult(handled=True, output="Marketplace no disponible.")
+        packs = self._marketplace_service.list_installed()
+        if not packs:
+            return CommandResult(handled=True, output="No hay packs instalados.")
+        lines = [
+            f"  {name:<24} {p.source_path}@{p.marketplace}  ({p.commit or '—'})"
+            for name, p in packs.items()
+        ]
+        return CommandResult(handled=True, output="Packs instalados:\n" + "\n".join(lines))
 
     def _cmd_subagent_shortcut(self, args: str) -> CommandResult:
         """Handle subagent shortcut commands like /review, /test, etc."""
